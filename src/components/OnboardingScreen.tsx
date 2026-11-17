@@ -39,9 +39,9 @@ const LOCAL_COPY: Record<
 > = {
   ms: {
     loginRequired: 'Sila log masuk dengan Google di Langkah 1 terlebih dahulu sebelum meneruskan.',
-    emptyKeyError: 'Sila masukkan kunci API Google AI Studio (AIza...) atau pilih Mod Demo.',
+    emptyKeyError: 'Sila masukkan kunci API Google AI Studio atau pilih Mod Demo.',
     invalidKeyError:
-      'Format kunci API tidak sah. Kunci Google AI Studio mesti bermula dengan "AIza" (minimum 12 aksara).',
+      'Format kunci API tidak sah. Kunci Google AI Studio mesti sekurang-kurangnya 12 aksara.',
     showKey: 'Tunjuk kunci',
     hideKey: 'Sembunyi kunci',
     emailPlaceholder: 'freelancer@studio.my',
@@ -51,7 +51,7 @@ const LOCAL_COPY: Record<
     pauseGuide: 'Jeda Panduan',
     steps: [
       '1. Buka Google AI Studio',
-      '2. Klik Create API Key (AIza...)',
+      '2. Klik Create API Key',
       '3. Tampal kunci atau guna Mod Demo',
     ],
     settingsTitle: 'Tetapan Akses & Kunci BYOK',
@@ -61,9 +61,9 @@ const LOCAL_COPY: Record<
   },
   en: {
     loginRequired: 'Please sign in with Google in Step 1 first before continuing.',
-    emptyKeyError: 'Please enter a Google AI Studio API key (AIza...) or choose Demo Mode.',
+    emptyKeyError: 'Please enter a Google AI Studio API key or choose Demo Mode.',
     invalidKeyError:
-      'Invalid API key format. Google AI Studio keys must start with "AIza" (at least 12 characters).',
+      'Invalid API key format. Google AI Studio keys must be at least 12 characters.',
     showKey: 'Show key',
     hideKey: 'Hide key',
     emailPlaceholder: 'freelancer@studio.my',
@@ -73,7 +73,7 @@ const LOCAL_COPY: Record<
     pauseGuide: 'Pause Guide',
     steps: [
       '1. Open Google AI Studio',
-      '2. Click Create API Key (AIza...)',
+      '2. Click Create API Key',
       '3. Paste your key or use Demo Mode',
     ],
     settingsTitle: 'Access & BYOK Key Settings',
