@@ -1,0 +1,1229 @@
+import { expect, test } from '@playwright/test';
+import {
+  assertWhatsAppUrl,
+  completeOnboarding,
+  confirmStoryboard,
+  createBrandFolder,
+  DEFAULT_OFFER,
+  gotoFreshApp,
+  launchCampaign,
+  openTab,
+  saveBrandIfButtonVisible,
+  setBrandTone,
+  toggleLanguage,
+} from './helpers/app';
+import {
+  assertNoHorizontalOverflow,
+  attachNetworkOriginAuditor,
+  attachRuntimeErrorCollector,
+  clearClipboardSpy,
+  grantClipboardPermissions,
+  installClipboardSpy,
+  readClipboardWithFallback,
+} from './helpers/layout';
+import { appLocators, RX } from './helpers/locators';
+import {
+  assertPngBytesChanged,
+  assertValidAudioFileOrBuffer,
+  assertValidSlidePng,
+  assertValidVerticalVideoFile,
+  captureDownload,
+  createTestPngBuffer,
+  sha256Hex,
+  verifyAudioElement,
+  verifyVideoElement,
+} from './helpers/media';
+
+test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
+  test('T5-01: JingleTab generatedStyle tracks synthesized audio independently from selected style until regenerated', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+    await openTab(page, 'jingle');
+
+    const loc = appLocators(page);
+    await loc.tab3.styleBtn('pop-ceria').click();
+    await loc.tab3.generateBtn.click();
+    const popAudio = await verifyAudioElement(loc.tab3.audioPlayer);
+
+    const dl1 = await captureDownload(page, () => loc.tab3.downloadBtn.click());
+    expect(dl1.suggestedFilename).toContain('pop-ceria.wav');
+    const wav1 = assertValidAudioFileOrBuffer(dl1.filePath, dl1.buffer);
+
+    // Switch style without regenerating -> stale-style notice appears, filename/badge stay pop-ceria
+    await loc.tab3.styleBtn('santai-akustik').click();
+    await expect(page.getByTestId('jingle-stale-style-notice')).toBeVisible();
+    await expect(loc.tab3.root).toContainText(/pop-ceria\s*•\s*5\.5s/i);
+
+    const dlStale = await captureDownload(page, () => loc.tab3.downloadBtn.click());
+    expect(dlStale.suggestedFilename).toContain('pop-ceria.wav');
+    expect(sha256Hex(dlStale.buffer)).toBe(wav1.sha256);
+
+    // Regenerate -> stale notice disappears, audio SHA-256 and download filename update to santai-akustik
+    await loc.tab3.generateBtn.click();
+    await verifyAudioElement(loc.tab3.audioPlayer, { excludeSrc: popAudio.currentSrc });
+    await expect(page.getByTestId('jingle-stale-style-notice')).toHaveCount(0);
+
+    const dl2 = await captureDownload(page, () => loc.tab3.downloadBtn.click());
+    expect(dl2.suggestedFilename).toContain('santai-akustik.wav');
+    const wav2 = assertValidAudioFileOrBuffer(dl2.filePath, dl2.buffer);
+    expect(wav2.sha256).not.toBe(wav1.sha256);
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-02: Concurrent launchCampaign mid-video-render never overwrites new campaign gated state', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, { offerSentence: 'Kempen Pertama Untuk Lumba' });
+
+    const loc = appLocators(page);
+    await openTab(page, 'video');
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+
+    // Immediately relaunch Campaign 2 while Campaign 1 video is rendering
+    await loc.quickForm.offerInput.fill('Kempen Kedua Baharu');
+    await loc.quickForm.launchBtn.click();
+
+    await page.waitForTimeout(3500);
+    await openTab(page, 'video');
+
+    await expect(loc.tab4.confirmCheckbox).not.toBeChecked();
+    await expect(loc.tab4.videoPlayer).toHaveCount(0);
+    await expect(loc.tab4.downloadBtn).toBeDisabled();
+    await expect(loc.tab4.gateWarning).toBeVisible();
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-03: VideoTab Path A -> Tab 3 pending notice -> re-render -> frame edit invalidates stale player', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+
+    const loc = appLocators(page);
+    await openTab(page, 'video');
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+    await expect(loc.tab4.audioSourceBadge).toContainText(RX.fallbackAudioBadge);
+
+    // Generate Tab 3 jingle after Path A video is already rendered
+    await openTab(page, 'jingle');
+    await loc.tab3.styleBtn('pop-ceria').click();
+    await loc.tab3.generateBtn.click();
+    await verifyAudioElement(loc.tab3.audioPlayer);
+
+    // Returning to Tab 4 shows pending Tab 3 notice until re-rendered
+    await openTab(page, 'video');
+    await expect(page.getByTestId('video-pending-tab3-notice')).toBeVisible();
+    await expect(loc.tab4.audioSourceBadge).toContainText(RX.fallbackAudioBadge);
+
+    // Re-render switches badge to Tab 3 and clears pending notice
+    await loc.tab4.generateBtn.click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+    await expect(loc.tab4.audioSourceBadge).toContainText(RX.tab3AudioBadge);
+    await expect(page.getByTestId('video-pending-tab3-notice')).toHaveCount(0);
+
+    // Editing frame 1 unconfirms gate, hides stale <video>, and disables download
+    await loc.tab4.frameInput(1).fill('Bingkai Disunting Selepas Render');
+    await expect(loc.tab4.confirmCheckbox).not.toBeChecked();
+    await expect(loc.tab4.videoPlayer).toHaveCount(0);
+    await expect(loc.tab4.downloadBtn).toBeDisabled();
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-04: VideoTab render error translates on BM/EN toggle, clears on frame edit, and recovers via Retry', async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __forceVideoFail?: boolean };
+      w.__forceVideoFail = true;
+
+      if (typeof VideoEncoder !== 'undefined') {
+        const origSupported = VideoEncoder.isConfigSupported.bind(VideoEncoder);
+        VideoEncoder.isConfigSupported = async (cfg: VideoEncoderConfig) => {
+          if (w.__forceVideoFail) {
+            return { supported: false, config: cfg };
+          }
+          return origSupported(cfg);
+        };
+      }
+
+      const OrigMediaRecorder = window.MediaRecorder;
+      if (OrigMediaRecorder) {
+        const WrappedMediaRecorder = function (
+          this: MediaRecorder,
+          stream: MediaStream,
+          options?: MediaRecorderOptions
+        ) {
+          if (w.__forceVideoFail) {
+            throw new Error('Forced encoder unavailable');
+          }
+          return new OrigMediaRecorder(stream, options);
+        } as unknown as typeof MediaRecorder;
+        WrappedMediaRecorder.isTypeSupported = OrigMediaRecorder.isTypeSupported.bind(OrigMediaRecorder);
+        window.MediaRecorder = WrappedMediaRecorder;
+      }
+    });
+
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+
+    const loc = appLocators(page);
+    await openTab(page, 'video');
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+
+    const alertBox = loc.tab4.root.getByRole('alert');
+    await expect(alertBox).toBeVisible();
+    await expect(alertBox).toContainText(/Gagal merender video menegak.*Forced encoder unavailable/i);
+
+    // Toggle BM -> EN translates error prefix immediately
+    await toggleLanguage(page, 'en');
+    await expect(alertBox).toContainText(/Failed to render vertical video.*Forced encoder unavailable/i);
+
+    // Editing a storyboard frame clears the error alert and unconfirms the gate
+    await loc.tab4.frameInput(1).fill('Bingkai Baharu Selepas Ralat');
+    await expect(alertBox).toHaveCount(0);
+    await expect(loc.tab4.confirmCheckbox).not.toBeChecked();
+
+    // Re-confirm and trigger failure once more so Retry Render recovery is exercised directly
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+    await expect(alertBox).toBeVisible();
+    await expect(alertBox).toContainText(/Failed to render vertical video.*Forced encoder unavailable/i);
+
+    // Retry succeeds once encoder is restored
+    await page.evaluate(() => {
+      (window as unknown as { __forceVideoFail?: boolean }).__forceVideoFail = false;
+    });
+    await alertBox.getByRole('button', { name: /Retry Render/i }).click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+    await expect(loc.tab4.root.getByRole('alert')).toHaveCount(0);
+  });
+
+  test('T5-05: QuickCampaignForm upload-busy guard + non-square logo & custom photo propagation through Tab 2 & Tab 4', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await page.addInitScript(() => {
+      const origRead = FileReader.prototype.readAsDataURL;
+      FileReader.prototype.readAsDataURL = function (blob: Blob) {
+        setTimeout(() => {
+          origRead.call(this, blob);
+        }, 350);
+      };
+    });
+
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    const loc = appLocators(page);
+
+    // Non-square 160x40 PNG logo in Brand Vault
+    await createBrandFolder(page, {
+      name: 'Klinik Logo Lebar',
+      colorHex: '#10B981',
+      tone: 'professional',
+      whatsapp: '+019-777 6655',
+    });
+    const wideLogo = createTestPngBuffer({
+      width: 160,
+      height: 40,
+      rgba: [16, 185, 129, 255],
+      stripeRgba: [255, 255, 255, 255],
+    });
+    await loc.vault.logoInput.setInputFiles({
+      name: 'wide-logo.png',
+      mimeType: 'image/png',
+      buffer: wideLogo,
+    });
+    await expect(loc.vault.saveBtn).toBeDisabled();
+    await expect
+      .poll(async () =>
+        loc.vault.logoPreview.evaluate((img: HTMLImageElement) =>
+          (img.currentSrc || img.src || '').startsWith('data:image/png'),
+        ),
+      )
+      .toBe(true);
+    await expect(loc.vault.saveBtn).toBeEnabled();
+    await saveBrandIfButtonVisible(page);
+
+    // Clear Photo 1, upload custom PNG -> Bina Kempen disabled while pending, enabled after data:image/ settles
+    await loc.quickForm.photo1ClearBtn.click();
+    const custom1 = createTestPngBuffer({ width: 120, height: 180, rgba: [239, 68, 68, 255] });
+    const custom2 = createTestPngBuffer({ width: 120, height: 180, rgba: [59, 130, 246, 255] });
+
+    await loc.quickForm.photo1Input.setInputFiles({
+      name: 'custom-1.png',
+      mimeType: 'image/png',
+      buffer: custom1,
+    });
+    await expect(loc.quickForm.launchBtn).toBeDisabled();
+    await expect
+      .poll(async () =>
+        loc.quickForm.photoSlot1
+          .locator('img')
+          .first()
+          .evaluate((img: HTMLImageElement) => (img.currentSrc || img.src || '').startsWith('data:image/')),
+      )
+      .toBe(true);
+    await expect(loc.quickForm.launchBtn).toBeEnabled();
+
+    await loc.quickForm.photo2Input.setInputFiles({
+      name: 'custom-2.png',
+      mimeType: 'image/png',
+      buffer: custom2,
+    });
+    await expect
+      .poll(async () =>
+        loc.quickForm.photoSlot2
+          .locator('img')
+          .first()
+          .evaluate((img: HTMLImageElement) => (img.currentSrc || img.src || '').startsWith('data:image/')),
+      )
+      .toBe(true);
+    await expect(loc.quickForm.launchBtn).toBeEnabled();
+
+    await launchCampaign(page, {
+      brandName: 'Klinik Logo Lebar',
+      offerSentence: DEFAULT_OFFER,
+      attachSamplePhotos: false,
+    });
+
+    // Verify Tab 2 background & Tab 4 storyboard use custom data:image/ photos
+    await openTab(page, 'carousel');
+    const stageBgSrc = await loc.tab2.previewStage
+      .locator('img')
+      .first()
+      .evaluate((img: HTMLImageElement) => img.currentSrc || img.src);
+    expect(stageBgSrc.startsWith('data:image/')).toBe(true);
+    const dlPng = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
+    assertValidSlidePng(dlPng.buffer, '9:16');
+
+    await openTab(page, 'video');
+    const frame1Src = await loc.tab4
+      .frameCard(1)
+      .locator('img')
+      .first()
+      .evaluate((img: HTMLImageElement) => img.currentSrc || img.src);
+    expect(frame1Src.startsWith('data:image/')).toBe(true);
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+    const dlVid = await captureDownload(page, () => loc.tab4.downloadBtn.click());
+    assertValidVerticalVideoFile(dlVid.filePath);
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-06: Corrupt localStorage sanitization + mid-campaign Brand Vault edits propagate across Tabs 1-4 preserving user edits', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    const net = attachNetworkOriginAuditor(page);
+
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.setItem(
+        'kks_workbench:v1',
+        JSON.stringify({
+          version: 1,
+          isLoggedIn: true,
+          freelancerEmail: 'freelancer@studio.my',
+          byokKey: '',
+          isDemoMode: true,
+          activeScreen: 'workbench',
+          brands: [
+            {
+              id: 'klinik-gigi-impian',
+              name: 'Klinik Gigi Impian',
+              logoDataUrl: 'https://evil.example/tracker.png',
+              themeColor: 'not-a-hex',
+              tone: 'casual',
+              whatsappNumber: 'not-a-phone',
+              isSeeded: true,
+              updatedAt: '2026-11-17T00:00:00.000Z',
+            },
+          ],
+          activeBrandId: 'klinik-gigi-impian',
+        }),
+      );
+    });
+    await page.reload();
+
+    const loc = appLocators(page);
+    await expect(loc.vault.root).toBeVisible({ timeout: 10_000 });
+    const recoveredLogo = await loc.vault.logoPreview.evaluate(
+      (img: HTMLImageElement) => img.getAttribute('src') ?? '',
+    );
+    expect(recoveredLogo).toBe('/assets/brands/klinik-gigi-impian-logo.png');
+    await expect(loc.vault.whatsappInput).toHaveValue('60123456789');
+
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+
+    // Edit Tab 2 Slide 1 & Tab 3 lyrics, capture Slide 4 PNG before Brand Vault edit
+    await openTab(page, 'carousel');
+    await loc.tab2.slideBtn(1).click();
+    await loc.tab2.headlineInput.fill('Tajuk Slaid 1 Kekal');
+    await loc.tab2.slideBtn(4).click();
+    const slide4Before = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
+
+    await openTab(page, 'jingle');
+    await loc.tab3.lyricsInput.fill('Lirik Kekal Disunting Pengguna');
+
+    // Edit active Brand Vault folder mid-campaign (+019 normalization + name + tone)
+    await loc.vault.activeNameInput.fill('Klinik Baharu Pro');
+    await setBrandTone(page, 'professional');
+    await loc.vault.whatsappInput.fill('+019-999 8888');
+    await saveBrandIfButtonVisible(page);
+    await expect(loc.vault.whatsappInput).toHaveValue('60199998888');
+
+    // Tab 1 reflects updated phone, brand name, and professional tone
+    await openTab(page, 'strategy');
+    const fbHref = await loc.tab1.channelCard('facebook').whatsappLink.getAttribute('href');
+    assertWhatsAppUrl(fbHref, '60199998888');
+    await expect(loc.tab1.psychologyPanel).toContainText('Klinik Baharu Pro');
+    await expect(loc.tab1.channelCard('facebook').card).toContainText('Keyakinan Klinikal');
+
+    // Tab 2 preserves edited Slide 1 while Slide 4 updates & PNG bytes change
+    await openTab(page, 'carousel');
+    await loc.tab2.slideBtn(1).click();
+    await expect(loc.tab2.headlineInput).toHaveValue('Tajuk Slaid 1 Kekal');
+    await loc.tab2.slideBtn(4).click();
+    await expect(loc.tab2.previewStage).toContainText('Klinik Baharu Pro');
+    await expect(loc.tab2.previewStage).toContainText('+60199998888');
+    const slide4After = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
+    assertPngBytesChanged(slide4Before.buffer, slide4After.buffer, 'Mid-campaign brand update Slide 4');
+
+    // Tab 3 preserves user-edited lyrics
+    await openTab(page, 'jingle');
+    await expect(loc.tab3.lyricsInput).toHaveValue('Lirik Kekal Disunting Pengguna');
+
+    // Tab 4 Frame 1 & Frame 4 update reactively
+    await openTab(page, 'video');
+    await expect(loc.tab4.frameInput(1)).toHaveValue(/Klinik Baharu Pro/);
+    await expect(loc.tab4.frameInput(4)).toHaveValue(/\+60199998888/);
+
+    // Creating & selecting an unlaunched Brand B + typing an unlaunched offer draft
+    // MUST NOT mutate Campaign A across Tabs 1-4 until Bina Kempen is clicked
+    await createBrandFolder(page, {
+      name: 'Klinik Belum Lancar',
+      colorHex: '#EF4444',
+      tone: 'casual',
+      whatsapp: '017-555 4433',
+    });
+    await loc.quickForm.offerInput.fill('Draf Belum Lancar Tier5');
+
+    await openTab(page, 'strategy');
+    await expect(loc.tab1.psychologyPanel).toContainText('Klinik Baharu Pro');
+    await expect(loc.tab1.psychologyPanel).toContainText(DEFAULT_OFFER);
+    await expect(loc.tab1.psychologyPanel).not.toContainText('Klinik Belum Lancar');
+    await expect(loc.tab1.psychologyPanel).not.toContainText('Draf Belum Lancar Tier5');
+    const fbStillHref = await loc.tab1.channelCard('facebook').whatsappLink.getAttribute('href');
+    assertWhatsAppUrl(fbStillHref, '60199998888');
+
+    await openTab(page, 'carousel');
+    await loc.tab2.slideBtn(4).click();
+    await expect(loc.tab2.previewStage).toContainText('Klinik Baharu Pro');
+    await expect(loc.tab2.previewStage).not.toContainText('Klinik Belum Lancar');
+
+    await loc.vault.folderButton('Klinik Baharu Pro').click();
+    await openTab(page, 'strategy');
+    const fbAfterReturnHref = await loc.tab1.channelCard('facebook').whatsappLink.getAttribute('href');
+    assertWhatsAppUrl(fbAfterReturnHref, '60199998888');
+
+    net.assertSameOriginAndHealthy();
+    errors.assertClean();
+    net.detach();
+    errors.detach();
+  });
+
+  test('T5-07: Mobile 390x844 extreme unbroken brand/offer zero overflow + html lang sync + Escape modal + clipboard fallback', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await page.addInitScript(() => {
+      try {
+        Object.defineProperty(navigator, 'clipboard', {
+          configurable: true,
+          value: {
+            writeText: async () => {
+              throw new Error('Clipboard blocked');
+            },
+          },
+        });
+      } catch {
+        // Ignore if non-configurable
+      }
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+
+    const loc = appLocators(page);
+
+    // html lang attribute tracks BM <-> EN toggle & Escape dismisses API settings modal
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('ms');
+    await toggleLanguage(page, 'en');
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('en');
+    await toggleLanguage(page, 'ms');
+    expect(await page.evaluate(() => document.documentElement.lang)).toBe('ms');
+
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(loc.onboarding.settingsModal).toHaveCount(0);
+
+    // Extreme unbroken brand name (96 chars) & offer (220 chars)
+    const extremeBrand = 'KlinikPergigianPakarEstetikDanKeluargaCawanganPusatBandarayaKualaLumpurSentralMalaysia99999999';
+    const extremeOffer = 'PromosiScalingDanPolishIstimewaSempenaMingguGajiUntukSemuaPelangganBaruDanLama_' + 'X'.repeat(140);
+
+    await createBrandFolder(page, {
+      name: extremeBrand,
+      whatsapp: '012-345 6789',
+    });
+    await launchCampaign(page, {
+      brandName: extremeBrand,
+      offerSentence: extremeOffer,
+    });
+
+    await assertNoHorizontalOverflow(page, '390 extreme vault+form+tab1');
+
+    // Clipboard rejection falls back cleanly to execCommand('copy')
+    await loc.tab1.channelCard('facebook').copyBtn.click();
+    await expect(loc.tab1.channelCard('facebook').card).toContainText(RX.copiedFeedback);
+
+    for (const tab of ['carousel', 'jingle', 'video'] as const) {
+      await openTab(page, tab);
+      await assertNoHorizontalOverflow(page, `390 extreme ${tab}`);
+    }
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-08: Tab 4 mid-render tab switch (tab-video -> tab-strategy -> tab-video) never deadlocks and exports valid 9:16 video', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await page.route('**/assets/audio/fallback-jingle.wav', async (route) => {
+      await new Promise((r) => setTimeout(r, 600));
+      await route.continue();
+    });
+
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+
+    const loc = appLocators(page);
+    await openTab(page, 'video');
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+
+    // Immediately switch away to Tab 1 while Tab 4 is rendering
+    await openTab(page, 'strategy');
+    await expect(loc.tab1.psychologyPanel).toBeVisible();
+    await page.waitForTimeout(3500);
+
+    // Return to Tab 4 -> never deadlocked; either finished rendering or completes cleanly
+    await openTab(page, 'video');
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+    await expect(loc.tab4.generateBtn).toBeEnabled();
+    await expect(loc.tab4.confirmCheckbox).toBeEnabled();
+    await expect(loc.tab4.frameInput(1)).toBeEnabled();
+    await expect(loc.tab4.downloadBtn).toBeEnabled();
+
+    const dl = await captureDownload(page, () => loc.tab4.downloadBtn.click());
+    assertValidVerticalVideoFile(dl.filePath);
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-09: JingleTab mid-synthesis tab switch (tab-jingle -> tab-video) completes cleanly and unlocks Tab 3 & Tab 4', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await page.addInitScript(() => {
+      const Ctx = window.OfflineAudioContext;
+      if (Ctx && Ctx.prototype && typeof Ctx.prototype.startRendering === 'function') {
+        const origStart = Ctx.prototype.startRendering;
+        Ctx.prototype.startRendering = function (this: OfflineAudioContext) {
+          return new Promise((resolve, reject) => {
+            setTimeout(() => {
+              origStart.call(this).then(resolve, reject);
+            }, 650);
+          });
+        };
+      }
+    });
+
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+
+    const loc = appLocators(page);
+    await openTab(page, 'jingle');
+    await loc.tab3.styleBtn('santai-akustik').click();
+    await loc.tab3.generateBtn.click();
+
+    // Immediately switch to Tab 4 while OfflineAudioContext.startRendering is still pending
+    await openTab(page, 'video');
+    await expect(loc.tab4.audioSourceBadge).toContainText(RX.tab3AudioBadge, { timeout: 10_000 });
+
+    // Return to Tab 3 -> audio player mounted and WAV download enabled
+    await openTab(page, 'jingle');
+    await verifyAudioElement(loc.tab3.audioPlayer);
+    await expect(loc.tab3.downloadBtn).toBeEnabled();
+    const dl = await captureDownload(page, () => loc.tab3.downloadBtn.click());
+    expect(dl.suggestedFilename).toContain('santai-akustik.wav');
+    assertValidAudioFileOrBuffer(dl.filePath, dl.buffer);
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-10: api-settings-modal keeps single onboarding-demo-badge, inert background, trapped Tab focus, and clean Sign Out', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+
+    const loc = appLocators(page);
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible();
+
+    // Strict single onboarding-demo-badge inside modal (vault badge switches to vault-demo-badge)
+    await expect(page.getByTestId('onboarding-demo-badge')).toHaveCount(1);
+    await expect(loc.onboarding.settingsModal.getByTestId('onboarding-demo-badge')).toBeVisible();
+    await expect(page.getByTestId('vault-demo-badge')).toHaveCount(1);
+
+    // Background <header> and <main> wrapper are inert and aria-hidden="true"
+    const bgState = await page.evaluate(() => {
+      const header = document.querySelector('header');
+      const mainWrap = document.querySelector('main')?.parentElement;
+      return {
+        headerInert: Boolean(header?.hasAttribute('inert')),
+        headerAriaHidden: header?.getAttribute('aria-hidden'),
+        mainInert: Boolean(mainWrap?.hasAttribute('inert')),
+        mainAriaHidden: mainWrap?.getAttribute('aria-hidden'),
+      };
+    });
+    expect(bgState).toEqual({
+      headerInert: true,
+      headerAriaHidden: 'true',
+      mainInert: true,
+      mainAriaHidden: 'true',
+    });
+
+    // Initial focus starts inside modal and pressing Tab 12 times never escapes into header or main
+    await expect(loc.onboarding.settingsCloseBtn).toBeFocused();
+    for (let i = 0; i < 12; i += 1) {
+      await page.keyboard.press('Tab');
+      const focusLoc = await page.evaluate(() => {
+        const el = document.activeElement;
+        const modal = document.querySelector('[data-testid="api-settings-modal"]');
+        const main = document.querySelector('main');
+        const header = document.querySelector('header');
+        return {
+          inModal: Boolean(el && modal?.contains(el)),
+          inMain: Boolean(el && main?.contains(el)),
+          inHeader: Boolean(el && header?.contains(el)),
+        };
+      });
+      expect(focusLoc.inModal).toBe(true);
+      expect(focusLoc.inMain).toBe(false);
+      expect(focusLoc.inHeader).toBe(false);
+    }
+
+    // Sign Out inside modal re-gates WorkspaceShell and disables nav-workbench
+    await loc.onboarding.settingsModal.getByRole('button', { name: /Log Keluar|Sign Out/i }).click();
+    await expect(loc.onboarding.settingsModal).toHaveCount(0);
+    await expect(loc.vault.root).toHaveCount(0);
+    await expect(loc.onboarding.googleLoginBtn).toBeVisible();
+    await expect(page.getByTestId('nav-workbench')).toBeDisabled();
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-11: StrategyTab Gemini BYOK E2E (absent in demo, mid-flight angle-switch notice isolation, sanitization, HTTP 500 fallback) & RSA accessible labels', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await gotoFreshApp(page);
+
+    // 1. Demo Mode hides Enhance with Gemini (BYOK)
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+    const loc = appLocators(page);
+    await expect(loc.tab1.root.getByRole('button', { name: /Gemini/i })).toHaveCount(0);
+
+    // Sign out and re-enter with a valid BYOK key
+    await loc.headerApiSettings.click();
+    await loc.onboarding.settingsModal.getByRole('button', { name: /Log Keluar|Sign Out/i }).click();
+    await completeOnboarding(page, { useDemoMode: false, apiKey: 'AIzaSyTier5ValidKey123456' });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+
+    // 2. Google RSA H1-H3 and D1-D2 resolve via getByLabel
+    const rsaCard = loc.tab1.channelCard('google_rsa').card;
+    for (const label of ['H1', 'H2', 'H3', 'D1', 'D2']) {
+      await expect(rsaCard.getByLabel(label, { exact: true })).toBeVisible();
+    }
+
+    // 3. Mock Gemini API: call 1 delayed 450ms with risky + overlong RSA; call 2 HTTP 500 fallback
+    let callCount = 0;
+    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+      callCount += 1;
+      if (callCount === 1) {
+        await new Promise((r) => setTimeout(r, 450));
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      text: JSON.stringify({
+                        facebook: {
+                          primaryText: 'Gigi anda kuning! 100% dijamin terbaik bersama doktor bertauliah.',
+                          headline: 'Senyum Yakin Gemini',
+                          description: 'Konsultasi klinikal',
+                        },
+                        google_rsa: {
+                          headlines: [
+                            'Tajuk Google RSA Sangat Panjang Melebihi Tiga Puluh Aksara',
+                            'Slot Scaling Gigi',
+                            'Konsultasi Klinik',
+                          ],
+                          descriptions: [
+                            'Penerangan Google RSA yang sengaja dibuat melebihi sembilan puluh aksara untuk menguji pemangkasan selamat.',
+                            'Tempah slot pemeriksaan klinikal hari ini.',
+                          ],
+                        },
+                      }),
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 500, body: 'Upstream error' });
+    });
+
+    const enhanceBtn = loc.tab1.root.getByRole('button', { name: /Gemini/i });
+    await enhanceBtn.click();
+
+    // Switch to payday mid-flight -> payday must NOT display Gemini enhancement notice
+    await loc.tab1.angleBtn('payday').click();
+    await expect(page.getByTestId('strategy-enhance-notice')).toHaveCount(0);
+    await expect(enhanceBtn).toBeEnabled({ timeout: 5_000 });
+    await expect(page.getByTestId('strategy-enhance-notice')).toHaveCount(0);
+
+    // Switch back to confidence -> shows Gemini notice and sanitized RSA/FB copy
+    await loc.tab1.angleBtn('confidence').click();
+    await expect(page.getByTestId('strategy-enhance-notice')).toContainText(/Salinan dipertingkat oleh Gemini/i);
+    const fbText = await loc.tab1.channelCard('facebook').card.locator('textarea').inputValue();
+    expect(fbText).not.toMatch(/100%|dijamin|terbaik/i);
+    const rsaH1 = await rsaCard.getByLabel('H1', { exact: true }).inputValue();
+    const rsaD1 = await rsaCard.getByLabel('D1', { exact: true }).inputValue();
+    expect(rsaH1.length).toBeGreaterThan(0);
+    expect(rsaH1.length).toBeLessThanOrEqual(30);
+    expect(rsaD1.length).toBeGreaterThan(0);
+    expect(rsaD1.length).toBeLessThanOrEqual(90);
+
+    // Trigger HTTP 500 on payday -> falls back cleanly to baseline template notice
+    await loc.tab1.angleBtn('payday').click();
+    await enhanceBtn.click();
+    await expect(page.getByTestId('strategy-enhance-notice')).toContainText(/templat selamat terbina/i);
+
+    expect(
+      errors.errors.every(
+        (entry) =>
+          entry.kind === 'console.error' &&
+          /status of 500/i.test(entry.message) &&
+          (entry.location ?? '').includes('generativelanguage.googleapis.com'),
+      ),
+    ).toBe(true);
+    errors.assertClean([/status of 500/i]);
+    errors.detach();
+  });
+
+  test('T5-12: JingleTab Reset lyrics + VideoTab hasPendingTab3Update on Tab 3 regeneration & ready->error frame-edit invalidation', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await page.addInitScript(() => {
+      const w = window as unknown as { __forceRenderFail?: boolean };
+      w.__forceRenderFail = false;
+
+      if (typeof VideoEncoder !== 'undefined') {
+        const origSupported = VideoEncoder.isConfigSupported.bind(VideoEncoder);
+        VideoEncoder.isConfigSupported = async (cfg: VideoEncoderConfig) => {
+          if (w.__forceRenderFail) {
+            return { supported: false, config: cfg };
+          }
+          return origSupported(cfg);
+        };
+      }
+
+      const OrigMediaRecorder = window.MediaRecorder;
+      if (OrigMediaRecorder) {
+        const WrappedMediaRecorder = function (
+          this: MediaRecorder,
+          stream: MediaStream,
+          options?: MediaRecorderOptions
+        ) {
+          if (w.__forceRenderFail) {
+            throw new Error('Forced second render failure');
+          }
+          return new OrigMediaRecorder(stream, options);
+        } as unknown as typeof MediaRecorder;
+        WrappedMediaRecorder.isTypeSupported = OrigMediaRecorder.isTypeSupported.bind(OrigMediaRecorder);
+        window.MediaRecorder = WrappedMediaRecorder;
+      }
+    });
+
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+
+    const loc = appLocators(page);
+
+    // 1. Tab 3 Reset lyrics restores baseline brand + offer lyrics
+    await openTab(page, 'jingle');
+    const baselineLyrics = await loc.tab3.lyricsInput.inputValue();
+    await loc.tab3.lyricsInput.fill('Lirik Sementara Sebelum Reset');
+    await page.getByTestId('jingle-reset-lyrics-btn').click();
+    await expect(loc.tab3.lyricsInput).toHaveValue(baselineLyrics);
+
+    await loc.tab3.styleBtn('pop-ceria').click();
+    await loc.tab3.generateBtn.click();
+    const popAudio = await verifyAudioElement(loc.tab3.audioPlayer);
+
+    // 2. Render Tab 4 with pop-ceria -> no pending Tab 3 notice
+    await openTab(page, 'video');
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+    await expect(loc.tab4.audioSourceBadge).toContainText(RX.tab3AudioBadge);
+    await expect(page.getByTestId('video-pending-tab3-notice')).toHaveCount(0);
+
+    // 3. Regenerate Tab 3 with korporat-segar -> returning to Tab 4 MUST show video-pending-tab3-notice
+    await openTab(page, 'jingle');
+    await loc.tab3.styleBtn('korporat-segar').click();
+    await loc.tab3.generateBtn.click();
+    await verifyAudioElement(loc.tab3.audioPlayer, { excludeSrc: popAudio.currentSrc });
+
+    await openTab(page, 'video');
+    await expect(page.getByTestId('video-pending-tab3-notice')).toBeVisible();
+
+    // 4. Force ready -> error on second render, then edit frame 1 -> clears alert & stale player
+    await page.evaluate(() => {
+      (window as unknown as { __forceRenderFail?: boolean }).__forceRenderFail = true;
+    });
+    await loc.tab4.generateBtn.click();
+    const alertBox = loc.tab4.root.getByRole('alert');
+    await expect(alertBox).toBeVisible();
+
+    await loc.tab4.frameInput(1).fill('Bingkai Disunting Selepas Ralat Kedua');
+    await expect(alertBox).toHaveCount(0);
+    await expect(loc.tab4.confirmCheckbox).not.toBeChecked();
+    await expect(loc.tab4.videoPlayer).toHaveCount(0);
+    await expect(loc.tab4.downloadBtn).toBeDisabled();
+
+    // 5. Recover render -> clears pending notice
+    await page.evaluate(() => {
+      (window as unknown as { __forceRenderFail?: boolean }).__forceRenderFail = false;
+    });
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+    await expect(page.getByTestId('video-pending-tab3-notice')).toHaveCount(0);
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-13: QuickCampaignForm 3rd sample photo + CarouselTab photo switcher, stage headline focus, and subheadline/badge/cta PNG propagation', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+
+    const loc = appLocators(page);
+
+    // Open sample-photo-picker-0 and select the 3rd sample photo (clinic-chair-3.png)
+    await loc.quickForm.photo1SampleBtn.click();
+    await loc.quickForm.photoSlot1.getByRole('button', { name: /Ruang Klinik Moden/i }).click();
+    await expect(loc.quickForm.photoSlot1.locator('img').first()).toHaveAttribute(
+      'src',
+      /clinic-chair-3\.png/i,
+    );
+
+    await launchCampaign(page, {
+      offerSentence: DEFAULT_OFFER,
+      attachSamplePhotos: false,
+    });
+
+    await openTab(page, 'carousel');
+
+    // Slide 1 initially uses clinic-chair-3.png
+    const stageBgImg = loc.tab2.previewStage.locator('img').first();
+    await expect(stageBgImg).toHaveAttribute('src', /clinic-chair-3\.png/i);
+    const png1 = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
+    assertValidSlidePng(png1.buffer, '9:16');
+
+    // Switch Slide 1 Layer 1 photo to Photo 2 (clinic-smile-2.png) -> PNG bytes change
+    await page.getByTestId('carousel-photo-btn-1').click();
+    await expect(stageBgImg).toHaveAttribute('src', /clinic-smile-2\.png/i);
+    const png2 = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
+    assertPngBytesChanged(png1.buffer, png2.buffer, 'Layer 1 photo switch');
+
+    // Click stage headline -> focuses carousel-headline-input
+    await loc.tab2.previewStage.getByTitle(/Klik untuk sunting tajuk|Click to edit headline/i).click();
+    await expect(loc.tab2.headlineInput).toBeFocused();
+
+    // Edit subheadline, badge, and CTA -> updates live preview & PNG bytes
+    await loc.tab2.subheadlineInput.fill('Subtajuk Kemas Kini Tier 5');
+    await page.getByTestId('carousel-badge-input').fill('PROMO TERHAD');
+    await page.getByTestId('carousel-cta-input').fill('Tempah Slot');
+
+    await expect(loc.tab2.previewStage).toContainText('Subtajuk Kemas Kini Tier 5');
+    await expect(loc.tab2.previewStage).toContainText('PROMO TERHAD');
+    await expect(loc.tab2.previewStage).toContainText('Tempah Slot');
+
+    const png3 = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
+    assertValidSlidePng(png3.buffer, '9:16');
+    assertPngBytesChanged(png2.buffer, png3.buffer, 'Subheadline/badge/CTA live edit');
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-14: StrategyTab mid-flight BYOK Gemini survives tab switch (tab-strategy -> tab-carousel -> tab-strategy), Vault swatch + invalid_wa guard, Shift+Tab modal wrap, and compliance reset', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: false, apiKey: 'AIzaSyTier5Fourteen12345' });
+
+    const loc = appLocators(page);
+
+    // 1. BrandVaultScreen preset swatch + invalid_wa persistence on name/color edits
+    const emeraldSwatch = loc.vault.root.getByRole('button', { name: '#10B981' });
+    await emeraldSwatch.click();
+    await expect(emeraldSwatch).toHaveAttribute('aria-pressed', 'true');
+    await expect(loc.vault.colorInput).toHaveValue('#10b981');
+
+    await loc.vault.whatsappInput.fill('123');
+    await loc.vault.whatsappInput.blur();
+    await expect(loc.vault.errorMsg).toBeVisible();
+
+    await loc.vault.activeNameInput.fill('Klinik Impian Tier5');
+    await expect(loc.vault.errorMsg).toBeVisible();
+    await loc.vault.root.getByRole('button', { name: '#F59E0B' }).click();
+    await expect(loc.vault.errorMsg).toBeVisible();
+
+    await loc.vault.whatsappInput.fill('012-345 6789');
+    await expect(loc.vault.errorMsg).toHaveCount(0);
+
+    // 2. api-settings-modal Shift+Tab wrap & Escape focus restoration to nav-onboarding
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible();
+    await expect(loc.onboarding.settingsCloseBtn).toBeFocused();
+
+    await page.keyboard.press('Shift+Tab');
+    await expect(loc.onboarding.videoGuide).toBeFocused();
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press('Shift+Tab');
+      const inModal = await page.evaluate(() => {
+        const el = document.activeElement;
+        const modal = document.querySelector('[data-testid="api-settings-modal"]');
+        return Boolean(el && modal?.contains(el));
+      });
+      expect(inModal).toBe(true);
+    }
+
+    await page.keyboard.press('Escape');
+    await expect(loc.onboarding.settingsModal).toHaveCount(0);
+    await expect(loc.headerApiSettings).toBeFocused();
+
+    // 3. Launch campaign & intercept Gemini API with 500ms delay
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+
+    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+      await new Promise((r) => setTimeout(r, 500));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      facebook: {
+                        primaryText: 'Salinan Gemini selamat merentas pertukaran tab bersama doktor bertauliah.',
+                        headline: 'GEMINI_SURVIVED_TAB_SWITCH',
+                        description: 'Konsultasi klinikal',
+                      },
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    const enhanceBtn = loc.tab1.root.getByRole('button', { name: /Gemini/i });
+    await enhanceBtn.click();
+
+    // Immediately switch to Carousel tab while Gemini BYOK request is in flight
+    await openTab(page, 'carousel');
+    await expect(loc.tab2.previewStage).toBeVisible();
+    await page.waitForTimeout(800);
+
+    // Return to Strategy tab -> enhanced copy & notice survive unmount/remount, isolated per angle
+    await openTab(page, 'strategy');
+    await expect(page.getByTestId('strategy-enhance-notice')).toContainText(
+      /Salinan dipertingkat oleh Gemini/i,
+    );
+    const fbCard = loc.tab1.channelCard('facebook').card;
+    await expect(fbCard.locator('input[type="text"]').first()).toHaveValue('GEMINI_SURVIVED_TAB_SWITCH');
+
+    await loc.tab1.angleBtn('payday').click();
+    await expect(page.getByTestId('strategy-enhance-notice')).toHaveCount(0);
+    await loc.tab1.angleBtn('confidence').click();
+    await expect(page.getByTestId('strategy-enhance-notice')).toContainText(
+      /Salinan dipertingkat oleh Gemini/i,
+    );
+
+    // 4. Compliance reset button: Muat dari Teks Facebook restores Facebook primaryText & clears flags
+    const fbPrimaryText = await fbCard.locator('textarea').inputValue();
+    await loc.tab1.compliance.testRiskyBtn.click();
+    await expect(loc.tab1.compliance.findings).toContainText(/Meta Personal Attributes/i);
+    await loc.tab1.root.getByRole('button', { name: /Muat dari Teks Facebook/i }).click();
+    await expect(loc.tab1.compliance.input).toHaveValue(fbPrimaryText);
+    await expect(loc.tab1.compliance.statusBadge).toContainText(/Lulus/i);
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-15: Brand Vault edits (name/phone/themeColor) before video generation & #video-frame-lyric-1 edits reset VideoTab confirmation gate', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+
+    const loc = appLocators(page);
+    await openTab(page, 'video');
+    await confirmStoryboard(page);
+    await expect(loc.tab4.confirmCheckbox).toBeChecked();
+    await expect(loc.tab4.generateBtn).toBeEnabled();
+
+    // 1. Mid-campaign Brand Vault name + WhatsApp edit while awaiting-confirmation MUST uncheck gate
+    await loc.vault.activeNameInput.fill('Klinik Mutasi Sahkan');
+    await loc.vault.whatsappInput.fill('019-111 2222');
+    await saveBrandIfButtonVisible(page);
+
+    await expect(loc.tab4.frameInput(1)).toHaveValue(/Klinik Mutasi Sahkan/);
+    await expect(loc.tab4.frameInput(4)).toHaveValue(/\+60191112222/);
+    await expect(loc.tab4.confirmCheckbox).not.toBeChecked();
+    await expect(loc.tab4.gateWarning).toBeVisible();
+    await expect(loc.tab4.generateBtn).toBeDisabled();
+
+    // 2. Re-confirm, then change Brand Vault themeColor -> MUST uncheck gate
+    await confirmStoryboard(page);
+    await expect(loc.tab4.confirmCheckbox).toBeChecked();
+    await loc.vault.colorInput.fill('#10B981');
+    await saveBrandIfButtonVisible(page);
+
+    await expect(loc.tab4.confirmCheckbox).not.toBeChecked();
+    await expect(loc.tab4.gateWarning).toBeVisible();
+    await expect(loc.tab4.generateBtn).toBeDisabled();
+
+    // 3. Re-confirm, then edit #video-frame-lyric-1 (Caption / Lyric) -> unchecks gate
+    await confirmStoryboard(page);
+    const lyric1 = loc.tab4.root.locator('#video-frame-lyric-1');
+    await lyric1.fill('Lirik Bingkai 1 Disunting Sebelum Render');
+    await expect(loc.tab4.confirmCheckbox).not.toBeChecked();
+    await expect(loc.tab4.gateWarning).toBeVisible();
+    await expect(loc.tab4.generateBtn).toBeDisabled();
+
+    // 4. Re-confirm & render video -> edit #video-frame-lyric-1 unmounts <video>, unchecks gate, disables download
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+    await expect(loc.tab4.downloadBtn).toBeEnabled();
+
+    await lyric1.fill('Lirik Bingkai 1 Disunting Selepas Render');
+    await expect(loc.tab4.confirmCheckbox).not.toBeChecked();
+    await expect(loc.tab4.videoPlayer).toHaveCount(0);
+    await expect(loc.tab4.downloadBtn).toBeDisabled();
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-16: Live Demo <-> BYOK upgrade and downgrade via api-settings-modal preserves campaign state and clears errors on close', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+
+    const loc = appLocators(page);
+    await loc.quickForm.offerInput.fill('Tawaran Kekal Ujian Tier 5');
+    await launchCampaign(page, {
+      offerSentence: 'Tawaran Kekal Ujian Tier 5',
+      attachSamplePhotos: true,
+    });
+
+    const fbHeadline = loc.tab1.channelCard('facebook').card.locator('input[type="text"]').first();
+    await fbHeadline.fill('Tajuk FB Kekal Modal');
+    await expect(loc.tab1.root.getByRole('button', { name: /Gemini/i })).toHaveCount(0);
+
+    // 1. Open modal, trigger invalid-key error, close modal, reopen -> error is cleared
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible();
+    await loc.onboarding.byokInput.fill('invalid-key');
+    await loc.onboarding.byokSaveBtn.click();
+    await expect(loc.onboarding.byokError).toBeVisible();
+
+    await loc.onboarding.settingsCloseBtn.click();
+    await expect(loc.onboarding.settingsModal).toHaveCount(0);
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.byokError).toHaveCount(0);
+
+    // 2. Upgrade Demo -> BYOK inside modal -> closes modal, restores focus, preserves campaign, mounts Gemini button
+    await loc.onboarding.byokInput.fill('AIzaSyTier5Upgrade123456');
+    await loc.onboarding.byokSaveBtn.click();
+    await expect(loc.onboarding.settingsModal).toHaveCount(0);
+    await expect(loc.headerApiSettings).toBeFocused();
+    await expect(loc.quickForm.offerInput).toHaveValue('Tawaran Kekal Ujian Tier 5');
+    await expect(fbHeadline).toHaveValue('Tajuk FB Kekal Modal');
+    await expect(loc.tab1.root.getByRole('button', { name: /Gemini/i })).toBeVisible();
+
+    // 3. Downgrade BYOK -> Demo inside modal -> unmounts Gemini button, preserves campaign
+    await loc.headerApiSettings.click();
+    await loc.onboarding.demoBtn.click();
+    await expect(loc.onboarding.settingsModal).toHaveCount(0);
+    await expect(loc.tab1.root.getByRole('button', { name: /Gemini/i })).toHaveCount(0);
+    await expect(loc.quickForm.offerInput).toHaveValue('Tawaran Kekal Ujian Tier 5');
+    await expect(fbHeadline).toHaveValue('Tajuk FB Kekal Modal');
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-17: StrategyTab RSA D1/D2 >90 warning, live FB->Compliance sync, IG/TikTok edited Quick-Copy, and CPA 0% close-rate BM/EN', async ({ context, page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await grantClipboardPermissions(context);
+    await installClipboardSpy(page);
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+
+    const loc = appLocators(page);
+
+    // 1. RSA D1 & D2 >90 chars over-limit warning
+    const rsaCard = loc.tab1.channelCard('google_rsa').card;
+    const d1 = rsaCard.getByLabel('D1', { exact: true });
+    const d2 = rsaCard.getByLabel('D2', { exact: true });
+    await d1.fill('A'.repeat(95));
+    await expect(d1).toHaveValue('A'.repeat(95));
+    await expect(d1).toHaveClass(/border-rose-500/);
+    await expect(rsaCard).toContainText(/95\/90\s*\(Melebihi had\)/i);
+
+    await d2.fill('B'.repeat(92));
+    await expect(d2).toHaveClass(/border-rose-500/);
+    await expect(rsaCard).toContainText(/92\/90\s*\(Melebihi had\)/i);
+
+    // 2. Live FB primaryText -> Compliance auto-sync
+    await loc.tab1.channelCard('facebook').card.locator('textarea').fill('Gigi anda kuning! 100% dijamin!');
+    await expect(loc.tab1.compliance.input).toHaveValue('Gigi anda kuning! 100% dijamin!');
+    await expect(loc.tab1.compliance.statusBadge).toContainText(/2 Amaran Dikesan/i);
+
+    // 3. Edited Instagram caption & hashtags copied via Quick-Copy
+    const ig = loc.tab1.channelCard('instagram');
+    await ig.card.locator('textarea').fill('Kapsyen IG Suntingan Tier 5');
+    await ig.card.locator('input[type="text"]').fill('#KlinikGigiTier5 #SenyumBersih');
+    await clearClipboardSpy(page);
+    await ig.copyBtn.click();
+    const igCopied = await readClipboardWithFallback(page);
+    expect(igCopied).toContain('Kapsyen IG Suntingan Tier 5');
+    expect(igCopied).toContain('#KlinikGigiTier5 #SenyumBersih');
+    expect(igCopied).toContain('https://wa.me/');
+
+    // 4. Edited TikTok hook, script, and caption copied via Quick-Copy
+    const tt = loc.tab1.channelCard('tiktok');
+    await tt.card.locator('input[type="text"]').fill('Hook TikTok Tier 5');
+    await tt.card.locator('textarea').nth(0).fill('Skrip TikTok Tier 5');
+    await tt.card.locator('textarea').nth(1).fill('Kapsyen TikTok Tier 5');
+    await clearClipboardSpy(page);
+    await tt.copyBtn.click();
+    const ttCopied = await readClipboardWithFallback(page);
+    expect(ttCopied).toContain('Hook TikTok Tier 5');
+    expect(ttCopied).toContain('Skrip TikTok Tier 5');
+    expect(ttCopied).toContain('Kapsyen TikTok Tier 5');
+    expect(ttCopied).toContain('https://wa.me/');
+
+    // 5. CPA 0% close-rate note translates across BM -> EN
+    await loc.tab1.cpa.closeRateInput.fill('0');
+    await expect(loc.tab1.cpa.root).toContainText(/Kadar tutup 0%/i);
+    await toggleLanguage(page, 'en');
+    await expect(loc.tab1.cpa.root).toContainText(/Close rate is 0%/i);
+    await expect(rsaCard).toContainText(/95\/90\s*\(Over limit\)/i);
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-18: Duplicate brand folder -2 suffix, QuickCampaignForm select->Vault sync, and 390x844 api-settings-modal + 4:5 safe-zone overflow + empty headline placeholder', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+
+    const loc = appLocators(page);
+
+    // 1. Duplicate brand name creates -2 slug without overwriting seeded folder
+    await loc.vault.newNameInput.fill('Klinik Gigi Impian');
+    await loc.vault.createBtn.click();
+    await expect(page.getByTestId('brand-folder-klinik-gigi-impian')).toBeVisible();
+    await expect(page.getByTestId('brand-folder-klinik-gigi-impian-2')).toBeVisible();
+
+    await loc.vault.whatsappInput.fill('019-222 3333');
+    await loc.vault.colorInput.fill('#10B981');
+    await saveBrandIfButtonVisible(page);
+    await expect(loc.vault.whatsappInput).toHaveValue('60192223333');
+
+    // 2. Selecting seeded brand via QuickCampaignForm <select> updates Brand Vault active folder
+    await loc.quickForm.brandSelect.selectOption('klinik-gigi-impian');
+    await expect(loc.vault.activeNameInput).toHaveValue('Klinik Gigi Impian');
+    await expect(loc.vault.whatsappInput).toHaveValue('60123456789');
+    await expect(loc.vault.colorInput).toHaveValue('#0ea5e9');
+
+    // 3. api-settings-modal at 390x844 has zero horizontal overflow
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible();
+    await assertNoHorizontalOverflow(page, '390 api-settings-modal');
+    await loc.onboarding.settingsCloseBtn.click();
+
+    // 4. Tab 2 4:5 safe-zone at 390x844 has zero overflow & empty headline shows bilingual placeholder
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+    await openTab(page, 'carousel');
+    await loc.tab2.aspect45Btn.click();
+    await loc.tab2.safeZoneToggleBtn.click();
+    await expect(loc.tab2.safeZoneOverlay).toBeVisible();
+    await assertNoHorizontalOverflow(page, '390 tab2 4:5 safe-zone');
+
+    await loc.tab2.headlineInput.fill('');
+    await expect(loc.tab2.slideBtn(1)).toContainText('(Tiada tajuk)');
+    await toggleLanguage(page, 'en');
+    await expect(loc.tab2.slideBtn(1)).toContainText('(No headline)');
+
+    errors.assertClean();
+    errors.detach();
+  });
+});

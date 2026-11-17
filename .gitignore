@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-ssr/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+.playwright-artifacts/
+*.tsbuildinfo
+.vercel/
+.env
+.env.*
+!.env.example
+.agents/
+*.log
