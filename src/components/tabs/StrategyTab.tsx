@@ -24,7 +24,6 @@ import {
   rewriteSafeCopy,
 } from '../../utils/compliance';
 import {
-  buildCustomerPsychology,
   generateCampaignCopyMap,
   isValidGeminiKeyFormat,
 } from '../../utils/copyGenerator';
@@ -131,6 +130,8 @@ export function StrategyTab() {
     launchedBrand,
     launchedOfferSentence,
     campaignLaunchEpoch,
+    variationIndex,
+    customerPsychology: psychology,
     selectedAngle,
     setSelectedAngle,
     editedCopyByAngle,
@@ -143,19 +144,14 @@ export function StrategyTab() {
   } = useCampaign();
 
   const baselineMap = useMemo(
-    () => generateCampaignCopyMap(launchedBrand, launchedOfferSentence),
-    [launchedBrand, launchedOfferSentence]
+    () => generateCampaignCopyMap(launchedBrand, launchedOfferSentence, variationIndex),
+    [launchedBrand, launchedOfferSentence, variationIndex]
   );
 
   const angleCopy: ChannelCopy = useMemo(() => {
     const raw = editedCopyByAngle[selectedAngle] ?? baselineMap[selectedAngle];
     return syncAngleCopyWhatsapp(raw, launchedBrand.whatsappNumber);
   }, [baselineMap, editedCopyByAngle, selectedAngle, launchedBrand.whatsappNumber]);
-
-  const psychology = useMemo(
-    () => buildCustomerPsychology(launchedBrand, launchedOfferSentence),
-    [launchedBrand, launchedOfferSentence]
-  );
 
   const cpaEval = useMemo(() => calculateCpaMetrics(cpaInputs), [cpaInputs]);
 
@@ -167,7 +163,7 @@ export function StrategyTab() {
   );
   const [complianceEditedByUser, setComplianceEditedByUser] = useState<boolean>(false);
 
-  const launchScopeKey = `${campaignLaunchEpoch}::${launchedBrand.id}::${launchedBrand.tone}::${launchedBrand.name}::${launchedBrand.whatsappNumber}`;
+  const launchScopeKey = `${campaignLaunchEpoch}::${variationIndex}::${launchedBrand.id}::${launchedBrand.tone}::${launchedBrand.name}::${launchedBrand.whatsappNumber}`;
   const prevScopeRef = useRef<string>(launchScopeKey);
   const prevAngleRef = useRef<AngleId>(selectedAngle);
 

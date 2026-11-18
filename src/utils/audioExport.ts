@@ -1,5 +1,10 @@
 import { FALLBACK_AUDIO_URL, SAMPLE_OFFER_CHIP } from '../data/seedVault';
 import type { JingleState, JingleStyleId } from '../types/campaign';
+import {
+  extractOfferDetails,
+  getFrameworkForVariation,
+  stripDuplicateTawaran,
+} from './offerDetails';
 
 export const JINGLE_DURATION_SEC = 5.5;
 export const JINGLE_SAMPLE_RATE = 48000;
@@ -72,15 +77,70 @@ const STYLE_ARRANGEMENTS: Record<JingleStyleId, StyleArrangement> = {
   },
 };
 
-export function buildJingleLyrics(brandName: string, offerSentence: string): string {
+export function buildJingleLyrics(
+  brandName: string,
+  offerSentence: string,
+  variationIndex = 1
+): string {
   const safeBrand = brandName.trim() || 'Bisnes Saya';
   const conciseOffer = offerSentence.trim() || SAMPLE_OFFER_CHIP;
-  return [
-    `Pilihan tepat bersama ${safeBrand},`,
-    `Kualiti terjamin untuk anda semua,`,
-    `${conciseOffer}`,
-    `Jom WhatsApp sekarang, jangan lepaskan peluang!`,
-  ].join('\n');
+  const details = extractOfferDetails(safeBrand, conciseOffer);
+  const framework = getFrameworkForVariation(variationIndex);
+  const valueBadge = [details.discountPercent, details.priceTag, details.bundleOrFreebie]
+    .filter(Boolean)
+    .join(' • ');
+  const topicHook = details.collabTag
+    ? `${details.productTopic} (${details.collabTag})`
+    : details.productTopic;
+  const occasionCue = details.occasion ?? 'hari ini';
+
+  let lines: string[];
+  switch (framework) {
+    case 'pas':
+      lines = [
+        `Penat cari ${topicHook}? Pilih ${safeBrand},`,
+        `Mudah, telus dan kemas untuk rutin anda,`,
+        `${conciseOffer}`,
+        `WhatsApp ${safeBrand} sekarang, jangan tunggu lagi!`,
+      ];
+      break;
+    case 'bab':
+      lines = [
+        `Ubah rutin lama ke gaya baharu bersama ${safeBrand},`,
+        `Lebih lancar dengan ${topicHook} yang mesra bajet,`,
+        valueBadge ? `${valueBadge} — ${occasionCue}!` : `${conciseOffer}`,
+        `Tempah di WhatsApp ${safeBrand} hari ini juga!`,
+      ];
+      break;
+    case 'pov_ugc':
+      lines = [
+        `POV cuba sendiri ${safeBrand}, memang puas hati!`,
+        `Ramai puji ${topicHook}${details.collabTag ? ` ${details.collabTag}` : ''},`,
+        valueBadge ? `Berbaloi sungguh dengan ${valueBadge},` : `${conciseOffer}`,
+        `Klik WhatsApp ${safeBrand}, tanya stok sebelum habis!`,
+      ];
+      break;
+    case 'smart_buyer':
+      lines = [
+        `Pembeli bijak kira nilai di ${safeBrand},`,
+        valueBadge
+          ? `Nikmati ${valueBadge} tanpa caj tersembunyi,`
+          : `Harga jelas untuk ${topicHook} pilihan anda,`,
+        `${conciseOffer}`,
+        `Banding & WhatsApp ${safeBrand} sekarang!`,
+      ];
+      break;
+    case 'fomo_drop':
+      lines = [
+        `Rebut ${occasionCue} di ${safeBrand} sekarang!`,
+        `${topicHook} kuota terawal hampir penuh,`,
+        valueBadge ? `Hanya ${valueBadge} untuk yang pantas bertindak,` : `${conciseOffer}`,
+        `Tekan WhatsApp ${safeBrand} sebelum stok ditutup!`,
+      ];
+      break;
+  }
+
+  return stripDuplicateTawaran(lines.join('\n'));
 }
 
 export function computeRms(samples: Float32Array): number {

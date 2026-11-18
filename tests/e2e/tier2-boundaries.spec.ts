@@ -131,6 +131,15 @@ test.describe('Tier 2 — A1: Onboarding Boundaries (6 Tests)', () => {
   test('T2-A1-06: Revisit BYOK settings mid-campaign preserves active campaign', async ({ page }) => {
     await gotoFreshApp(page);
     await completeOnboarding(page, { useDemoMode: false });
+    await page.route('**/v1beta/models/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          candidates: [{ content: { parts: [{ text: '{}' }] } }],
+        }),
+      });
+    });
     const offer = 'Tawaran Khas Kekal 123';
     await launchCampaign(page, { offerSentence: offer });
 

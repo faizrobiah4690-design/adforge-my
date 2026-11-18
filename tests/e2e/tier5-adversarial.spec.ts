@@ -776,6 +776,18 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
     await loc.headerApiSettings.click();
     await loc.onboarding.settingsModal.getByRole('button', { name: /Log Keluar|Sign Out/i }).click();
     await completeOnboarding(page, { useDemoMode: false, apiKey: 'sk-live-tier5-key-123456' });
+
+    // Mock initial launchCampaign auto-vision call cleanly before manual enhance test
+    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          candidates: [{ content: { parts: [{ text: '{}' }] } }],
+        }),
+      });
+    });
+
     await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
 
     // 2. Google RSA H1-H3 and D1-D2 resolve via getByLabel
@@ -783,6 +795,10 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
     for (const label of ['H1', 'H2', 'H3', 'D1', 'D2']) {
       await expect(rsaCard.getByLabel(label, { exact: true })).toBeVisible();
     }
+
+    // Wait for initial auto-vision settle before replacing route handler for manual enhance test
+    await expect(page.getByTestId('generate-new-variation-btn')).toBeEnabled({ timeout: 5_000 });
+    await page.unroute('https://generativelanguage.googleapis.com/**');
 
     // 3. Mock Gemini API: call 1 delayed 450ms with risky + overlong RSA; call 2 HTTP 500 fallback
     let callCount = 0;
@@ -1063,7 +1079,18 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
     await expect(loc.headerApiSettings).toBeFocused();
 
     // 3. Launch campaign & intercept Gemini API with 500ms delay
+    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          candidates: [{ content: { parts: [{ text: '{}' }] } }],
+        }),
+      });
+    });
     await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+    await expect(page.getByTestId('generate-new-variation-btn')).toBeEnabled({ timeout: 5_000 });
+    await page.unroute('https://generativelanguage.googleapis.com/**');
 
     await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
       await new Promise((r) => setTimeout(r, 500));
@@ -1504,6 +1531,16 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
       }
     });
 
+    await page.route('**/v1beta/models/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          candidates: [{ content: { parts: [{ text: '{}' }] } }],
+        }),
+      });
+    });
+
     await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
     await openTab(page, 'video');
 
@@ -1587,6 +1624,14 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
       });
     });
 
+    await page.route('**/v1beta/models/**', async (route) => {
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'Rate limited' } }),
+      });
+    });
+
     await createBrandFolder(page, {
       name: unbrokenBrand,
       colorHex: '#0EA5E9',
@@ -1638,6 +1683,293 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
     }
 
     errors.assertClean([/status of 429/i]);
+    errors.detach();
+  });
+
+  test('T5-22: Demo Mode 5-variation sweep, Ulike X HelloKitty token extraction, zero "Tawaran Tawaran", zero external requests, and 390x844/1440x900 layout', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    const net = attachNetworkOriginAuditor(page);
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+
+    const loc = appLocators(page);
+    await createBrandFolder(page, {
+      name: 'Ulike X HelloKitty',
+      colorHex: '#EC4899',
+      tone: 'casual',
+      whatsapp: '019-888 7766',
+    });
+
+    const png1 = createTestPngBuffer({ width: 64, height: 64, rgba: [236, 72, 153, 255] });
+    const png2 = createTestPngBuffer({ width: 64, height: 64, rgba: [255, 255, 255, 255] });
+    await page.getByTestId('campaign-photo-1-input').setInputFiles({
+      name: 'ulike-1.png',
+      mimeType: 'image/png',
+      buffer: png1,
+    });
+    await page.getByTestId('campaign-photo-2-input').setInputFiles({
+      name: 'ulike-2.png',
+      mimeType: 'image/png',
+      buffer: png2,
+    });
+
+    const ulikeOffer =
+      'Edisi Terhad diskaun 20% harga RM899 Beli 1 Percuma Casing sempena Minggu Gaji, stok & slot terhad — WhatsApp sekarang.';
+    await launchCampaign(page, {
+      brandName: 'Ulike X HelloKitty',
+      offerSentence: ulikeOffer,
+      attachSamplePhotos: false,
+    });
+
+    await expect(page.getByTestId('variation-toolbar')).toBeVisible();
+    await expect(page.getByTestId('campaign-engine-status-badge')).toContainText(/Demo/i);
+    await expect(loc.workspaceTabs.locator(':scope > [role="tab"]')).toHaveCount(4);
+
+    // Verify Variation #1 content: zero "Tawaran Tawaran", extracted tokens present
+    const psychV1 = await loc.tab1.psychologyPanel.innerText();
+    const fbV1 = await loc.tab1.channelCard('facebook').card.locator('textarea').inputValue();
+    const ttV1 = await loc.tab1.channelCard('tiktok').card.innerText();
+    expect(`${psychV1}\n${fbV1}\n${ttV1}`).not.toMatch(/\btawaran\s+tawaran\b/i);
+    expect(`${psychV1}\n${fbV1}`).toMatch(/HelloKitty|20%|RM899|Minggu Gaji/i);
+
+    // Cycle Variasi #1 -> #2 -> #3 -> #4 -> #5 across Tabs 1-4
+    const fbPrimarySamples = new Set<string>([fbV1]);
+    const psychSamples = new Set<string>([psychV1]);
+
+    for (let step = 2; step <= 5; step += 1) {
+      await page.getByTestId('generate-new-variation-btn').click();
+      await expect(page.getByTestId('active-variation-label')).toContainText(`#${step}`);
+      const fbText = await loc.tab1.channelCard('facebook').card.locator('textarea').inputValue();
+      const psychText = await loc.tab1.psychologyPanel.innerText();
+      expect(`${psychText}\n${fbText}`).not.toMatch(/\btawaran\s+tawaran\b/i);
+      fbPrimarySamples.add(fbText);
+      psychSamples.add(psychText);
+    }
+    expect(fbPrimarySamples.size).toBe(5);
+    expect(psychSamples.size).toBe(5);
+
+    // Compare Tab 2, Tab 3, Tab 4 between Variasi #1 and Variasi #4 (Smart Buyer)
+    await page.getByTestId('variation-pill-1').click();
+    await openTab(page, 'carousel');
+    const slide1V1 = await loc.tab2.headlineInput.inputValue();
+    await openTab(page, 'jingle');
+    const lyricsV1 = await loc.tab3.lyricsInput.inputValue();
+    await openTab(page, 'video');
+    const frame1V1 = await page.getByTestId('video-frame-input-1').inputValue();
+
+    await page.getByTestId('variation-pill-4').click();
+    await expect(page.getByTestId('active-variation-label')).toContainText('#4');
+    await openTab(page, 'carousel');
+    const slide1V4 = await loc.tab2.headlineInput.inputValue();
+    await openTab(page, 'jingle');
+    const lyricsV4 = await loc.tab3.lyricsInput.inputValue();
+    await openTab(page, 'video');
+    const frame1V4 = await page.getByTestId('video-frame-input-1').inputValue();
+
+    expect(slide1V4).not.toBe(slide1V1);
+    expect(lyricsV4).not.toBe(lyricsV1);
+    expect(frame1V4).not.toBe(frame1V1);
+    await expect(loc.tab4.generateBtn).toBeDisabled();
+
+    // Responsive check at 390x844 and 1440x900
+    for (const vp of [
+      { width: 390, height: 844 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(vp);
+      await openTab(page, 'strategy');
+      await assertNoHorizontalOverflow(page, `T5-22 ${vp.width}x${vp.height}`);
+      await assertNoElementClipping(page, `T5-22 ${vp.width}x${vp.height}`);
+    }
+
+    net.assertSameOriginAndHealthy();
+    net.detach();
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-23: BYOK Multimodal Vision sends photo1+photo2 inlineData, falls back 2.5-flash (503) -> 2.0-flash (200), hydrates Tabs 1-4, and resets Tab 4 gate on Jana Variasi Baru', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await page.setViewportSize({ width: 1280, height: 850 });
+    await gotoFreshApp(page);
+    await completeOnboarding(page, {
+      useDemoMode: false,
+      apiKey: 'sk-live-m11-vision-123456',
+    });
+
+    const loc = appLocators(page);
+    await createBrandFolder(page, {
+      name: 'Ulike X HelloKitty',
+      colorHex: '#EC4899',
+      tone: 'casual',
+      whatsapp: '019-888 7766',
+    });
+
+    const png1 = createTestPngBuffer({ width: 48, height: 48, rgba: [236, 72, 153, 255] });
+    const png2 = createTestPngBuffer({ width: 48, height: 48, rgba: [250, 204, 21, 255] });
+    await page.getByTestId('campaign-photo-1-input').setInputFiles({
+      name: 'photo-1.png',
+      mimeType: 'image/png',
+      buffer: png1,
+    });
+    await page.getByTestId('campaign-photo-2-input').setInputFiles({
+      name: 'photo-2.png',
+      mimeType: 'image/png',
+      buffer: png2,
+    });
+
+    const visionCalls: Array<{ model: string; inlineCount: number; promptText: string }> = [];
+
+    await page.route('**/v1beta/models/**', async (route) => {
+      const url = route.request().url();
+      const body = JSON.parse(route.request().postData() ?? '{}') as {
+        contents?: Array<{
+          parts?: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }>;
+        }>;
+      };
+      const parts = body.contents?.[0]?.parts ?? [];
+      const inlineParts = parts.filter((p) => Boolean(p.inlineData));
+      const promptText = parts.find((p) => typeof p.text === 'string')?.text ?? '';
+      const modelMatch = url.match(/models\/([^:]+):generateContent/);
+      const model = modelMatch?.[1] ?? 'unknown';
+      visionCalls.push({ model, inlineCount: inlineParts.length, promptText });
+
+      if (model === 'gemini-2.5-flash' && visionCalls.length === 1) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: '2.5-flash busy' } }),
+        });
+        return;
+      }
+
+      const isV2 = promptText.includes('Variasi #2');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      visualSummary: isV2
+                        ? 'Set peranti IPL merah jambu HelloKitty bersama cermin mata pelindung.'
+                        : 'Peranti IPL Ulike X HelloKitty berwarna merah jambu edisi koleksi.',
+                      psychology: {
+                        targetPersona: isV2
+                          ? 'Pengguna gaya hidup moden yang mahu rutin penjagaan rumah tanpa ke salon.'
+                          : 'Peminat kecantikan & kolektor HelloKitty yang mencari peranti IPL di rumah.',
+                        coreTrigger: isV2
+                          ? 'Transformasi rutin penjagaan kulit mingguan yang lebih selesa di rumah.'
+                          : 'Diskaun 20% RM899 untuk edisi kolaborasi terhad.',
+                        frictionObjections: 'Ingin pastikan keaslian set dan keselamatan penggunaan.',
+                        trustAnchors: 'Set rasmi Ulike X HelloKitty bersama panduan penggunaan.',
+                      },
+                      angles: {
+                        urgency: {
+                          facebook: {
+                            primaryText: isV2
+                              ? 'Ubah rutin lama ke sesi penjagaan rumah selesa dengan Ulike X HelloKitty!'
+                              : 'Edisi Ulike X HelloKitty diskaun 20% kini dibuka untuk batch awal!',
+                            headline: isV2 ? 'Ulike X HelloKitty Gaya Baharu' : 'Ulike X HelloKitty Terhad',
+                            description: 'RM899 • Minggu Gaji',
+                          },
+                          instagram: {
+                            caption: isV2
+                              ? 'Gaya baharu penjagaan rumah dengan Ulike X HelloKitty ✨'
+                              : 'Koleksi Ulike X HelloKitty edisi terhad kini tiba!',
+                            hashtags: '#UlikeXHelloKitty #BeautyMY',
+                          },
+                          tiktok: {
+                            hook: isV2
+                              ? 'Rutin rumah lebih kemas tanpa perlu keluar jauh!'
+                              : 'Tengok rupa sebenar peranti Ulike X HelloKitty ini!',
+                            script: '0-2s: Visual produk. 2-4s: Diskaun 20% RM899. 4-6s: WhatsApp.',
+                            caption: 'Ulike X HelloKitty RM899',
+                          },
+                          google_rsa: {
+                            headlines: ['Ulike X HelloKitty', 'Diskaun 20% RM899', 'Tempah WhatsApp Kini'],
+                            descriptions: [
+                              'Peranti IPL edisi kolaborasi Ulike X HelloKitty untuk kegunaan di rumah.',
+                              'Hubungi WhatsApp rasmi untuk semak stok batch terawal.',
+                            ],
+                            negativeKeywords: ['percuma', 'tiruan', 'terpakai', 'rosak', 'borong'],
+                          },
+                        },
+                      },
+                      carouselSlides: [
+                        {
+                          badgeText: isV2 ? 'GAYA BAHARU' : 'EDISI KOLEKSI',
+                          headline: isV2 ? 'Rutin Rumah Lebih Mudah' : 'Ulike X HelloKitty IPL',
+                          subheadline: 'RM899 • Diskaun 20%',
+                          ctaText: 'Slide 1 / 4',
+                        },
+                      ],
+                      jingleLyrics: isV2
+                        ? 'Gaya baharu bersama Ulike X HelloKitty,\nRutin selesa setiap hari!'
+                        : 'Ulike X HelloKitty pilihan bergaya,\nJimat 20% RM899 minggu gaji!',
+                      storyboardFrames: [
+                        {
+                          overlayHeadline: isV2
+                            ? 'Ulike X HelloKitty: Gaya Baharu'
+                            : 'Ulike X HelloKitty: Edisi Khas',
+                          lyricLine: 'Baris 1',
+                        },
+                      ],
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await launchCampaign(page, {
+      brandName: 'Ulike X HelloKitty',
+      offerSentence: 'Edisi Terhad diskaun 20% RM899 Minggu Gaji',
+      attachSamplePhotos: false,
+    });
+
+    // Should retry 2.5-flash (503) -> 2.0-flash (200) with both photo inlineData parts
+    await expect(page.getByTestId('campaign-engine-status-badge')).toContainText(
+      /Gemini 2\.0 Flash Vision/i,
+      { timeout: 10_000 }
+    );
+    await expect(page.getByTestId('product-vision-summary-badge')).toContainText(
+      /Peranti IPL Ulike X HelloKitty/i
+    );
+    expect(visionCalls.length).toBe(2);
+    expect(visionCalls[0].model).toBe('gemini-2.5-flash');
+    expect(visionCalls[0].inlineCount).toBe(2);
+    expect(visionCalls[1].model).toBe('gemini-2.0-flash');
+    expect(visionCalls[1].inlineCount).toBe(2);
+
+    await expect(loc.tab1.psychologyPanel).toContainText(/kolektor HelloKitty/i);
+
+    // Confirm Tab 4 gate, then click Jana Variasi Baru -> 2.5-flash succeeds & Tab 4 gate resets
+    await openTab(page, 'video');
+    await confirmStoryboard(page);
+    await expect(loc.tab4.generateBtn).toBeEnabled();
+
+    await page.getByTestId('generate-new-variation-btn').click();
+    await expect(page.getByTestId('active-variation-label')).toContainText('#2');
+    await expect(page.getByTestId('campaign-engine-status-badge')).toContainText(
+      /Gemini 2\.5 Flash Vision/i,
+      { timeout: 10_000 }
+    );
+    await expect(loc.tab4.generateBtn).toBeDisabled();
+    await expect(page.getByTestId('video-frame-input-1')).toHaveValue(/Gaya Baharu/i);
+
+    await openTab(page, 'jingle');
+    expect(await loc.tab3.lyricsInput.inputValue()).toContain('Gaya baharu bersama Ulike X HelloKitty');
+
+    errors.assertClean([/status of 503/i]);
     errors.detach();
   });
 });

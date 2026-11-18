@@ -12,6 +12,45 @@ export type VideoEngineId = 'gemini-omni-1.2-flash' | 'veo-3.1-generate-preview'
 export type JingleGenerationSource = 'lyria-api' | 'local-fallback' | 'local-synth';
 export type VideoGenerationSource = 'omni-api' | 'veo-api' | 'local-fallback' | 'local-muxer';
 export type WorkbenchScreen = 'onboarding' | 'workbench';
+export type VariationFrameworkId = 'pas' | 'bab' | 'pov_ugc' | 'smart_buyer' | 'fomo_drop';
+export type CampaignGenerationStatus = 'idle' | 'generating' | 'ready';
+export type CampaignGenerationSource =
+  | 'gemini-2.5-flash'
+  | 'gemini-2.0-flash'
+  | 'offline-smart-demo'
+  | 'offline-smart-fallback';
+
+export interface OfferDetails {
+  brandName: string;
+  collabTag: string | null;
+  discountPercent: string | null;
+  priceTag: string | null;
+  bundleOrFreebie: string | null;
+  occasion: string | null;
+  scarcityCue: string | null;
+  productTopic: string;
+  vertical: 'beauty' | 'fnb' | 'fashion' | 'services' | 'general';
+}
+
+export interface CustomerPsychologyProfile {
+  targetPersona: string;
+  coreTrigger: string;
+  frictionObjections: string;
+  trustAnchors: string;
+  productVisionSummary?: string;
+}
+
+export interface CampaignVariationSnapshot {
+  variationIndex: number;
+  frameworkId: VariationFrameworkId;
+  psychology: CustomerPsychologyProfile;
+  copyByAngle: Record<AngleId, ChannelCopy>;
+  slides: CarouselSlide[];
+  jingleLyrics: string;
+  storyboardFrames: StoryboardFrame[];
+  source: CampaignGenerationSource;
+  productVisionSummary: string | null;
+}
 
 export interface BrandProfile {
   id: string;
@@ -181,6 +220,15 @@ export interface CampaignContextValue {
   launchedOfferSentence: string;
   launchedPhotos: [PhotoAsset, PhotoAsset];
   launchCampaign: (overrideInput?: Partial<CampaignInput>) => void;
+  variationIndex: number;
+  activeFrameworkId: VariationFrameworkId;
+  customerPsychology: CustomerPsychologyProfile;
+  productVisionSummary: string | null;
+  campaignGenStatus: CampaignGenerationStatus;
+  campaignGenSource: CampaignGenerationSource;
+  generatedVariations: Record<number, CampaignVariationSnapshot>;
+  selectVariation: (index: number) => Promise<void> | void;
+  generateNewVariation: () => Promise<void>;
   activeTab: WorkspaceTabId;
   setActiveTab: (tab: WorkspaceTabId) => void;
   selectedAngle: AngleId;

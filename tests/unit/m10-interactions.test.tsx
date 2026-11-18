@@ -678,12 +678,17 @@ describe('M10 Tab 3 & Tab 4 UI + CampaignContext integration', () => {
     seedAuthInStorage({ byokKey: 'sk-live-m10-byok-key-999', isDemoMode: false });
 
     let resolveFetch!: (res: Response) => void;
-    vi.spyOn(globalThis, 'fetch').mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('/v1beta/interactions')) {
+        return new Promise<Response>((resolve) => {
           resolveFetch = resolve;
-        })
-    );
+        });
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { message: 'mocked fallback' } }), { status: 503 })
+      );
+    });
 
     render(
       <I18nProvider>

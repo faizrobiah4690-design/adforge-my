@@ -774,7 +774,11 @@ describe('M3 StrategyTab component integration', () => {
     const pendingFetch = new Promise<Response>((resolve) => {
       resolveFetch = resolve;
     });
-    vi.spyOn(globalThis, 'fetch').mockReturnValueOnce(pendingFetch);
+    vi.spyOn(globalThis, 'fetch')
+      .mockReturnValueOnce(pendingFetch)
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: 'mocked fallback' } }), { status: 503 })
+      );
 
     function ByokEnhanceHarness() {
       const { loginWithGoogle, saveByokKey } = useWorkbench();
@@ -860,7 +864,11 @@ describe('M3 StrategyTab component integration', () => {
     const pendingFetch = new Promise<Response>((resolve) => {
       resolveFetch = resolve;
     });
-    vi.spyOn(globalThis, 'fetch').mockReturnValueOnce(pendingFetch);
+    vi.spyOn(globalThis, 'fetch')
+      .mockReturnValueOnce(pendingFetch)
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: 'mocked fallback' } }), { status: 503 })
+      );
 
     function MidFlightRelaunchHarness() {
       const { loginWithGoogle, saveByokKey } = useWorkbench();
@@ -958,7 +966,11 @@ describe('M3 StrategyTab component integration', () => {
     const pendingFetch = new Promise<Response>((resolve) => {
       resolveFetch = resolve;
     });
-    vi.spyOn(globalThis, 'fetch').mockReturnValueOnce(pendingFetch);
+    vi.spyOn(globalThis, 'fetch')
+      .mockReturnValueOnce(pendingFetch)
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: 'mocked fallback' } }), { status: 503 })
+      );
 
     function MidFlightBrandToneHarness() {
       const { loginWithGoogle, saveByokKey, activeBrandId, updateBrand } = useWorkbench();
@@ -1049,7 +1061,11 @@ describe('M3 StrategyTab component integration', () => {
     const pendingFetch = new Promise<Response>((resolve) => {
       resolveFetch = resolve;
     });
-    vi.spyOn(globalThis, 'fetch').mockReturnValueOnce(pendingFetch);
+    vi.spyOn(globalThis, 'fetch')
+      .mockReturnValueOnce(pendingFetch)
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: 'mocked fallback' } }), { status: 503 })
+      );
 
     function ByokAngleIsolationHarness() {
       const { loginWithGoogle, saveByokKey } = useWorkbench();
@@ -1140,7 +1156,11 @@ describe('M3 StrategyTab component integration', () => {
     const pendingFetch = new Promise<Response>((resolve) => {
       resolveFetch = resolve;
     });
-    vi.spyOn(globalThis, 'fetch').mockReturnValueOnce(pendingFetch);
+    vi.spyOn(globalThis, 'fetch')
+      .mockReturnValueOnce(pendingFetch)
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: 'mocked fallback' } }), { status: 503 })
+      );
 
     function TabSwitchHarness() {
       const { loginWithGoogle, saveByokKey } = useWorkbench();
@@ -1251,7 +1271,11 @@ describe('M3 StrategyTab component integration', () => {
     const pendingFetch = new Promise<Response>((resolve) => {
       resolveFetch = resolve;
     });
-    vi.spyOn(globalThis, 'fetch').mockReturnValueOnce(pendingFetch);
+    vi.spyOn(globalThis, 'fetch')
+      .mockReturnValueOnce(pendingFetch)
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: 'mocked fallback' } }), { status: 503 })
+      );
 
     function ProviderUnmountHarness() {
       const { loginWithGoogle, saveByokKey } = useWorkbench();
@@ -1363,7 +1387,11 @@ describe('M3 StrategyTab component integration', () => {
     const pendingFetch = new Promise<Response>((resolve) => {
       resolveFetch = resolve;
     });
-    vi.spyOn(globalThis, 'fetch').mockReturnValueOnce(pendingFetch);
+    vi.spyOn(globalThis, 'fetch')
+      .mockReturnValueOnce(pendingFetch)
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: 'mocked fallback' } }), { status: 503 })
+      );
 
     function DemoSwitchMidFlightHarness() {
       const { loginWithGoogle, saveByokKey } = useWorkbench();

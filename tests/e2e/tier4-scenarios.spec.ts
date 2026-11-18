@@ -42,6 +42,30 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
     await gotoFreshApp(page);
     await completeOnboarding(page, { useDemoMode: false });
 
+    await page.route('**/v1beta/models/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      visualSummary: 'Foto produk dan servis Demo Bisnes Saya.',
+                      jingleLyrics:
+                        'Pilihan tepat bersama Demo Bisnes Saya,\nPromosi Minggu Gaji diskaun 20% untuk anda,\nStok dan slot terawal sedia ditempah,\nWhatsApp Demo Bisnes Saya sekarang!',
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      });
+    });
+
     const loc = appLocators(page);
     await expect(loc.vault.folderButton('Demo Bisnes Saya')).toBeVisible();
     await loc.vault.folderButton('Demo Bisnes Saya').click();

@@ -98,6 +98,7 @@ export function JingleTab() {
   const {
     launchedBrand,
     launchedOfferSentence,
+    variationIndex,
     jingle,
     setJingle,
     isGeneratingJingle,
@@ -157,7 +158,11 @@ export function JingleTab() {
 
   const handleResetLyrics = () => {
     clearJingleError();
-    const baseline = buildJingleLyrics(launchedBrand.name, launchedOfferSentence);
+    const baseline = buildJingleLyrics(
+      launchedBrand.name,
+      launchedOfferSentence,
+      variationIndex
+    );
     setJingle((prev) => ({
       ...prev,
       lyrics: baseline,
