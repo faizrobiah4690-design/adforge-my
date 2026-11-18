@@ -216,15 +216,17 @@ export function BrandVaultScreen() {
               data-testid={
                 activeScreen === 'onboarding' ? 'vault-demo-badge' : 'onboarding-demo-badge'
               }
-              className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300"
+              className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 max-w-full min-w-0"
             >
               <Sparkles className="h-3 w-3 shrink-0" />
-              {t('app.demoBadge')}
+              <span className="min-w-0 break-words [overflow-wrap:anywhere] whitespace-normal leading-tight">
+                {t('app.demoBadge')}
+              </span>
             </span>
           ) : null}
-          <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-[#0B0F19] px-2.5 py-1 text-[11px] text-slate-300 max-w-full">
+          <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-[#0B0F19] px-2.5 py-1 text-[11px] text-slate-300 max-w-full min-w-0">
             <Shield className="h-3 w-3 text-sky-400 shrink-0" />
-            <span className="break-words whitespace-normal leading-tight">
+            <span className="min-w-0 break-words [overflow-wrap:anywhere] whitespace-normal leading-tight">
               {t('vault.seededBadge')}: {brands.find((b) => b.isSeeded)?.name ?? SEEDED_DEMO_BRAND.name}
             </span>
           </span>
@@ -251,7 +253,7 @@ export function BrandVaultScreen() {
                 className="h-2.5 w-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: brand.themeColor }}
               />
-              <span className="break-words whitespace-normal text-left leading-tight max-w-full">
+              <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] whitespace-normal text-left leading-tight">
                 {brand.name}
               </span>
             </button>

@@ -180,7 +180,7 @@ export function CarouselTab() {
                     {ROLE_LABELS[locale][slide.role]}
                   </span>
                 </div>
-                <div className="mt-0.5 whitespace-normal break-words text-[11px] leading-snug text-slate-400">
+                <div className="mt-0.5 whitespace-normal break-words [overflow-wrap:anywhere] text-[11px] leading-snug text-slate-400">
                   {slide.headline || (locale === 'ms' ? '(Tiada tajuk)' : '(No headline)')}
                 </div>
               </button>
@@ -194,13 +194,17 @@ export function CarouselTab() {
           {/* Left Column: Live Two-Layer Preview Stage */}
           <div className="lg:col-span-6 space-y-3 min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 min-w-0">
-              <span className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-[#0B0F19] px-2.5 py-1">
-                <ImageIcon className="h-3 w-3 text-sky-400" />
-                {t('tab2.layerBgLabel')}
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-[#0B0F19] px-2.5 py-1 max-w-full min-w-0">
+                <ImageIcon className="h-3 w-3 text-sky-400 shrink-0" />
+                <span className="min-w-0 break-words [overflow-wrap:anywhere] whitespace-normal leading-tight">
+                  {t('tab2.layerBgLabel')}
+                </span>
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-[#0B0F19] px-2.5 py-1">
-                <Layers className="h-3 w-3 text-emerald-400" />
-                {t('tab2.layerFgLabel')}
+              <span className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-[#0B0F19] px-2.5 py-1 max-w-full min-w-0">
+                <Layers className="h-3 w-3 text-emerald-400 shrink-0" />
+                <span className="min-w-0 break-words [overflow-wrap:anywhere] whitespace-normal leading-tight">
+                  {t('tab2.layerFgLabel')}
+                </span>
               </span>
             </div>
 
@@ -418,7 +422,7 @@ export function CarouselTab() {
                           —
                         </div>
                       )}
-                      <span className="break-words whitespace-normal leading-tight text-xs font-medium">
+                      <span className="min-w-0 break-words [overflow-wrap:anywhere] whitespace-normal leading-tight text-xs font-medium">
                         {photo.label || (photoIdx === 0 ? t('form.photo1Label') : t('form.photo2Label'))}
                       </span>
                     </button>
@@ -433,12 +437,17 @@ export function CarouselTab() {
                 <span className="text-xs font-semibold text-slate-200">
                   {t('tab2.layerFgLabel')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-[#111827] px-2.5 py-0.5 text-[11px] text-slate-300 max-w-full">
+                <span
+                  data-testid="carousel-layer2-brand-pill"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-700 bg-[#111827] px-2.5 py-1 text-[11px] text-slate-300 min-w-0 max-w-full"
+                >
                   <span
                     className="h-2.5 w-2.5 rounded-full shrink-0"
                     style={{ backgroundColor: themeColor }}
                   />
-                  <span className="break-words whitespace-normal leading-tight">{launchedBrand.name}</span>
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere] whitespace-normal leading-tight">
+                    {launchedBrand.name}
+                  </span>
                 </span>
               </div>
 

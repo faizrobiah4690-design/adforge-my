@@ -51,7 +51,7 @@ export async function assertNoElementClipping(page: Page, label = 'viewport'): P
     };
 
     const selector =
-      'button, a, [role="tab"], h1, h2, h3, h4, input, textarea, select, [data-testid$="-badge"]';
+      'button, a, [role="tab"], h1, h2, h3, h4, input, textarea, select, [data-testid$="-badge"], [data-testid*="pill"], span[class*="rounded-full"], span[class*="rounded-xl"]';
     for (const el of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
       if (el.closest('[aria-hidden="true"]') || el.closest('[inert]')) continue;
       if (el.closest('[data-carousel-stage="true"]')) continue;
@@ -63,8 +63,22 @@ export async function assertNoElementClipping(page: Page, label = 'viewport'): P
       const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
       const testid = el.getAttribute('data-testid');
 
+      // Skip intentional horizontal scroll containers
+      let insideHorizontalScroller = false;
+      {
+        let p = el.parentElement;
+        while (p && p !== document.documentElement) {
+          const ps = window.getComputedStyle(p);
+          if (ps.overflowX === 'auto' || ps.overflowX === 'scroll') {
+            insideHorizontalScroller = true;
+            break;
+          }
+          p = p.parentElement;
+        }
+      }
+
       // 1. Viewport bounds check
-      if (rect.left < -1 || rect.right > clientWidth + 1) {
+      if (!insideHorizontalScroller && (rect.left < -1 || rect.right > clientWidth + 1)) {
         issues.push({
           kind: 'viewport-clip',
           tag: el.tagName.toLowerCase(),
@@ -74,35 +88,49 @@ export async function assertNoElementClipping(page: Page, label = 'viewport'): P
         });
       }
 
-      // 2. Text / inner content horizontal clipping check on interactive/badge/heading elements
+      // 2. Text / inner content horizontal clipping check on interactive/badge/pill/heading elements
       const tag = el.tagName.toLowerCase();
       if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
         const style = window.getComputedStyle(el);
-        if (style.overflowX === 'hidden' || style.overflowX === 'clip') {
-          if (el.scrollWidth > el.clientWidth + 2) {
-            issues.push({
-              kind: 'self-text-clip',
-              tag,
-              testid,
-              text,
-              detail: `scrollWidth=${el.scrollWidth} > clientWidth=${el.clientWidth}`,
-            });
-          }
+        const isScrollableX = style.overflowX === 'auto' || style.overflowX === 'scroll';
+        if (!isScrollableX && el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 2) {
+          issues.push({
+            kind: 'self-text-clip',
+            tag,
+            testid,
+            text,
+            detail: `scrollWidth=${el.scrollWidth} > clientWidth=${el.clientWidth} (overflowX=${style.overflowX})`,
+          });
         }
-        for (const child of Array.from(el.querySelectorAll<HTMLElement>('span, div, p'))) {
-          if (isVisuallyHidden(child)) continue;
-          const cs = window.getComputedStyle(child);
-          if (
-            (cs.overflowX === 'hidden' || cs.overflowX === 'clip') &&
-            child.scrollWidth > child.clientWidth + 2
-          ) {
-            issues.push({
-              kind: 'child-text-clip',
-              tag: child.tagName.toLowerCase(),
-              testid,
-              text: (child.textContent ?? '').trim().slice(0, 60),
-              detail: `scrollWidth=${child.scrollWidth} > clientWidth=${child.clientWidth}`,
-            });
+        if (!isScrollableX) {
+          for (const child of Array.from(el.querySelectorAll<HTMLElement>('span, div, p'))) {
+            if (isVisuallyHidden(child)) continue;
+            const cs = window.getComputedStyle(child);
+            if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') continue;
+            if (child.clientWidth > 0 && child.scrollWidth > child.clientWidth + 2) {
+              issues.push({
+                kind: 'child-text-clip',
+                tag: child.tagName.toLowerCase(),
+                testid,
+                text: (child.textContent ?? '').trim().slice(0, 60),
+                detail: `scrollWidth=${child.scrollWidth} > clientWidth=${child.clientWidth} (overflowX=${cs.overflowX})`,
+              });
+            }
+            const cRect = child.getBoundingClientRect();
+            if (
+              cRect.width > 0 &&
+              (cRect.left < rect.left - 1 ||
+                cRect.right > rect.right + 1 ||
+                (!insideHorizontalScroller && cRect.right > clientWidth + 1))
+            ) {
+              issues.push({
+                kind: 'child-box-overflow',
+                tag: child.tagName.toLowerCase(),
+                testid,
+                text: (child.textContent ?? '').trim().slice(0, 60),
+                detail: `child(${Math.round(cRect.left)}..${Math.round(cRect.right)}) exceeds parent(${Math.round(rect.left)}..${Math.round(rect.right)}) or viewport(${clientWidth})`,
+              });
+            }
           }
         }
       }

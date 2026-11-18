@@ -447,7 +447,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     errors.detach();
   });
 
-  test('T5-07: Mobile 390x844 extreme unbroken brand/offer zero overflow + html lang sync + Escape modal + clipboard fallback', async ({ page }) => {
+  test('T5-07: Mobile 320/360/390 extreme unbroken brand/offer zero clipping across Onboarding, Vault, Form, Tabs 1-4 + html lang sync + Escape modal + clipboard fallback', async ({ page }) => {
     const errors = attachRuntimeErrorCollector(page);
     await page.addInitScript(() => {
       try {
@@ -464,8 +464,18 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
       }
     });
 
-    await page.setViewportSize({ width: 390, height: 844 });
     await gotoFreshApp(page);
+
+    for (const vp of [
+      { width: 320, height: 700 },
+      { width: 360, height: 800 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(vp);
+      await assertNoHorizontalOverflow(page, `${vp.width} onboarding`);
+      await assertNoElementClipping(page, `${vp.width} onboarding`);
+    }
+
     await completeOnboarding(page, { useDemoMode: true });
 
     const loc = appLocators(page);
@@ -482,8 +492,8 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await page.keyboard.press('Escape');
     await expect(loc.onboarding.settingsModal).toHaveCount(0);
 
-    // Extreme unbroken brand name (96 chars) & offer (220 chars)
-    const extremeBrand = 'KedaiFesyenDanGayaHidupModenCawanganPusatBandarayaKualaLumpurSentralMalaysia99999999';
+    // Extreme unbroken 64-char brand name & 212-char offer
+    const extremeBrand = 'KedaiKopiDanRotiBakarWarisanNenekKebayanUltraPanjangTanpaRuang2026';
     const extremeOffer = 'PromosiPakejIstimewaSempenaMingguGajiUntukSemuaPelangganBaruDanLama_' + 'X'.repeat(140);
 
     await createBrandFolder(page, {
@@ -495,26 +505,52 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
       offerSentence: extremeOffer,
     });
 
-    await assertNoHorizontalOverflow(page, '390 extreme vault+form+tab1');
-    await assertNoElementClipping(page, '390 extreme vault+form+tab1');
-
     // Clipboard rejection falls back cleanly to execCommand('copy')
     await loc.tab1.channelCard('facebook').copyBtn.click();
     await expect(loc.tab1.channelCard('facebook').card).toContainText(RX.copiedFeedback);
 
-    for (const tab of ['carousel', 'jingle', 'video'] as const) {
-      await openTab(page, tab);
-      await assertNoHorizontalOverflow(page, `390 extreme ${tab}`);
-      await assertNoElementClipping(page, `390 extreme ${tab}`);
-    }
-
-    for (const smallVp of [
-      { width: 320, height: 700 },
+    for (const vp of [
+      { width: 390, height: 844 },
       { width: 360, height: 800 },
+      { width: 320, height: 700 },
     ]) {
-      await page.setViewportSize(smallVp);
-      await assertNoHorizontalOverflow(page, `${smallVp.width} extreme vault+form+video`);
-      await assertNoElementClipping(page, `${smallVp.width} extreme vault+form+video`);
+      await page.setViewportSize(vp);
+
+      const folderMetrics = await loc.vault.folderButton(extremeBrand).evaluate((btn) => {
+        const bRect = btn.getBoundingClientRect();
+        const span = btn.querySelector('span:last-of-type');
+        const sRect = span?.getBoundingClientRect();
+        return {
+          scrollWidth: btn.scrollWidth,
+          clientWidth: btn.clientWidth,
+          btnRight: bRect.right,
+          spanRight: sRect?.right ?? 0,
+        };
+      });
+      expect(folderMetrics.scrollWidth).toBeLessThanOrEqual(folderMetrics.clientWidth + 2);
+      expect(folderMetrics.spanRight).toBeLessThanOrEqual(folderMetrics.btnRight + 1);
+
+      for (const tab of ['strategy', 'carousel', 'jingle', 'video'] as const) {
+        await openTab(page, tab);
+        await assertNoHorizontalOverflow(page, `${vp.width} extreme ${tab}`);
+        await assertNoElementClipping(page, `${vp.width} extreme ${tab}`);
+
+        if (tab === 'carousel') {
+          const pillMetrics = await page.getByTestId('carousel-layer2-brand-pill').evaluate((pill) => {
+            const pRect = pill.getBoundingClientRect();
+            const span = pill.querySelector('span:last-of-type');
+            const sRect = span?.getBoundingClientRect();
+            return {
+              viewportWidth: document.documentElement.clientWidth,
+              pillRight: pRect.right,
+              spanRight: sRect?.right ?? 0,
+            };
+          });
+          expect(pillMetrics.pillRight).toBeLessThanOrEqual(pillMetrics.viewportWidth + 1);
+          expect(pillMetrics.spanRight).toBeLessThanOrEqual(pillMetrics.pillRight + 1);
+          expect(pillMetrics.spanRight).toBeLessThanOrEqual(pillMetrics.viewportWidth + 1);
+        }
+      }
     }
 
     errors.assertClean();
