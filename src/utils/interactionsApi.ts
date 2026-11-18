@@ -62,11 +62,13 @@ const STYLE_PROMPT_GUIDES: Record<JingleStyleId, string> = {
 export function buildLyriaJinglePrompt(params: {
   brand: BrandProfile;
   offerSentence: string;
+  uspAndAudience?: string;
   style: JingleStyleId;
   lyrics: string;
 }): string {
   const brandName = params.brand.name.trim() || 'Bisnes Saya';
   const offer = params.offerSentence.trim() || 'Promosi istimewa minggu ini';
+  const usp = params.uspAndAudience?.trim();
   const toneLabel =
     params.brand.tone === 'casual'
       ? 'Casual, warm, Malaysian SME friendly'
@@ -79,6 +81,7 @@ export function buildLyriaJinglePrompt(params: {
     `Brand: ${brandName}`,
     `Tone: ${toneLabel}`,
     `Campaign Offer: ${offer}`,
+    ...(usp ? [`Product USP & Audience: ${usp}`] : []),
     `Musical Style: ${styleGuide}`,
     'Sing/deliver these exact Bahasa Melayu chorus lyrics clearly:',
     cleanLyrics,
@@ -88,11 +91,13 @@ export function buildLyriaJinglePrompt(params: {
 export function buildVideoStoryboardPrompt(params: {
   brand: BrandProfile;
   offerSentence: string;
+  uspAndAudience?: string;
   jingleStyle: JingleStyleId;
   frames: StoryboardFrame[];
 }): string {
   const brandName = params.brand.name.trim() || 'Bisnes Saya';
   const offer = params.offerSentence.trim() || 'Promosi istimewa minggu ini';
+  const usp = params.uspAndAudience?.trim();
   const toneLabel =
     params.brand.tone === 'casual'
       ? 'Santai & mesra (Casual Malaysian SME)'
@@ -110,6 +115,7 @@ export function buildVideoStoryboardPrompt(params: {
     `Primary Theme Color: ${params.brand.themeColor}`,
     `Tone: ${toneLabel}`,
     `Offer: ${offer}`,
+    ...(usp ? [`Product USP & Audience: ${usp}`] : []),
     `Audio Mood: ${styleGuide}`,
     'Keep key titles inside 9:16 social safe zones (avoid top/bottom edge clipping).',
     'Confirmed 4-Frame Storyboard:',

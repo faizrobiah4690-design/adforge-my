@@ -1,4 +1,5 @@
-import { Cpu, Film, LayoutGrid, Loader2, Music, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, Clock, Cpu, Film, LayoutGrid, Loader2, Music, Sparkles } from 'lucide-react';
 import { useI18n } from '../i18n/I18nContext';
 import { useCampaign } from '../state/CampaignContext';
 import type { VariationFrameworkId, WorkspaceTabId } from '../types/campaign';
@@ -47,7 +48,7 @@ function TabIcon({ tabId }: { tabId: WorkspaceTabId }) {
 }
 
 export function WorkspaceShell() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const {
     activeTab,
     setActiveTab,
@@ -57,9 +58,32 @@ export function WorkspaceShell() {
     productVisionSummary,
     campaignGenStatus,
     campaignGenSource,
+    campaignGenError,
+    pollinationsCooldownUntil,
     selectVariation,
     generateNewVariation,
   } = useCampaign();
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!pollinationsCooldownUntil || pollinationsCooldownUntil <= Date.now()) {
+      return;
+    }
+    setNowMs(Date.now());
+    const id = window.setInterval(() => {
+      const current = Date.now();
+      setNowMs(current);
+      if (current >= pollinationsCooldownUntil) {
+        window.clearInterval(id);
+      }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [pollinationsCooldownUntil]);
+
+  const cooldownSeconds =
+    pollinationsCooldownUntil && pollinationsCooldownUntil > nowMs
+      ? Math.ceil((pollinationsCooldownUntil - nowMs) / 1000)
+      : 0;
 
   const activeFwPill =
     FRAMEWORK_PILLS.find((fw) => fw.id === activeFrameworkId) ?? FRAMEWORK_PILLS[0];
@@ -70,12 +94,16 @@ export function WorkspaceShell() {
       ? 'variation.statusGemini25'
       : campaignGenSource === 'gemini-2.0-flash'
         ? 'variation.statusGemini20'
-        : campaignGenSource === 'offline-smart-demo'
-          ? 'variation.statusOfflineDemo'
-          : 'variation.statusOfflineFallback';
+        : campaignGenSource === 'pollinations-openai-fast'
+          ? 'variation.statusBuiltInPollinations'
+          : campaignGenSource === 'offline-smart-demo'
+            ? 'variation.statusOfflineDemo'
+            : 'variation.statusOfflineFallback';
 
   const isLiveVisionBadge =
-    campaignGenSource === 'gemini-2.5-flash' || campaignGenSource === 'gemini-2.0-flash';
+    campaignGenSource === 'gemini-2.5-flash' ||
+    campaignGenSource === 'gemini-2.0-flash' ||
+    campaignGenSource === 'pollinations-openai-fast';
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 space-y-6 min-w-0">
@@ -126,6 +154,20 @@ export function WorkspaceShell() {
                     {t('variation.visionPrefix')} {productVisionSummary}
                   </span>
                 ) : null}
+
+                {cooldownSeconds > 0 ? (
+                  <span
+                    data-testid="pollinations-cooldown-badge"
+                    className="inline-flex items-center gap-1 rounded-xl border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-200 max-w-full min-w-0 whitespace-normal [overflow-wrap:anywhere] leading-snug"
+                  >
+                    <Clock className="h-3 w-3 shrink-0" />
+                    <span>
+                      {locale === 'ms'
+                        ? `Had AI Terbina Dalam: ${cooldownSeconds}s`
+                        : `Built-In AI Cooldown: ${cooldownSeconds}s`}
+                    </span>
+                  </span>
+                ) : null}
               </div>
 
               <button
@@ -145,6 +187,19 @@ export function WorkspaceShell() {
                 </span>
               </button>
             </div>
+
+            {campaignGenError ? (
+              <div
+                role="alert"
+                data-testid="byok-fallback-alert"
+                className="flex items-start gap-2 rounded-xl border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 min-w-0"
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                <span className="min-w-0 break-words [overflow-wrap:anywhere] leading-snug">
+                  {campaignGenError}
+                </span>
+              </div>
+            ) : null}
 
             {isGenerating ? (
               <p className="text-[11px] text-sky-300 whitespace-normal [overflow-wrap:anywhere] leading-snug">

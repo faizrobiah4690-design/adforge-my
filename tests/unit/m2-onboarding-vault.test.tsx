@@ -389,13 +389,29 @@ describe('OnboardingScreen', () => {
     );
   }
 
-  it('renders dark-mode Freelancer Workbench, local video guide, and gates Demo/Save behind Google Login (never auto-login)', () => {
-    renderWithProviders(
-      <>
-        <OnboardingProbe />
-        <OnboardingScreen />
-      </>
-    );
+  it('renders dark-mode Freelancer settings, local video guide, and gates Demo/Save behind Google Login after Sign Out', () => {
+    function SignedOutGateHarness() {
+      const { logout, activeScreen } = useWorkbench();
+      return (
+        <>
+          <button type="button" data-testid="force-logout" onClick={() => logout()}>
+            logout
+          </button>
+          <OnboardingProbe />
+          {activeScreen === 'onboarding' || true ? <OnboardingScreen /> : null}
+        </>
+      );
+    }
+
+    renderWithProviders(<SignedOutGateHarness />);
+
+    // Default starts logged in with Built-In AI active in workbench
+    expect(screen.getByTestId('probe-logged-in')).toHaveTextContent('true');
+    expect(screen.getByTestId('probe-screen')).toHaveTextContent('workbench');
+    expect(screen.getByTestId('use-builtin-ai-btn')).toBeInTheDocument();
+
+    // Signing out gates Demo/Save behind Google login
+    fireEvent.click(screen.getByTestId('force-logout'));
 
     expect(screen.getByTestId('onboarding-screen')).toBeInTheDocument();
     expect(screen.getByTestId('byok-video-guide')).toHaveAttribute(
@@ -418,17 +434,26 @@ describe('OnboardingScreen', () => {
   });
 
   it('reveals session badge on Google login, toggles password visibility preserving value, and validates BYOK keys', () => {
-    renderWithProviders(
-      <>
-        <OnboardingProbe />
-        <OnboardingScreen />
-      </>
-    );
+    function AuthValidationHarness() {
+      const { logout } = useWorkbench();
+      return (
+        <>
+          <button type="button" data-testid="force-logout" onClick={() => logout()}>
+            logout
+          </button>
+          <OnboardingProbe />
+          <OnboardingScreen />
+        </>
+      );
+    }
 
+    renderWithProviders(<AuthValidationHarness />);
+
+    fireEvent.click(screen.getByTestId('force-logout'));
     fireEvent.click(screen.getByTestId('google-login-btn'));
     expect(screen.getByTestId('probe-logged-in')).toHaveTextContent('true');
     expect(screen.getByTestId('onboarding-session-badge')).toHaveTextContent(
-      'freelancer@studio.my'
+      /freelancer@(?:adforge|studio)\.my/
     );
 
     const byokInput = screen.getByTestId('byok-input') as HTMLInputElement;
@@ -513,7 +538,7 @@ describe('OnboardingScreen', () => {
 
     renderWithProviders(<RevisitHarness />);
 
-    fireEvent.click(screen.getByTestId('google-login-btn'));
+    fireEvent.click(screen.getByTestId('revisit-settings'));
     fireEvent.click(screen.getByTestId('byok-demo-btn'));
 
     expect(screen.getByTestId('probe-demo')).toHaveTextContent('true');
@@ -538,8 +563,6 @@ describe('OnboardingScreen', () => {
         <OnboardingScreen />
       </>
     );
-
-    fireEvent.click(screen.getByTestId('google-login-btn'));
 
     const byokInput = screen.getByTestId('byok-input') as HTMLInputElement;
     fireEvent.change(byokInput, { target: { value: 'bad-key-123' } });
@@ -590,7 +613,7 @@ describe('OnboardingScreen', () => {
     }
 
     renderWithProviders(<ModalEscapeHarness />);
-    fireEvent.click(screen.getByTestId('google-login-btn'));
+    fireEvent.click(screen.getByTestId('open-settings'));
     fireEvent.click(screen.getByTestId('byok-demo-btn'));
     expect(screen.getByTestId('probe-screen')).toHaveTextContent('workbench');
 

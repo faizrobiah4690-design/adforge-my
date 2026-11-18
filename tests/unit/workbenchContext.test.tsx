@@ -231,7 +231,7 @@ describe('WorkbenchContext', () => {
     expect(screen.getByTestId('active-brand-id')).toHaveTextContent(SEEDED_BRAND_ID);
   });
 
-  it('recovers gracefully from malformed localStorage payloads', () => {
+  it('recovers gracefully to Built-In Keyless AI workbench from malformed localStorage payloads', () => {
     window.localStorage.setItem(WORKBENCH_STORAGE_KEY, '{invalid-json');
     render(
       <WorkbenchProvider>
@@ -241,7 +241,8 @@ describe('WorkbenchContext', () => {
 
     expect(screen.getByTestId('brand-count')).toHaveTextContent('1');
     expect(screen.getByTestId('active-brand-id')).toHaveTextContent(SEEDED_BRAND_ID);
-    expect(screen.getByTestId('screen')).toHaveTextContent('onboarding');
+    expect(screen.getByTestId('logged-in')).toHaveTextContent('true');
+    expect(screen.getByTestId('screen')).toHaveTextContent('workbench');
   });
 
   it('rejects string "false" isLoggedIn coercion and invalid brand records on storage recovery', () => {

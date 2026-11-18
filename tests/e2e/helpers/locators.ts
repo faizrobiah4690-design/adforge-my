@@ -133,7 +133,7 @@ export const RX = {
   googleLogin: /Google|Log Masuk dengan Google|Teruskan dengan Google|Continue with Google|Sign in with Google/i,
   toggleKeyVisibility: /Tunjuk|Sembunyi|Show|Hide|Toggle.*key|Visibility/i,
   saveByok: /Simpan Kunci|Simpan & Masuk|Simpan & Teruskan|Save Key|Save & Enter|Save & Continue|Simpan|Save/i,
-  demoMode: /Demo|Offline|Tanpa Kunci|Showcase Mode|Mod Demo/i,
+  demoMode: /Demo|Offline|Showcase Mode|Mod Demo/i,
   continueDashboard: /Masuk Workbench|Buka Ruang Kempen|Open Campaign Workspace|Teruskan|Continue|Dashboard|Papan Pemuka/i,
   videoGuidePlay: /Panduan Video|Video Guide|Mainkan Panduan|Play Guide|Play|Main/i,
 
@@ -291,6 +291,7 @@ export function appLocators(page: Page) {
       .or(page.getByTestId('byok-demo-btn'))
       .or(page.getByRole('button', { name: RX.demoMode }))
       .first(),
+    useBuiltInBtn: page.getByTestId('use-builtin-ai-btn'),
     demoBadge: page
       .getByTestId(TEST_IDS.onboardingDemoBadge)
       .or(page.getByText(/Demo|Mod Demo|Offline/i))
@@ -455,6 +456,7 @@ export function appLocators(page: Page) {
       .or(formRoot.getByPlaceholder(RX.offerPlaceholder))
       .or(formRoot.locator('textarea'))
       .first(),
+    uspAudienceInput: formRoot.getByTestId('usp-audience-input'),
     offerChip: formRoot
       .getByTestId(TEST_IDS.campaignOfferChip)
       .or(formRoot.getByTestId('offer-sample-chip'))
@@ -655,6 +657,9 @@ export function appLocators(page: Page) {
       .or(tab2Root.getByRole('checkbox', { name: RX.safeZoneToggle }))
       .first(),
     safeZoneOverlay: tab2Root.getByTestId(TEST_IDS.safezoneOverlay),
+    aiBgBtn: tab2Root.getByTestId('carousel-ai-bg-btn'),
+    aiBgResetBtn: tab2Root.getByTestId('carousel-ai-bg-reset-btn'),
+    aiBgError: tab2Root.getByTestId('carousel-ai-bg-error'),
     downloadPngBtn: tab2Root
       .getByTestId(TEST_IDS.carouselDownloadBtn)
       .or(tab2Root.getByRole('button', { name: RX.downloadPng }))
@@ -692,6 +697,8 @@ export function appLocators(page: Page) {
       .getByTestId(TEST_IDS.jingleGenerateBtn)
       .or(tab3Root.getByRole('button', { name: RX.generateJingle }))
       .first(),
+    voiceoverBtn: tab3Root.getByTestId('jingle-voiceover-btn'),
+    voiceoverMixToggle: tab3Root.getByTestId('jingle-voiceover-mix-toggle'),
     audioPlayer: tab3Root
       .getByTestId(TEST_IDS.jingleAudioPlayer)
       .or(tab3Root.locator('audio'))

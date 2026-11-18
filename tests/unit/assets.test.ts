@@ -126,14 +126,20 @@ describe('same-origin pre-seeded assets & zero external media URLs', () => {
     }
   });
 
-  it('contains zero external http(s):// URLs in src/ (except https://wa.me/) and restricts index.html to passive OG/Twitter meta tags', () => {
+  it('contains only allowlisted external http(s):// URLs in src/ and restricts index.html to passive OG/Twitter meta tags', () => {
+    const allowedSrcPrefixes = [
+      'https://wa.me/',
+      'https://generativelanguage.googleapis.com/',
+      'https://text.pollinations.ai/',
+      'https://image.pollinations.ai/',
+    ];
     const srcFiles = collectSourceFiles(path.join(PROJECT_ROOT, 'src'));
     const urlPattern = /https?:\/\/[^\s'"`<>)]+/g;
     for (const file of srcFiles) {
       const content = fs.readFileSync(file, 'utf8');
       const matches = content.match(urlPattern) ?? [];
       for (const match of matches) {
-        expect(match.startsWith('https://wa.me/')).toBe(true);
+        expect(allowedSrcPrefixes.some((prefix) => match.startsWith(prefix))).toBe(true);
       }
     }
 

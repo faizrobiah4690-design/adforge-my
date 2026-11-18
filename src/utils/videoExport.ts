@@ -1,6 +1,7 @@
 import { ArrayBufferTarget, Muxer } from 'webm-muxer';
 import type { BrandProfile, PhotoAsset, StoryboardFrame } from '../types/campaign';
-import { isAllowedImageSrc } from './carouselExport';
+import { getContrastTextColor, isAllowedImageSrc } from './carouselExport';
+import { extractOfferDetails } from './offerDetails';
 
 export const VIDEO_WIDTH = 540;
 export const VIDEO_HEIGHT = 960;
@@ -16,6 +17,8 @@ export interface ExportVideoInput {
   brand: BrandProfile;
   audioBuffer: AudioBuffer;
   durationSec?: number;
+  offerSentence?: string;
+  uspAndAudience?: string;
 }
 
 export interface ExportVideoResult {
@@ -274,6 +277,11 @@ function drawRoundedRectPath(
   ctx.closePath();
 }
 
+function easeOutCubic(t: number): number {
+  const clamped = clamp01(t);
+  return 1 - (1 - clamped) ** 3;
+}
+
 function drawImageCoverZoom(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
@@ -281,17 +289,22 @@ function drawImageCoverZoom(
   dstY: number,
   dstW: number,
   dstH: number,
-  zoom: number
+  zoom: number,
+  panXNorm = 0,
+  panYNorm = 0
 ): void {
   const naturalW = img.naturalWidth || img.width;
   const naturalH = img.naturalHeight || img.height;
   if (naturalW <= 0 || naturalH <= 0) return;
 
   const crop = computeCoverCropRect(naturalW, naturalH, dstW, dstH);
-  const zoomedW = crop.sw / zoom;
-  const zoomedH = crop.sh / zoom;
-  const zoomedX = crop.sx + (crop.sw - zoomedW) / 2;
-  const zoomedY = crop.sy + (crop.sh - zoomedH) / 2;
+  const safeZoom = Math.max(1, zoom);
+  const zoomedW = crop.sw / safeZoom;
+  const zoomedH = crop.sh / safeZoom;
+  const maxOffsetX = Math.max(0, (crop.sw - zoomedW) / 2);
+  const maxOffsetY = Math.max(0, (crop.sh - zoomedH) / 2);
+  const zoomedX = crop.sx + maxOffsetX * (1 + Math.max(-1, Math.min(1, panXNorm)));
+  const zoomedY = crop.sy + maxOffsetY * (1 + Math.max(-1, Math.min(1, panYNorm)));
 
   ctx.drawImage(img, zoomedX, zoomedY, zoomedW, zoomedH, dstX, dstY, dstW, dstH);
 }
@@ -313,6 +326,8 @@ interface StoryboardRenderCache {
   topScrim: CanvasGradient;
   bottomScrim: CanvasGradient;
   brandLine: string;
+  promoBadgeText: string;
+  whatsappPillText: string;
   frameLayouts: Map<string, CachedFrameLayout>;
 }
 
@@ -321,7 +336,9 @@ function createStoryboardRenderCache(
   width: number,
   height: number,
   frames: readonly StoryboardFrame[],
-  brand: BrandProfile
+  brand: BrandProfile,
+  offerSentence?: string,
+  uspAndAudience?: string
 ): StoryboardRenderCache {
   const baseGrad = ctx.createLinearGradient(0, 0, 0, height);
   baseGrad.addColorStop(0, '#0B0F19');
@@ -334,7 +351,7 @@ function createStoryboardRenderCache(
 
   const bottomScrim = ctx.createLinearGradient(0, 440, 0, height);
   bottomScrim.addColorStop(0, 'rgba(11, 15, 25, 0)');
-  bottomScrim.addColorStop(0.42, 'rgba(11, 15, 25, 0.82)');
+  bottomScrim.addColorStop(0.42, 'rgba(11, 15, 25, 0.84)');
   bottomScrim.addColorStop(1, 'rgba(11, 15, 25, 0.96)');
 
   const pillW = width - 56;
@@ -347,6 +364,20 @@ function createStoryboardRenderCache(
   );
   const brandLine = brandLines[0] ?? brand.name;
 
+  const details = extractOfferDetails(
+    brand.name,
+    offerSentence || frames[2]?.overlayHeadline || '',
+    uspAndAudience
+  );
+  const promoBadgeText = details.discountPercent
+    ? `DISKAUN ${details.discountPercent}`
+    : details.priceTag
+      ? `HANYA ${details.priceTag}`
+      : details.occasion
+        ? details.occasion.toUpperCase()
+        : 'PROMO KHAS';
+  const whatsappPillText = `WhatsApp +${brand.whatsappNumber}`;
+
   const cardW = width - 56;
   const textPadX = 20;
   const maxTextW = cardW - textPadX * 2;
@@ -354,7 +385,7 @@ function createStoryboardRenderCache(
 
   const layoutFrame = (frame: StoryboardFrame) => {
     if (frameLayouts.has(frame.id)) return;
-    ctx.font = '800 30px system-ui, -apple-system, sans-serif';
+    ctx.font = '800 28px system-ui, -apple-system, sans-serif';
     const headlineLines = wrapTextLines(
       (s) => ctx.measureText(s).width,
       frame.overlayHeadline,
@@ -362,21 +393,21 @@ function createStoryboardRenderCache(
       3
     );
 
-    ctx.font = '500 20px system-ui, -apple-system, sans-serif';
+    ctx.font = '500 19px system-ui, -apple-system, sans-serif';
     const lyricLines = wrapTextLines(
       (s) => ctx.measureText(s).width,
       frame.lyricLine,
       maxTextW,
-      3
+      2
     );
 
-    const headlineHeight = headlineLines.length * 38;
-    const lyricHeight = lyricLines.length * 28;
+    const headlineHeight = headlineLines.length * 36;
+    const lyricHeight = lyricLines.length * 26;
     const cardH = Math.max(
-      118,
-      42 + headlineHeight + (lyricLines.length > 0 ? 14 + lyricHeight : 0)
+      110,
+      36 + headlineHeight + (lyricLines.length > 0 ? 12 + lyricHeight : 0)
     );
-    const cardY = Math.min(790 - cardH, height - 150 - cardH);
+    const cardY = Math.min(788 - cardH, height - 172 - cardH);
     frameLayouts.set(frame.id, { headlineLines, lyricLines, cardH, cardY });
   };
 
@@ -393,6 +424,8 @@ function createStoryboardRenderCache(
     topScrim,
     bottomScrim,
     brandLine,
+    promoBadgeText,
+    whatsappPillText,
     frameLayouts,
   };
 }
@@ -456,39 +489,51 @@ function drawStoryboardFrame(
   const frame = getActiveStoryboardFrame(frames, tSec);
   const frameIdx = Math.max(0, frames.findIndex((f) => f.id === frame.id));
   const frameSpan = Math.max(0.05, frame.endSec - frame.startSec);
-  const frameProgress = clamp01((tSec - frame.startSec) / frameSpan);
+  const tInFrame = Math.max(0, tSec - frame.startSec);
+  const frameProgress = clamp01(tInFrame / frameSpan);
 
   // Base dark gradient backdrop tinted with active brand themeColor
   ctx.fillStyle = cache.baseGrad;
   ctx.fillRect(0, 0, width, height);
 
-  // Photo layer with subtle Ken Burns zoom & 0.25s crossfade from previous frame
+  // Ambient background photo layer with gentle Ken Burns zoom + 0.25s crossfade
   const currentImg = assets.photos[frame.photoIndex] ?? assets.photos[0] ?? assets.photos[1];
   const prevFrame = frameIdx > 0 ? frames[frameIdx - 1] : null;
   const prevImg = prevFrame
     ? assets.photos[prevFrame.photoIndex] ?? assets.photos[0]
     : null;
   const fadeAlpha =
-    prevFrame && tSec - frame.startSec < 0.25
-      ? clamp01((tSec - frame.startSec) / 0.25)
-      : 1;
+    prevFrame && tInFrame < 0.25 ? clamp01(tInFrame / 0.25) : 1;
+
+  const isEvenFrame = frameIdx % 2 === 0;
+  const kenBurnsZoom = isEvenFrame
+    ? 1.03 + 0.12 * frameProgress
+    : 1.15 - 0.11 * frameProgress;
+  const kenBurnsPanX = isEvenFrame
+    ? -0.35 + 0.7 * frameProgress
+    : 0.35 - 0.7 * frameProgress;
+  const kenBurnsPanY = isEvenFrame
+    ? -0.2 + 0.4 * frameProgress
+    : 0.2 - 0.4 * frameProgress;
 
   if (prevImg && fadeAlpha < 1) {
     ctx.save();
     ctx.globalAlpha = 1;
-    drawImageCoverZoom(ctx, prevImg, 0, 0, width, height, 1.05);
+    drawImageCoverZoom(ctx, prevImg, 0, 0, width, height, 1.08, 0.2, 0);
     ctx.restore();
   }
 
   if (currentImg) {
     ctx.save();
-    ctx.globalAlpha = fadeAlpha;
-    const zoom = 1.0 + 0.06 * frameProgress;
-    drawImageCoverZoom(ctx, currentImg, 0, 0, width, height, zoom);
+    ctx.globalAlpha = fadeAlpha * 0.52;
+    drawImageCoverZoom(ctx, currentImg, 0, 0, width, height, kenBurnsZoom, kenBurnsPanX * 0.4, 0);
     ctx.restore();
   }
 
-  // Top & bottom contrast scrims for crisp text readability
+  // Soft ambient dark veil + top/bottom contrast scrims
+  ctx.fillStyle = 'rgba(6, 10, 20, 0.48)';
+  ctx.fillRect(0, 0, width, height);
+
   ctx.fillStyle = cache.topScrim;
   ctx.fillRect(0, 0, width, 230);
 
@@ -496,12 +541,28 @@ function drawStoryboardFrame(
   ctx.fillRect(0, 440, width, height - 440);
 
   const safeThemeColor = resolveThemeColor(brand.themeColor);
+  const contrastText = getContrastTextColor(safeThemeColor);
 
-  // Top progress bar
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
-  ctx.fillRect(0, 0, width, 6);
+  // Segmented 4-part story progress bar (CapCut / TikTok story style)
+  const totalSegments = Math.max(1, frames.length);
+  const segBarMargin = 20;
+  const segGap = 6;
+  const segWidth =
+    (width - segBarMargin * 2 - segGap * (totalSegments - 1)) / totalSegments;
+  for (let sIdx = 0; sIdx < totalSegments; sIdx += 1) {
+    const sx = segBarMargin + sIdx * (segWidth + segGap);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.fillRect(sx, 10, segWidth, 5);
+    const segFillRatio =
+      sIdx < frameIdx ? 1 : sIdx === frameIdx ? frameProgress : 0;
+    if (segFillRatio > 0) {
+      ctx.fillStyle = safeThemeColor;
+      ctx.fillRect(sx, 10, segWidth * segFillRatio, 5);
+    }
+  }
+  // Overall subtle timeline indicator at y=0
   ctx.fillStyle = safeThemeColor;
-  ctx.fillRect(0, 0, width * clamp01(tSec / Math.max(0.1, durationSec)), 6);
+  ctx.fillRect(0, 0, width * clamp01(tSec / Math.max(0.1, durationSec)), 4);
 
   // Top brand header pill (9:16 safe margin)
   const pillX = 28;
@@ -510,7 +571,7 @@ function drawStoryboardFrame(
   const pillH = 62;
   ctx.save();
   drawRoundedRectPath(ctx, pillX, pillY, pillW, pillH, 16);
-  ctx.fillStyle = 'rgba(17, 24, 39, 0.84)';
+  ctx.fillStyle = 'rgba(17, 24, 39, 0.88)';
   ctx.fill();
   ctx.lineWidth = 1.5;
   ctx.strokeStyle = hexToRgba(safeThemeColor, 0.65);
@@ -563,50 +624,135 @@ function drawStoryboardFrame(
   ctx.fillText(badgeText, pillX + pillW - badgeW / 2 - 12, pillY + pillH / 2);
   ctx.restore();
 
-  // Headline + Lyric safe-zone overlay block (above TikTok/Reels bottom UI: y <= 790)
-  const cardX = 28;
+  // Product Photo Spotlight Card (Ken Burns zoom + pan inside rounded frame)
+  const spotX = 36;
+  const spotY = 108;
+  const spotW = width - 72;
+  const spotH = 386;
+
+  ctx.save();
+  drawRoundedRectPath(ctx, spotX, spotY, spotW, spotH, 24);
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+  ctx.fill();
+
+  if (currentImg) {
+    ctx.save();
+    drawRoundedRectPath(ctx, spotX + 4, spotY + 4, spotW - 8, spotH - 8, 20);
+    ctx.clip();
+    ctx.globalAlpha = fadeAlpha;
+    drawImageCoverZoom(
+      ctx,
+      currentImg,
+      spotX + 4,
+      spotY + 4,
+      spotW - 8,
+      spotH - 8,
+      kenBurnsZoom,
+      kenBurnsPanX,
+      kenBurnsPanY
+    );
+    ctx.restore();
+  }
+
+  drawRoundedRectPath(ctx, spotX, spotY, spotW, spotH, 24);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = safeThemeColor;
+  ctx.stroke();
+
+  // Pop-In Promo / Price Badge on top-right of Spotlight Card
+  const badgeEase = easeOutCubic(tInFrame / 0.28);
+  ctx.save();
+  ctx.globalAlpha = 0.2 + 0.8 * badgeEase;
+  ctx.font = '800 16px system-ui, -apple-system, sans-serif';
+  const promoW = Math.min(spotW - 36, Math.max(130, ctx.measureText(cache.promoBadgeText).width + 32));
+  const promoX = spotX + spotW - promoW - 14;
+  const promoY = spotY + 14 + (1 - badgeEase) * -10;
+  drawRoundedRectPath(ctx, promoX, promoY, promoW, 34, 17);
+  ctx.fillStyle = safeThemeColor;
+  ctx.fill();
+  ctx.fillStyle = contrastText;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(cache.promoBadgeText, promoX + promoW / 2, promoY + 17);
+  ctx.restore();
+  ctx.restore();
+
+  // Animated Slide-In Headline + Lyric Card (above TikTok/Reels bottom UI)
+  const slideEase = easeOutCubic(tInFrame / 0.25);
+  const slideOffsetX = (1 - slideEase) * 40;
+  const cardX = 28 + slideOffsetX;
   const cardW = width - 56;
   const textPadX = 20;
   const layout = cache.frameLayouts.get(frame.id) ?? {
     headlineLines: [],
     lyricLines: [],
-    cardH: 118,
-    cardY: Math.min(790 - 118, height - 150 - 118),
+    cardH: 110,
+    cardY: Math.min(788 - 110, height - 172 - 110),
   };
   const { headlineLines, lyricLines, cardH, cardY } = layout;
 
   ctx.save();
+  ctx.globalAlpha = 0.25 + 0.75 * slideEase;
   drawRoundedRectPath(ctx, cardX, cardY, cardW, cardH, 18);
-  ctx.fillStyle = 'rgba(11, 15, 25, 0.84)';
+  ctx.fillStyle = 'rgba(11, 15, 25, 0.88)';
   ctx.fill();
   ctx.lineWidth = 1.5;
-  ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+  ctx.strokeStyle = hexToRgba(safeThemeColor, 0.45);
   ctx.stroke();
 
   // Brand theme accent bar on left edge of card
-  drawRoundedRectPath(ctx, cardX, cardY + 14, 6, cardH - 28, 3);
+  drawRoundedRectPath(ctx, cardX, cardY + 14, 6, Math.max(20, cardH - 28), 3);
   ctx.fillStyle = safeThemeColor;
   ctx.fill();
 
-  let cursorY = cardY + 24;
+  let cursorY = cardY + 18;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = '800 30px system-ui, -apple-system, sans-serif';
+  ctx.font = '800 28px system-ui, -apple-system, sans-serif';
   for (const line of headlineLines) {
     ctx.fillText(line, cardX + textPadX, cursorY);
-    cursorY += 38;
+    cursorY += 36;
   }
 
   if (lyricLines.length > 0) {
-    cursorY += 8;
+    cursorY += 6;
     ctx.fillStyle = '#CBD5E1';
-    ctx.font = '500 20px system-ui, -apple-system, sans-serif';
+    ctx.font = '500 19px system-ui, -apple-system, sans-serif';
     for (const line of lyricLines) {
       ctx.fillText(line, cardX + textPadX, cursorY);
-      cursorY += 28;
+      cursorY += 26;
     }
   }
+  ctx.restore();
+
+  // Pulsing WhatsApp CTA Pill (bottom safe anchor, extra vivid on Frame 4)
+  const ctaW = 360;
+  const ctaH = 52;
+  const ctaX = Math.round((width - ctaW) / 2);
+  const ctaY = 810;
+  const pulseOsc = 0.5 + 0.5 * Math.sin(tSec * 9);
+  const isFinalFrame = frameIdx === totalSegments - 1;
+
+  ctx.save();
+  ctx.globalAlpha = (isFinalFrame ? 0.34 : 0.18) + 0.22 * pulseOsc;
+  drawRoundedRectPath(ctx, ctaX - 5, ctaY - 5, ctaW + 10, ctaH + 10, 31);
+  ctx.fillStyle = safeThemeColor;
+  ctx.fill();
+
+  ctx.globalAlpha = 1;
+  drawRoundedRectPath(ctx, ctaX, ctaY, ctaW, ctaH, 26);
+  ctx.fillStyle = '#16A34A';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = safeThemeColor;
+  ctx.stroke();
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '800 18px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(cache.whatsappPillText, ctaX + ctaW / 2, ctaY + ctaH / 2);
   ctx.restore();
 }
 
@@ -1078,6 +1224,8 @@ export async function exportVerticalVideo({
   brand,
   audioBuffer,
   durationSec = TOTAL_VIDEO_DURATION_SEC,
+  offerSentence,
+  uspAndAudience,
 }: ExportVideoInput): Promise<ExportVideoResult> {
   const safeDuration = Number.isFinite(durationSec)
     ? Math.min(6.0, Math.max(1.5, durationSec))
@@ -1104,7 +1252,9 @@ export async function exportVerticalVideo({
     VIDEO_WIDTH,
     VIDEO_HEIGHT,
     frames,
-    brand
+    brand,
+    offerSentence,
+    uspAndAudience
   );
 
   const normalizedAudio = await normalizeAudioBufferToStereo48k(

@@ -530,6 +530,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
     });
 
     await gotoFreshApp(page);
+    const loc = appLocators(page);
 
     for (const vp of [
       { width: 320, height: 700 },
@@ -537,13 +538,25 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
       { width: 390, height: 844 },
     ]) {
       await page.setViewportSize(vp);
-      await assertNoHorizontalOverflow(page, `${vp.width} onboarding`);
-      await assertNoElementClipping(page, `${vp.width} onboarding`);
+      await assertNoHorizontalOverflow(page, `${vp.width} workbench-entry`);
+      await assertNoElementClipping(page, `${vp.width} workbench-entry`);
     }
 
-    await completeOnboarding(page, { useDemoMode: true });
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible();
+    for (const vp of [
+      { width: 320, height: 700 },
+      { width: 360, height: 800 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(vp);
+      await assertNoHorizontalOverflow(page, `${vp.width} api-settings-modal`);
+      await assertNoElementClipping(page, `${vp.width} api-settings-modal`);
+    }
+    await page.keyboard.press('Escape');
+    await expect(loc.onboarding.settingsModal).toHaveCount(0);
 
-    const loc = appLocators(page);
+    await completeOnboarding(page, { useDemoMode: true });
 
     // html lang attribute tracks BM <-> EN toggle & Escape dismisses API settings modal
     expect(await page.evaluate(() => document.documentElement.lang)).toBe('ms');
@@ -869,7 +882,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
     // Trigger HTTP 500 on social_proof -> falls back cleanly to baseline template notice
     await loc.tab1.angleBtn('social_proof').click();
     await enhanceBtn.click();
-    await expect(page.getByTestId('strategy-enhance-notice')).toContainText(/templat selamat terbina/i);
+    await expect(page.getByTestId('strategy-enhance-notice')).toContainText(/templat selamat terbina|enjin salinan terbina/i);
 
     expect(
       errors.errors.every(
@@ -1632,6 +1645,14 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
       });
     });
 
+    await page.route('**/text.pollinations.ai/**', async (route) => {
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Rate limited' }),
+      });
+    });
+
     await createBrandFolder(page, {
       name: unbrokenBrand,
       colorHex: '#0EA5E9',
@@ -2024,6 +2045,372 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
     }
 
     errors.assertClean([/status of 503/i]);
+    errors.detach();
+  });
+
+  test('T5-24: Built-In Keyless AI single-call Pollinations LLM, 45s cooldown, USP propagation, & honest BYOK error fallback alert', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await page.addInitScript(() => {
+      (window as unknown as { __ADFORGE_ALLOW_LIVE_AI_IN_TESTS__?: boolean }).__ADFORGE_ALLOW_LIVE_AI_IN_TESTS__ =
+        true;
+    });
+
+    await gotoFreshApp(page);
+    const loc = appLocators(page);
+
+    // 1. Default direct workbench with Built-In Keyless AI active
+    await expect(loc.vault.root).toBeVisible();
+    await expect(page.getByTestId('header-ai-mode-badge')).toContainText(/AI Terbina Dalam|Built-In AI/i);
+
+    let pollinationsHits = 0;
+    await page.route('**/text.pollinations.ai/**', async (route) => {
+      pollinationsHits += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  visualSummary: 'Kapsul Kopi Premium dalam kotak hadiah satin',
+                  psychology: {
+                    targetPersona: 'Pekerja pejabat & peminat kopi specialty di Malaysia',
+                    coreTrigger: 'Kopi kafe premium siap dalam 45 saat tanpa beratur',
+                    frictionObjections: 'Penat beratur panjang & bayar RM18 secawan setiap pagi',
+                    trustAnchors: 'Kopi Arabica panggang segar terus ke pintu rumah kurang RM2.50 secawan',
+                  },
+                  angles: {
+                    urgency: {
+                      facebook: {
+                        headline: 'Stop Bayar RM18 Secawan Pagi Ini',
+                        primaryText: 'Siapkan espresso pekat berkrim dalam 45 saat di meja pejabat sebelum slot promo minggu gaji ditutup.',
+                        description: 'Penghantaran pantas terus ke pejabat anda.',
+                      },
+                      instagram: {
+                        caption: 'Kopi kafe di rumah kurang RM2.50 secawan. Klik link di bio sebelum stok batch ini habis!',
+                        hashtags: '#kopipremium #arabica #malaysia',
+                      },
+                      tiktok: {
+                        hook: 'Masih beratur 20 minit untuk kopi RM18?',
+                        script: 'Masalah (3-12s): Duit habis, kerja tertangguh.\nDemo (12-25s): Tekan satu butang — 45 saat terus siap!\nCTA (25-35s): Tekan WhatsApp sekarang.',
+                        caption: 'Kopi barista 45 saat di meja pejabat.',
+                      },
+                      google_rsa: {
+                        headlines: ['Kopi Kafe 45 Saat Di Rumah', 'Kurang RM2.50 Secawan', 'Stok Minggu Gaji Terhad'],
+                        descriptions: [
+                          'Kapsul Arabica panggang segar terus ke pintu anda. Order via WhatsApp sekarang.',
+                          'Jimat masa beratur pagi & nikmati crema pekat setiap hari.',
+                        ],
+                        negativeKeywords: ['percuma', 'rosak', 'tiruan', 'terpakai'],
+                      },
+                    },
+                    value: {
+                      facebook: {
+                        headline: 'Jimat 75% Kos Kopi Harian Anda',
+                        primaryText: 'Pek permulaan datang dengan jaminan rasa puas hati dan penghantaran pantas.',
+                        description: 'Combo jimat terus ke rumah anda.',
+                      },
+                      instagram: {
+                        caption: 'Nikmat Arabica sebenar tanpa harga kafe mahal.',
+                        hashtags: '#kopijimat #baristaruma #malaysia',
+                      },
+                      tiktok: {
+                        hook: 'Kira berapa anda belanja untuk kopi sebulan.',
+                        script: 'Demo: Dengan kapsul segar ini, hanya RM2.50 secawan.',
+                        caption: 'Jimat 75% kos kopi bulanan anda.',
+                      },
+                      google_rsa: {
+                        headlines: ['Jimat 75% Kos Kopi', 'Kapsul Arabica Segar', 'Pakej Permulaan Lengkap'],
+                        descriptions: [
+                          'Kualiti barista di pejabat atau rumah dengan kos serendah RM2.50 secawan.',
+                          'Penghantaran pantas seluruh Malaysia. Tempah terus melalui WhatsApp.',
+                        ],
+                        negativeKeywords: ['percuma', 'rosak', 'tiruan', 'terpakai'],
+                      },
+                    },
+                    social_proof: {
+                      facebook: {
+                        headline: '4,200+ Peminat Kopi Sudah Tukar',
+                        primaryText: 'Lebih 4,200 pelanggan tetap memilih rasa panggang segar setiap pagi tanpa perlu keluar rumah.',
+                        description: 'Pilihan utama peminat kopi pejabat.',
+                      },
+                      instagram: {
+                        caption: 'Rating 4.9 bintang daripada ribuan peminat kopi Malaysia!',
+                        hashtags: '#reviewkopi #kopimalaysia #arabica',
+                      },
+                      tiktok: {
+                        hook: 'Kenapa 4,200 orang bertukar ke kapsul ini?',
+                        script: 'Bukti: Crema tebal & aroma wangi satu dapur.',
+                        caption: 'Disahkan 4,200+ pelanggan tetap.',
+                      },
+                      google_rsa: {
+                        headlines: ['4,200+ Pelanggan Puas Hati', 'Rating Kopi 4.9 Bintang', 'Rasa Barista Di Rumah'],
+                        descriptions: [
+                          'Disahkan ribuan peminat kopi tempatan. Cuba pek jimat hari ini.',
+                          'Klik WhatsApp untuk semak combo paling laris minggu ini.',
+                        ],
+                        negativeKeywords: ['percuma', 'rosak', 'tiruan', 'terpakai'],
+                      },
+                    },
+                  },
+                  carouselSlides: [
+                    { badgeText: 'JIMAT 75%', headline: 'Kopi Barista 45 Saat', subheadline: 'Kurang RM2.50 secawan di rumah', ctaText: 'Slide 1 / 4' },
+                    { badgeText: 'MASALAH VS SOLUSI', headline: 'Tak Perlu Beratur Lagi', subheadline: 'Terus bancuh panas di meja kerja', ctaText: 'Slide 2 / 4' },
+                    { badgeText: 'KELEBIHAN UTAMA', headline: 'Arabica Panggang Segar', subheadline: 'Crema tebal tanpa mesin mahal', ctaText: 'Slide 3 / 4' },
+                    { badgeText: 'WHATSAPP KINI', headline: 'Tuntut Combo Minggu Gaji', subheadline: 'Penghantaran pantas hari ini', ctaText: 'WhatsApp Sekarang' },
+                  ],
+                  jingleLyrics: '[Verse]\nPagi sibuk jangan risau kopi kafe 45 saat\n[Chorus]\nArabica segar jimat RM2.50 WhatsApp cepat!',
+                  storyboardFrames: [
+                    { overlayHeadline: 'Kopi Barista 45 Saat', lyricLine: 'Pagi sibuk jangan risau kopi kafe 45 saat' },
+                    { overlayHeadline: 'Tak Perlu Beratur', lyricLine: 'Penat beratur panjang di kafe' },
+                    { overlayHeadline: 'Kurang RM2.50 Secawan', lyricLine: 'Arabica segar jimat tujuh puluh lima peratus' },
+                    { overlayHeadline: 'WhatsApp Combo Kini', lyricLine: 'WhatsApp cepat sebelum batch habis!' },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    const uspText = 'Siap 45 saat tanpa mesin mahal; Sasaran: Pekerja pejabat KL 25-40 tahun';
+    await launchCampaign(page, {
+      offerSentence: 'Combo Kapsul Kopi Arabica RM49 jimat 75% minggu gaji',
+      uspAndAudience: uspText,
+    });
+
+    expect(pollinationsHits).toBe(1);
+    await expect(page.getByTestId('campaign-engine-status-badge')).toContainText(/Pollinations|OpenAI Fast|AI Terbina/i, {
+      timeout: 10_000,
+    });
+    await expect(loc.tab1.psychologyPanel).toContainText(/Kopi kafe premium siap dalam 45 saat/i);
+    await expect(page.getByTestId('strategy-usp-summary')).toContainText(/Siap 45 saat/i);
+
+    // Cooldown countdown badge becomes visible immediately after Pollinations call
+    await expect(page.getByTestId('pollinations-cooldown-badge')).toBeVisible();
+
+    // 2. Switch to invalid/failing Google BYOK key -> verify honest BYOK failure alert on variation generate
+    await completeOnboarding(page, { useDemoMode: false, apiKey: 'sk-live-failing-byok-key-123' });
+    await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'API key invalid or forbidden' } }),
+      });
+    });
+
+    await page.getByTestId('generate-new-variation-btn').click();
+    await expect(page.getByTestId('byok-fallback-alert')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('byok-fallback-alert')).toContainText(/403|BYOK|Google|API/i);
+
+    errors.assertClean([/status of 403/i]);
+    errors.detach();
+  });
+
+  test('T5-25: Tab 2 Pollinations AI background -> taint-free base64 JPEG & 4 distinct slide layouts PNG export', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await page.addInitScript(() => {
+      (window as unknown as { __ADFORGE_ALLOW_LIVE_AI_IN_TESTS__?: boolean }).__ADFORGE_ALLOW_LIVE_AI_IN_TESTS__ =
+        true;
+    });
+
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, {
+      offerSentence: DEFAULT_OFFER,
+      uspAndAudience: 'Kualiti studio tanpa caj tambahan; Sasaran: Pemilik bisnes muda',
+    });
+
+    // Switch back to Built-In AI (with empty text mock so launch doesn't depend on live net) and mock image.pollinations.ai
+    await completeOnboarding(page, { forceBuiltInAi: true });
+
+    // Create tiny real PNG/JPEG bytes using helper; image.pollinations.ai mock serves real image bytes
+    const sampleImgBytes = createTestPngBuffer({ width: 64, height: 64, rgba: [236, 72, 153, 255] });
+    let imageApiHits = 0;
+    await page.route('https://image.pollinations.ai/**', async (route) => {
+      imageApiHits += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'image/jpeg',
+        body: sampleImgBytes,
+      });
+    });
+
+    const loc = appLocators(page);
+    await openTab(page, 'carousel');
+
+    await expect(loc.tab2.aiBgBtn).toBeVisible();
+    await loc.tab2.aiBgBtn.click();
+
+    await expect.poll(() => imageApiHits, { timeout: 10_000 }).toBe(1);
+    await expect(loc.tab2.aiBgResetBtn).toBeVisible({ timeout: 10_000 });
+
+    // Stage must render >=2 loaded <img> (base64 AI background + brand logo)
+    const imgStates = await loc.tab2.previewStage.locator('img').evaluateAll((imgs) =>
+      imgs.map((img) => ({
+        src: (img as HTMLImageElement).src,
+        complete: (img as HTMLImageElement).complete,
+        naturalWidth: (img as HTMLImageElement).naturalWidth,
+      }))
+    );
+    expect(imgStates.length).toBeGreaterThanOrEqual(2);
+    expect(imgStates[0].src.startsWith('data:image/jpeg;base64,')).toBe(true);
+    expect(imgStates.every((i) => i.complete && i.naturalWidth > 0)).toBe(true);
+
+    // Export all 4 slides and verify valid 1080x1920 PNG downloads
+    for (let idx = 1; idx <= 4; idx += 1) {
+      await loc.tab2.slideBtn(idx).click();
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        loc.tab2.downloadPngBtn.click(),
+      ]);
+      const p = await download.path();
+      expect(p).toBeTruthy();
+      const fs = await import('node:fs');
+      const buf = fs.readFileSync(p!);
+      expect(buf.readUInt32BE(16)).toBe(1080);
+      expect(buf.readUInt32BE(20)).toBe(1920);
+    }
+
+    // Switching back to manual photo clears AI background cleanly
+    await page.getByTestId('carousel-photo-btn-1').click();
+    await expect(loc.tab2.aiBgResetBtn).toHaveCount(0);
+
+    errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-26: Tab 3 multi-track WAV + TTS voiceover, Tab 4 Ken Burns 9:16 video export, & 320px-1440px zero-clipping on M12 controls', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    await page.addInitScript(() => {
+      const speakCalls: string[] = [];
+      (window as unknown as Record<string, unknown>).__SPEAK_CALLS__ = speakCalls;
+      Object.defineProperty(window, 'speechSynthesis', {
+        configurable: true,
+        value: {
+          cancel: () => {},
+          speak: (u: { text?: string }) => {
+            speakCalls.push(String(u?.text ?? ''));
+          },
+          getVoices: () => [{ lang: 'ms-MY', name: 'Melayu Test' }],
+        },
+      });
+      (window as unknown as Record<string, unknown>).SpeechSynthesisUtterance = class {
+        text: string;
+        lang = 'ms-MY';
+        rate = 1;
+        onend: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        constructor(t: string) {
+          this.text = t;
+        }
+      };
+    });
+
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, {
+      offerSentence: DEFAULT_OFFER,
+      uspAndAudience: 'Penghantaran 24 jam percuma; Sasaran: Usahawan SME Malaysia',
+    });
+
+    const loc = appLocators(page);
+
+    // Tab 3: generate multi-track WAV, trigger TTS voiceover & mix ducking
+    await openTab(page, 'jingle');
+    await loc.tab3.generateBtn.click();
+    await verifyAudioElement(loc.tab3.audioPlayer);
+    await expect(loc.tab3.root.locator('audio')).toHaveCount(1);
+
+    await expect(loc.tab3.voiceoverBtn).toBeVisible();
+    await loc.tab3.voiceoverBtn.click();
+    const spoken = await page.evaluate(
+      () => ((window as unknown as { __SPEAK_CALLS__?: string[] }).__SPEAK_CALLS__ ?? []).length
+    );
+    expect(spoken).toBeGreaterThanOrEqual(1);
+
+    await loc.tab3.voiceoverMixToggle.check();
+    const audioVol = await loc.tab3.audioPlayer.evaluate((el: HTMLAudioElement) => el.volume);
+    expect(audioVol).toBeCloseTo(0.3, 1);
+    await expect(loc.tab3.root.locator('audio')).toHaveCount(1);
+
+    // Tab 4: confirm storyboard & export 9:16 vertical video
+    await openTab(page, 'video');
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+
+    // Responsive audit across 320px..1440px & ms/en on all new M12 controls
+    for (const vp of [
+      { width: 320, height: 700 },
+      { width: 360, height: 800 },
+      { width: 390, height: 844 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(vp);
+      for (const locale of ['ms', 'en'] as const) {
+        await toggleLanguage(page, locale);
+        await openTab(page, 'strategy');
+        await assertNoHorizontalOverflow(page, `T5-26 ${vp.width} ${locale} tab1`);
+        await assertNoElementClipping(page, `T5-26 ${vp.width} ${locale} tab1`);
+
+        await openTab(page, 'carousel');
+        await assertNoHorizontalOverflow(page, `T5-26 ${vp.width} ${locale} tab2`);
+        await assertNoElementClipping(page, `T5-26 ${vp.width} ${locale} tab2`);
+
+        if (vp.width === 320 || vp.width === 390) {
+          await loc.tab2.aspect45Btn.click();
+          await expect(loc.tab2.aspect45Btn).toHaveAttribute('aria-pressed', 'true');
+          for (let slideIdx = 1; slideIdx <= 4; slideIdx += 1) {
+            await loc.tab2.slideBtn(slideIdx).click();
+            const stageCheck = await loc.tab2.previewStage.evaluate((stage) => {
+              const stageRect = stage.getBoundingClientRect();
+              const layer2 = stage.querySelector('.z-10');
+              const descendants = layer2
+                ? Array.from(layer2.querySelectorAll<HTMLElement>('*'))
+                : [];
+              const bottomOverflows = descendants
+                .filter((el) => {
+                  const style = window.getComputedStyle(el);
+                  return style.display !== 'none' && style.visibility !== 'hidden';
+                })
+                .map((el) => {
+                  const r = el.getBoundingClientRect();
+                  return {
+                    tag: el.tagName.toLowerCase(),
+                    text: (el.textContent ?? '').trim().slice(0, 40),
+                    overflowBottom: Math.round(r.bottom - stageRect.bottom),
+                  };
+                })
+                .filter((x) => x.overflowBottom > 2);
+
+              return {
+                scrollHeight: stage.scrollHeight,
+                clientHeight: stage.clientHeight,
+                bottomOverflows,
+              };
+            });
+            expect(
+              stageCheck.scrollHeight,
+              `Tab 2 4:5 vertical overflow at ${vp.width}px ${locale} slide ${slideIdx}`
+            ).toBeLessThanOrEqual(stageCheck.clientHeight + 2);
+            expect(
+              stageCheck.bottomOverflows,
+              `Tab 2 4:5 descendant clipping at ${vp.width}px ${locale} slide ${slideIdx}: ${JSON.stringify(stageCheck.bottomOverflows)}`
+            ).toEqual([]);
+          }
+          await loc.tab2.aspect916Btn.click();
+        }
+
+        await openTab(page, 'jingle');
+        await assertNoHorizontalOverflow(page, `T5-26 ${vp.width} ${locale} tab3`);
+        await assertNoElementClipping(page, `T5-26 ${vp.width} ${locale} tab3`);
+      }
+    }
+
+    errors.assertClean();
     errors.detach();
   });
 });

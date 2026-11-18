@@ -17,6 +17,7 @@ export type CampaignGenerationStatus = 'idle' | 'generating' | 'ready';
 export type CampaignGenerationSource =
   | 'gemini-2.5-flash'
   | 'gemini-2.0-flash'
+  | 'pollinations-openai-fast'
   | 'offline-smart-demo'
   | 'offline-smart-fallback';
 
@@ -30,6 +31,8 @@ export interface OfferDetails {
   scarcityCue: string | null;
   productTopic: string;
   vertical: 'beauty' | 'fnb' | 'fashion' | 'services' | 'general';
+  uspSummary?: string | null;
+  targetAudience?: string | null;
 }
 
 export interface CustomerPsychologyProfile {
@@ -74,6 +77,7 @@ export interface CampaignInput {
   brandId: string;
   photos: [PhotoAsset, PhotoAsset];
   offerSentence: string;
+  uspAndAudience?: string;
   generatedAt: string | null;
 }
 
@@ -105,9 +109,11 @@ export interface CarouselSlide {
   index: number;
   role: 'hook' | 'offer' | 'proof' | 'cta';
   photoIndex: 0 | 1;
+  aiBackgroundDataUrl?: string | null;
   badgeText: string;
   headline: string;             // Live-editable BM headline
   subheadline: string;
+  highlightPoints?: string[];
   ctaText: string;
   editedByUser: boolean;
 }
@@ -191,11 +197,13 @@ export interface WorkbenchContextValue {
   freelancerEmail: string | null;
   byokKey: string;
   isDemoMode: boolean;
+  builtInAiActive: boolean;
   activeScreen: WorkbenchScreen;
   setActiveScreen: (screen: WorkbenchScreen) => void;
   loginWithGoogle: (email?: string) => void;
   logout: () => void;
   saveByokKey: (key: string, demoMode?: boolean) => void;
+  activateBuiltInAi: () => void;
   brands: BrandProfile[];
   activeBrandId: string;
   activeBrand: BrandProfile;
@@ -207,7 +215,7 @@ export interface WorkbenchContextValue {
 }
 
 export type EditedCopyByAngle = Partial<Record<AngleId, ChannelCopy>>;
-export type StrategyEnhanceNotice = 'gemini' | 'baseline';
+export type StrategyEnhanceNotice = 'gemini' | 'pollinations' | 'baseline';
 export type StrategyEnhanceNoticeByAngle = Partial<Record<AngleId, StrategyEnhanceNotice>>;
 
 export interface CampaignContextValue {
@@ -218,6 +226,7 @@ export interface CampaignContextValue {
   launchedBrandId: string;
   launchedBrand: BrandProfile;
   launchedOfferSentence: string;
+  launchedUspAndAudience: string;
   launchedPhotos: [PhotoAsset, PhotoAsset];
   launchCampaign: (overrideInput?: Partial<CampaignInput>) => void;
   variationIndex: number;
@@ -226,6 +235,8 @@ export interface CampaignContextValue {
   productVisionSummary: string | null;
   campaignGenStatus: CampaignGenerationStatus;
   campaignGenSource: CampaignGenerationSource;
+  campaignGenError: string | null;
+  pollinationsCooldownUntil: number | null;
   generatedVariations: Record<number, CampaignVariationSnapshot>;
   selectVariation: (index: number) => Promise<void> | void;
   generateNewVariation: () => Promise<void>;
@@ -243,6 +254,7 @@ export interface CampaignContextValue {
   setAngleCopyMap: (copyByAngle: EditedCopyByAngle) => void;
   isEnhancingStrategy: boolean;
   strategyEnhanceNoticeByAngle: StrategyEnhanceNoticeByAngle;
+  strategyEnhanceErrorByAngle: Partial<Record<AngleId, string>>;
   enhanceStrategyAngleWithGemini: (angle?: AngleId) => Promise<void>;
   cpaInputs: CpaInputs;
   setCpaInputs: Dispatch<SetStateAction<CpaInputs>>;

@@ -39,18 +39,29 @@ import {
 } from './helpers/media';
 
 test.describe('Tier 1 — A1: Onboarding (5 Tests)', () => {
-  test('T1-A1-01: Dark-mode Freelancer Workbench positioning & entry render', async ({ page }) => {
+  test('T1-A1-01: Dark-mode Freelancer Workbench direct Built-In AI entry & API settings modal', async ({ page }) => {
     const errors = attachRuntimeErrorCollector(page);
     await gotoFreshApp(page);
     const loc = appLocators(page);
 
-    await expect(loc.onboarding.root).toBeVisible();
+    // M12: Direct workbench entry with Built-In Keyless AI active (zero BYOK wall)
+    await expect(loc.vault.root).toBeVisible();
+    await expect(loc.quickForm.root).toBeVisible();
     await assertDarkBackground(page);
     await expect(page).toHaveTitle(/AdForge MY — Tempat Menempa Iklan Digital Malaysia/);
     await expect(page.locator('header')).toContainText(/AdForge MY/);
     await expect(page.locator('header')).toContainText(/Tempat Menempa Iklan Digital Malaysia/);
-    await expect(loc.onboarding.root).toContainText(/AdForge MY/i);
-    await expect(loc.onboarding.root).toContainText(/Freelancer|Workbench/i);
+    await expect(page.getByTestId('header-ai-mode-badge')).toBeVisible();
+    await expect(page.getByTestId('header-ai-mode-badge')).toContainText(/AI Terbina Dalam|Built-In AI/i);
+
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible();
+    await expect(loc.onboarding.settingsModal).toContainText(/AdForge MY/i);
+    await expect(loc.onboarding.settingsModal).toContainText(/Freelancer|Workbench/i);
+    await expect(loc.onboarding.useBuiltInBtn).toBeVisible();
+
+    await loc.onboarding.settingsModal.getByRole('button', { name: /Log Keluar|Sign Out/i }).click();
+    await expect(loc.onboarding.root).toBeVisible();
     await expect(loc.onboarding.googleLoginBtn).toBeVisible();
     errors.assertClean();
     errors.detach();
@@ -62,21 +73,27 @@ test.describe('Tier 1 — A1: Onboarding (5 Tests)', () => {
     await gotoFreshApp(page);
     const loc = appLocators(page);
 
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible();
+    await loc.onboarding.settingsModal.getByRole('button', { name: /Log Keluar|Sign Out/i }).click();
+    await expect(loc.onboarding.googleLoginBtn).toBeVisible();
+
     await loc.onboarding.googleLoginBtn.click();
     await expect(loc.onboarding.sessionBadge).toBeVisible();
     await expect(loc.onboarding.sessionBadge).toContainText(/@|Freelancer|Studio/i);
+    await expect(loc.onboarding.useBuiltInBtn).toBeVisible();
     net.assertSameOriginAndHealthy();
     errors.assertClean();
     net.detach();
     errors.detach();
   });
 
-  test('T1-A1-03: Single-key Google AI Studio BYOK input & save', async ({ page }) => {
+  test('T1-A1-03: Single-key Google AI Studio BYOK input & save inside API settings', async ({ page }) => {
     const errors = attachRuntimeErrorCollector(page);
     await gotoFreshApp(page);
     const loc = appLocators(page);
 
-    await loc.onboarding.googleLoginBtn.click();
+    await loc.headerApiSettings.click();
     await expect(loc.onboarding.byokInput).toBeVisible();
     await loc.onboarding.byokInput.fill('sk-live-test-key-123456');
 
@@ -92,6 +109,7 @@ test.describe('Tier 1 — A1: Onboarding (5 Tests)', () => {
       await loc.onboarding.continueBtn.click();
     }
     await expect(loc.vault.root).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('header-ai-mode-badge')).toContainText(/BYOK/i);
     errors.assertClean();
     errors.detach();
   });
@@ -101,6 +119,9 @@ test.describe('Tier 1 — A1: Onboarding (5 Tests)', () => {
     const net = attachNetworkOriginAuditor(page);
     await gotoFreshApp(page);
     const loc = appLocators(page);
+
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible();
 
     const playBtnVisible = await loc.onboarding.videoGuidePlayBtn.isVisible().catch(() => false);
     if (playBtnVisible) {
@@ -177,7 +198,7 @@ test.describe('Tier 1 — A1: Onboarding (5 Tests)', () => {
     await expect(loc.headerApiSettings).toBeVisible();
     await loc.headerApiSettings.click();
     await expect(loc.onboarding.settingsModal).toBeVisible();
-    await expect(loc.onboarding.settingsModal).toContainText(/API|BYOK|Demo|Gemini/i);
+    await expect(loc.onboarding.settingsModal).toContainText(/API|BYOK|Demo|Gemini|Terbina/i);
     await loc.onboarding.settingsCloseBtn.click();
     await expect(loc.vault.root).toBeVisible();
     errors.assertClean();

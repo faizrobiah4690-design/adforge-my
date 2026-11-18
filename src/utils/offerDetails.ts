@@ -1,4 +1,5 @@
 import type { OfferDetails, VariationFrameworkId } from '../types/campaign';
+import { truncateAtWordBoundary } from './whatsapp';
 
 export const VARIATION_FRAMEWORKS: readonly VariationFrameworkId[] = [
   'pas',
@@ -77,12 +78,60 @@ export function appendTokenIfAbsent(
 
 export function extractOfferFocus(offerSentence: string): string {
   const lower = offerSentence.toLowerCase();
-  if (/diskaun|promo|jimat|potongan|sale|rebate/.test(lower)) return 'Penjimatan Istimewa';
-  if (/pakej|kombo|bundle|set/.test(lower)) return 'Pakej Kombo';
-  if (/servis|khidmat|tempahan|booking|penghantaran|bengkel/.test(lower)) return 'Servis Pilihan';
-  if (/makanan|minuman|menu|kopi|kek|kafe|restoran/.test(lower)) return 'Menu Istimewa';
-  if (/produk|koleksi|stok|item|edisi|fesyen|baju|butik/.test(lower)) return 'Koleksi Pilihan';
-  return 'Pilihan Utama';
+  if (/diskaun|promo|jimat|potongan|sale|rebate/.test(lower)) return 'Harga Promo Berbaloi';
+  if (/pakej|kombo|bundle|set/.test(lower)) return 'Set Kombo Jimat';
+  if (/servis|khidmat|tempahan|booking|penghantaran|bengkel/.test(lower)) return 'Servis Terus Siap';
+  if (/makanan|minuman|menu|kopi|kek|kafe|restoran/.test(lower)) return 'Menu Segar Hari Ini';
+  if (/produk|koleksi|stok|item|edisi|fesyen|baju|butik/.test(lower)) return 'Edisi Terkini';
+  return 'Tawaran Eksklusif';
+}
+
+export function extractUspAndAudience(uspAndAudience?: string): {
+  uspSummary: string | null;
+  targetAudience: string | null;
+  highlightPoints: string[];
+} {
+  const raw = (uspAndAudience ?? '').replace(/\s+/g, ' ').trim();
+  if (!raw) {
+    return { uspSummary: null, targetAudience: null, highlightPoints: [] };
+  }
+
+  // Split by common separators (e.g. "untuk ...", "|", ";", ",", "•")
+  const audienceSplit = raw.match(/^(.*?)\b(?:untuk|for|sasaran|target)\b[:\s-]*(.+)$/i);
+  let uspSummary: string | null = raw;
+  let targetAudience: string | null = null;
+
+  if (audienceSplit) {
+    const left = audienceSplit[1]?.replace(/[|,;•-]+$/g, '').trim();
+    const right = audienceSplit[2]?.replace(/^[|,;•-]+/g, '').trim();
+    if (left) {
+      uspSummary = left;
+    }
+    if (right) {
+      targetAudience = right;
+    }
+  } else {
+    const segments = raw
+      .split(/[|;•]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (segments.length >= 2) {
+      uspSummary = segments[0];
+      targetAudience = segments.slice(1).join(', ');
+    }
+  }
+
+  const highlightPoints = raw
+    .split(/[|,;•\n]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 3)
+    .slice(0, 4);
+
+  return {
+    uspSummary: uspSummary || null,
+    targetAudience: targetAudience || null,
+    highlightPoints,
+  };
 }
 
 const STOPWORD_RX =
@@ -91,10 +140,15 @@ const STOPWORD_RX =
 const COLLAB_TRAILING_STOP_RX =
   /\b(?:untuk|sempena|edisi|promosi|promo|diskaun|harga|rm\s*\d+|di|minggu|gaji|stok|slot|terhad|hebat|istimewa|terbaru|baharu|pakej|kombo|percuma|beli|whatsapp|sekarang)\b.*$/i;
 
-export function extractOfferDetails(brandName: string, offerSentence: string): OfferDetails {
+export function extractOfferDetails(
+  brandName: string,
+  offerSentence: string,
+  uspAndAudience?: string
+): OfferDetails {
   const cleanBrand = brandName.trim() || 'Bisnes Saya';
   const cleanOffer = cleanOfferText(offerSentence);
-  const combined = `${cleanBrand} ${cleanOffer}`;
+  const uspParsed = extractUspAndAudience(uspAndAudience);
+  const combined = `${cleanBrand} ${cleanOffer} ${uspAndAudience ?? ''}`;
 
   // 1. Collaboration tag e.g. "X HelloKitty" (requires whitespace after x/× so "Xiaomi" / "Xpress" are never misparsed)
   // Match brandName and offerSentence separately so a collab in brandName never bleeds into offer words.
@@ -129,12 +183,12 @@ export function extractOfferDetails(brandName: string, offerSentence: string): O
   const priceMatch = combined.match(/\bRM\s*(\d+(?:[.,]\d{1,2})?)\b/i);
   const priceTag = priceMatch?.[1] ? `RM${priceMatch[1]}` : null;
 
-  // 4. Bundle / Freebie cue
+  // 4. Bundle / Freebie cue (preserve decimal prices like RM12.90 while still stopping at sentence dots)
   const bundleMatch = cleanOffer.match(
-    /\b(?:beli\s+\d+\s+percuma\s+\d+|percuma\s+[^,.;—\n-]+|kombo\s+[^,.;—\n-]+|pakej\s+[^,.;—\n-]+|bundle\s+[^,.;—\n-]+)\b/i
+    /\b(?:beli\s+\d+\s+percuma\s+\d+|percuma\s+(?:\.(?=\d)|[^,.;—\n-])+|kombo\s+(?:\.(?=\d)|[^,.;—\n-])+|pakej\s+(?:\.(?=\d)|[^,.;—\n-])+|bundle\s+(?:\.(?=\d)|[^,.;—\n-])+)\b/i
   );
   const bundleOrFreebie = bundleMatch?.[0]
-    ? bundleMatch[0].trim().slice(0, 44).trim()
+    ? truncateAtWordBoundary(bundleMatch[0], 44) || null
     : null;
 
   // 5. Occasion (prioritize specific seasonal/payday occasions before generic edition labels)
@@ -215,5 +269,147 @@ export function extractOfferDetails(brandName: string, offerSentence: string): O
     scarcityCue,
     productTopic,
     vertical,
+    uspSummary: uspParsed.uspSummary,
+    targetAudience: uspParsed.targetAudience,
   };
+}
+
+const BRAND_TOKEN_STOPWORDS_RX = /^(?:x|dan|di|ke|for|the|and|of|my|sdn|bhd)$/i;
+
+function extractDistinctBrandTokens(brandName: string, collabTag?: string | null): string[] {
+  const raw = `${brandName} ${collabTag ?? ''}`;
+  const tokens = raw
+    .split(/[\s(),.;:!?—–\-•|/+]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2 && !BRAND_TOKEN_STOPWORDS_RX.test(t));
+
+  const unique: string[] = [];
+  for (const t of tokens) {
+    if (!unique.some((existing) => existing.toLowerCase() === t.toLowerCase())) {
+      unique.push(t);
+    }
+  }
+  return unique;
+}
+
+function stripOverlappingBrandTokens(
+  text: string,
+  brandName: string,
+  collabTag?: string | null
+): string {
+  let cleaned = text.trim();
+  if (!cleaned) return '';
+
+  if (collabTag) {
+    const collabCore = collabTag.replace(/^[x×]\s+/i, '').trim();
+    cleaned = cleaned.replace(
+      new RegExp(`\\(\\s*${escapeRegExp(collabTag)}\\s*\\)`, 'gi'),
+      ' '
+    );
+    cleaned = cleaned.replace(
+      new RegExp(`(?:^|\\s)${escapeRegExp(collabTag)}(?:$|\\s)`, 'gi'),
+      ' '
+    );
+    if (collabCore && collabCore.length >= 2) {
+      cleaned = cleaned.replace(
+        new RegExp(`(?:^|\\s)${escapeRegExp(collabCore)}(?:$|\\s)`, 'gi'),
+        ' '
+      );
+    }
+  }
+
+  const brandTokens = extractDistinctBrandTokens(brandName, collabTag);
+  for (const token of brandTokens) {
+    cleaned = cleaned.replace(
+      new RegExp(`(?:^|[\\s(])${escapeRegExp(token)}(?=$|[\\s),.;:!?])`, 'gi'),
+      ' '
+    );
+  }
+
+  return cleaned
+    .replace(/\(\s*\)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,.;:!?—–\-•|/+(]+|[\s,.;:!?—–\-•|/+(]+$/g, '')
+    .trim();
+}
+
+function hasBrandOrCollabOverlap(
+  candidate: string,
+  brandName: string,
+  collabTag?: string | null
+): boolean {
+  if (!candidate.trim()) return true;
+  if (
+    containsTokenCaseInsensitive(candidate, brandName) ||
+    containsTokenCaseInsensitive(brandName, candidate)
+  ) {
+    return true;
+  }
+  if (collabTag && containsTokenCaseInsensitive(brandName, collabTag)) {
+    const collabCore = collabTag.replace(/^[x×]\s+/i, '').trim();
+    if (
+      containsTokenCaseInsensitive(candidate, collabTag) ||
+      (collabCore.length >= 2 && containsTokenCaseInsensitive(candidate, collabCore))
+    ) {
+      return true;
+    }
+  }
+  const brandTokens = extractDistinctBrandTokens(brandName, collabTag);
+  const matchedBrandTokens = brandTokens.filter((tok) =>
+    containsTokenCaseInsensitive(candidate, tok)
+  );
+  return matchedBrandTokens.length >= 2;
+}
+
+export function resolveDistinctSubject(
+  details: OfferDetails,
+  cleanOffer: string
+): string {
+  const rawSubject =
+    details.collabTag && !containsTokenCaseInsensitive(details.brandName, details.collabTag)
+      ? appendCollabIfAbsent(details.productTopic, details.collabTag, 'parens')
+      : details.productTopic;
+
+  if (!hasBrandOrCollabOverlap(rawSubject, details.brandName, details.collabTag)) {
+    return rawSubject;
+  }
+
+  const stripped = stripOverlappingBrandTokens(
+    rawSubject,
+    details.brandName,
+    details.collabTag
+  );
+  if (
+    stripped &&
+    !hasBrandOrCollabOverlap(stripped, details.brandName, details.collabTag)
+  ) {
+    return stripped;
+  }
+
+  if (details.uspSummary) {
+    const firstClause = details.uspSummary.split(/[,;|•—–]+/)[0]?.trim() ?? '';
+    const cleanClause = hasBrandOrCollabOverlap(
+      firstClause,
+      details.brandName,
+      details.collabTag
+    )
+      ? stripOverlappingBrandTokens(firstClause, details.brandName, details.collabTag)
+      : firstClause;
+    const uspShort = truncateAtWordBoundary(cleanClause, 26);
+    if (
+      uspShort &&
+      !hasBrandOrCollabOverlap(uspShort, details.brandName, details.collabTag)
+    ) {
+      return uspShort;
+    }
+  }
+
+  if (
+    details.bundleOrFreebie &&
+    !hasBrandOrCollabOverlap(details.bundleOrFreebie, details.brandName, details.collabTag)
+  ) {
+    return details.bundleOrFreebie;
+  }
+
+  return extractOfferFocus(cleanOffer);
 }

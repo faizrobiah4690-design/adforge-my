@@ -19,17 +19,37 @@ import {
   containsTokenCaseInsensitive,
   extractOfferDetails,
   extractOfferFocus,
+  extractUspAndAudience,
   getFrameworkForVariation,
+  resolveDistinctSubject,
   stripDuplicateTawaran,
 } from './offerDetails';
+import {
+  POLLINATIONS_COOLDOWN_MS,
+  POLLINATIONS_TEXT_ENDPOINT,
+  callPollinationsJson,
+  formatByokErrorReason,
+  getPollinationsCooldownUntil,
+  resetPollinationsCooldown,
+  stripJsonCodeFenceAndExtract,
+} from './pollinationsAi';
 import {
   buildWhatsappCtaUrl,
   sliceSafeUtf16,
   stripLoneSurrogates,
+  truncateAtWordBoundary,
 } from './whatsapp';
 
 export type { CustomerPsychologyProfile };
-export { VARIATION_FRAMEWORKS, extractOfferDetails, getFrameworkForVariation };
+export {
+  POLLINATIONS_COOLDOWN_MS,
+  POLLINATIONS_TEXT_ENDPOINT,
+  VARIATION_FRAMEWORKS,
+  extractOfferDetails,
+  getFrameworkForVariation,
+  getPollinationsCooldownUntil,
+  resetPollinationsCooldown,
+};
 
 type GeminiModelId = 'gemini-2.5-flash' | 'gemini-2.0-flash';
 
@@ -69,34 +89,19 @@ export function enforceRsaLength(
     return source;
   }
 
-  const sliced = sliceSafeUtf16(source, maxLen).trimEnd();
-  const lastSpace = sliced.lastIndexOf(' ');
-  const wordTrimmed =
-    lastSpace >= Math.floor(maxLen * 0.55) ? sliced.slice(0, lastSpace).trimEnd() : sliced;
-
+  const wordTrimmed = truncateAtWordBoundary(source, maxLen);
   if (wordTrimmed.length > 0 && wordTrimmed.length <= maxLen) {
     return wordTrimmed;
   }
 
-  return sliceSafeUtf16(cleanFallback, maxLen).trimEnd();
-}
-
-function formatOfferSubject(details: OfferDetails): string {
-  return appendCollabIfAbsent(details.productTopic, details.collabTag, 'parens');
+  return (
+    truncateAtWordBoundary(cleanFallback, maxLen) ||
+    sliceSafeUtf16(cleanFallback, maxLen).trimEnd()
+  );
 }
 
 function getDistinctSubject(details: OfferDetails, cleanOffer: string): string {
-  const rawSubject = formatOfferSubject(details);
-  if (
-    containsTokenCaseInsensitive(rawSubject, details.brandName) ||
-    containsTokenCaseInsensitive(details.brandName, rawSubject) ||
-    (details.collabTag &&
-      containsTokenCaseInsensitive(details.brandName, details.collabTag) &&
-      containsTokenCaseInsensitive(rawSubject, details.collabTag))
-  ) {
-    return extractOfferFocus(cleanOffer);
-  }
-  return rawSubject;
+  return resolveDistinctSubject(details, cleanOffer);
 }
 
 function formatOfferHighlight(details: OfferDetails): string {
@@ -109,62 +114,125 @@ function formatOfferHighlight(details: OfferDetails): string {
   if (parts.length > 0) {
     return parts.join(' • ');
   }
+  if (details.uspSummary) {
+    return truncateAtWordBoundary(details.uspSummary, 48);
+  }
   if (
     containsTokenCaseInsensitive(details.productTopic, details.brandName) ||
     containsTokenCaseInsensitive(details.brandName, details.productTopic)
   ) {
-    return details.scarcityCue ?? 'pakej pilihan telus';
+    return details.scarcityCue ?? 'harga telus tanpa caj tersembunyi';
   }
   return details.productTopic;
 }
 
-function getVerticalPainAndDesire(vertical: OfferDetails['vertical']): {
+function getVerticalPerformanceCues(
+  vertical: OfferDetails['vertical'],
+  uspSummary: string | null | undefined,
+  targetAudience: string | null | undefined
+): {
+  audienceCasual: string;
+  audiencePro: string;
   painCasual: string;
   painPro: string;
   desireCasual: string;
   desirePro: string;
   trustVertical: string;
+  uspHook: string;
 } {
+  const customAudience = targetAudience?.trim();
+  const customUsp = uspSummary?.trim();
+
   switch (vertical) {
     case 'beauty':
       return {
-        painCasual: 'Penat keluar kos tinggi di luar atau beli produk yang rumit nak guna di rumah',
-        painPro: 'Keperluan rutin penjagaan diri yang praktikal, selesa di rumah, dan mudah diurus',
-        desireCasual: 'rutin penjagaan diri lebih selesa di rumah dengan hasil yang kemas',
-        desirePro: 'penjagaan diri berstruktur dengan pengalaman penggunaan yang konsisten',
-        trustVertical: 'spesifikasi jelas, kemasan tulen, dan panduan penggunaan mesra pelanggan',
+        audienceCasual:
+          customAudience || 'Wanita sibuk & pencinta rutin kecantikan di rumah',
+        audiencePro:
+          customAudience || 'Pengguna moden yang mementingkan penjagaan diri praktikal di rumah',
+        painCasual:
+          'Habis ratusan ringgit sekali walk-in, lepas tu kena tunggu giliran berjam-jam pulak',
+        painPro:
+          'Kos rawatan luar yang berulang serta jadual temu janji yang sukar disesuaikan',
+        desireCasual:
+          customUsp || 'set penjagaan diri ringkas dari rumah dengan rasa selesa setiap minggu',
+        desirePro:
+          customUsp || 'penjagaan diri tersusun di rumah dengan kemasan kemas & jimat masa',
+        trustVertical:
+          customUsp || 'spesifikasi jelas, set lengkap terus guna & panduan langkah mudah',
+        uspHook: customUsp || 'buat sendiri di rumah tanpa tunggu slot luar',
       };
     case 'fnb':
       return {
-        painCasual: 'Susah nak cari hidangan segar yang betul-betul sedap dan cepat sampai tanpa caj merepek',
-        painPro: 'Keperluan sajian berkualiti dengan penyediaan bersih serta penghantaran menepati masa',
-        desireCasual: 'nikmati rasa padu dan bahan segar untuk seisi keluarga atau rakan sekerja',
-        desirePro: 'penyediaan makanan yang konsisten, bersih, dan sesuai untuk tempahan berkumpulan',
-        trustVertical: 'penyediaan segar harian, pembungkusan kemas, dan maklum balas pelanggan berulang',
+        audienceCasual:
+          customAudience || 'Peminat kopi, pelajar & geng ofis yang nak port makan padu',
+        audiencePro:
+          customAudience || 'Pelanggan pejabat, keluarga & penganjur jamuan sekitar Malaysia',
+        painCasual:
+          'Order mahal-mahal tapi rasa cair, portion kecik dan sampai pun dah sejuk',
+        painPro:
+          'Sukar mendapatkan hidangan segar yang konsisten untuk jamuan atau tempahan pasukan',
+        desireCasual:
+          customUsp || 'menu segar panas-panas dengan portion puas hati untuk kongsi ramai',
+        desirePro:
+          customUsp || 'sajian segar harian dengan pembungkusan kemas dan penghantaran tepat masa',
+        trustVertical:
+          customUsp || 'bahan segar harian, bungkusan kemas & tempahan pantas via WhatsApp',
+        uspHook: customUsp || 'sediakan segar setiap pagi terus ke meja anda',
       };
     case 'fashion':
       return {
-        painCasual: 'Selalu kecewa bila saiz tak kena atau material nampak cantik dalam gambar saja',
-        painPro: 'Keperluan gaya kemasan pakaian yang selesa dipakai sepanjang hari dan tahan lasak',
-        desireCasual: 'gaya kemas dan selesa digayakan untuk kerja, santai, atau acara khas',
-        desirePro: 'potongan kemas serta pilihan material berkualiti untuk penampilan profesional',
-        trustVertical: 'panduan saiz tepat, perincian material telus, dan pertukaran mesra pelanggan',
+        audienceCasual:
+          customAudience || 'Pencinta OOTD & pembeli online yang pentingkan cutting kemas',
+        audiencePro:
+          customAudience || 'Profesional & pembeli gaya moden yang mengutamakan keselesaan material',
+        painCasual:
+          'Beli online nampak lawa, bila sampai kain panas, jarang & cutting lari terus',
+        painPro:
+          'Ketidakpastian ukuran saiz serta ketahanan fabrik bagi kegunaan kerja sepanjang hari',
+        desireCasual:
+          customUsp || 'kain sejuk jatuh elok, sarung terus nampak kemas dari pagi sampai malam',
+        desirePro:
+          customUsp || 'potongan rapi dan fabrik selesa bernafas untuk penampilan yakin',
+        trustVertical:
+          customUsp || 'carta saiz tepat, gambar kain sebenar & sokongan tukar saiz mesra',
+        uspHook: customUsp || 'cutting kemas & material selesa dipakai seharian',
       };
     case 'services':
       return {
-        painCasual: 'Serik tunggu sebut harga lambat atau kerja siap separuh jalan dengan caj tambahan',
-        painPro: 'Keperluan khidmat teratur dengan jadual kerja tepat serta sebut harga telus',
-        desireCasual: 'urusan selesai cepat tanpa pening kepala atau kos tersembunyi',
-        desirePro: 'pelaksanaan servis yang terancang, telus, dan dipantau hingga selesai',
-        trustVertical: 'sebut harga jelas sebelum mula, jadual temu janji tepat, dan sokongan selepas servis',
+        audienceCasual:
+          customAudience || 'Pemilik kereta, rumah & bisnes yang nak kerja siap kemas cepat',
+        audiencePro:
+          customAudience || 'Pemilik aset & pengurus operasi yang perlukan vendor menepati jadual',
+        painCasual:
+          'Serik tunggu quote sampai esok, lepas tu tiba-tiba ada caj tambahan masa bayar',
+        painPro:
+          'Kelewatan sebut harga serta ketidaktentuan jadual siap kerja yang mengganggu operasi',
+        desireCasual:
+          customUsp || 'kerja siap kemas ikut bajet yang dah dipersetujui dari awal lagi',
+        desirePro:
+          customUsp || 'pelaksanaan terancang dengan pecahan harga jelas sebelum kerja dimulakan',
+        trustVertical:
+          customUsp || 'pecahan kos telus sebelum mula, slot tepati masa & follow-up selepas siap',
+        uspHook: customUsp || 'sebut harga jelas awal-awal, kerja siap ikut masa',
       };
     default:
       return {
-        painCasual: 'Sering keliru pilih tawaran mana yang betul-betul berbaloi dan senang nak order',
-        painPro: 'Keperluan pilihan produk dan perkhidmatan yang telus, teratur, dan diyakini',
-        desireCasual: 'urusan pembelian lebih mudah dengan nilai yang jelas untuk bajet harian',
-        desirePro: 'perolehan yang teratur, spesifikasi jelas, dan sokongan pelanggan pantas',
-        trustVertical: 'penerangan pakej telus, sokongan WhatsApp pantas, dan rekod kepuasan pelanggan',
+        audienceCasual:
+          customAudience || 'Pembeli bijak Malaysia yang nak order terus tanpa tanya panjang',
+        audiencePro:
+          customAudience || 'Pembeli korporat & pengguna Malaysia yang menilai ketelusan tawaran',
+        painCasual:
+          'Penat DM banyak kedai tapi harga tak jelas, stok pula main teka-teka',
+        painPro:
+          'Kesukaran membandingkan spesifikasi pakej serta mendapatkan pengesahan stok pantas',
+        desireCasual:
+          customUsp || 'pakej lengkap dengan harga jelas terus depan mata & order dalam 1 minit',
+        desirePro:
+          customUsp || 'perolehan mudah dengan butiran pakej terperinci dan respons pantas',
+        trustVertical:
+          customUsp || 'info pakej telus, foto produk sebenar & semakan stok terus di WhatsApp',
+        uspHook: customUsp || 'nilai jelas depan mata tanpa drama harga tersembunyi',
       };
   }
 }
@@ -172,21 +240,28 @@ function getVerticalPainAndDesire(vertical: OfferDetails['vertical']): {
 export function buildCustomerPsychology(
   brand: BrandProfile,
   offerSentence: string,
-  variationIndex = 1
+  variationIndex = 1,
+  uspAndAudience?: string
 ): CustomerPsychologyProfile {
   const brandName = brand.name.trim() || 'Bisnes Saya';
   const cleanOffer = cleanOfferText(offerSentence);
-  const details = extractOfferDetails(brandName, cleanOffer);
+  const details = extractOfferDetails(brandName, cleanOffer, uspAndAudience);
   const framework = getFrameworkForVariation(variationIndex);
-  const focus = extractOfferFocus(cleanOffer);
   const subject = getDistinctSubject(details, cleanOffer);
   const highlight = formatOfferHighlight(details);
-  const verticalCopy = getVerticalPainAndDesire(details.vertical);
+  const cues = getVerticalPerformanceCues(
+    details.vertical,
+    details.uspSummary,
+    details.targetAudience
+  );
   const shortOffer =
     cleanOffer.length > 90
-      ? `${sliceSafeUtf16(cleanOffer, 87).trimEnd()}...`
+      ? `${truncateAtWordBoundary(cleanOffer, 87)}...`
       : stripLoneSurrogates(cleanOffer);
   const isCasual = brand.tone === 'casual';
+  const uspLine = details.uspSummary
+    ? ` (${truncateAtWordBoundary(details.uspSummary, 64)})`
+    : '';
 
   let profile: CustomerPsychologyProfile;
 
@@ -194,32 +269,32 @@ export function buildCustomerPsychology(
     case 'pas':
       profile = isCasual
         ? {
-            targetPersona: `Pembeli aktif di Malaysia yang mencari ${subject} daripada ${brandName} (${focus}) tanpa proses tempahan yang rumit.`,
-            coreTrigger: `${verticalCopy.painCasual} — tawaran "${shortOffer}" memberi penyelesaian terus melalui WhatsApp.`,
-            frictionObjections: `Bimbang kos tersembunyi, stok ${subject} cepat habis, atau respons mesej yang lambat.`,
-            trustAnchors: `Layanan mesra ${brandName}, ${verticalCopy.trustVertical}, serta pengesahan pantas di WhatsApp rasmi.`,
+            targetPersona: `${cues.audienceCasual} yang mahu dapatkan ${subject} daripada ${brandName}${uspLine}.`,
+            coreTrigger: `${cues.painCasual} — tawaran "${shortOffer}" bagi jalan pintas terus order di WhatsApp.`,
+            frictionObjections: `Takut stok ${subject} cepat licin atau info pakej tak sama macam dalam gambar.`,
+            trustAnchors: `${brandName} tunjuk info telus: ${cues.trustVertical}, terus semak stok di WhatsApp.`,
           }
         : {
-            targetPersona: `Golongan profesional dan pembeli berorientasikan kualiti yang menilai ${subject} di ${brandName} untuk ${verticalCopy.desirePro}.`,
-            coreTrigger: `${verticalCopy.painPro}; nilai rasmi ("${shortOffer}") memudahkan keputusan pembelian hari ini.`,
-            frictionObjections: `Pertimbangan terhadap ketelusan harga ${highlight}, konsistensi kualiti, dan jaminan sokongan selepas jualan.`,
-            trustAnchors: `Reputasi ${brandName}, ${verticalCopy.trustVertical}, dan komunikasi rasmi yang jelas.`,
+            targetPersona: `${cues.audiencePro} yang menilai ${subject} di ${brandName}${uspLine}.`,
+            coreTrigger: `${cues.painPro}; tawaran "${shortOffer}" memudahkan pengesahan terus tanpa berlengah.`,
+            frictionObjections: `Perlukan kepastian pecahan harga ${highlight}, kualiti sebenar dan tempoh serahan.`,
+            trustAnchors: `Reputasi ${brandName} bersama ${cues.trustVertical} melalui WhatsApp rasmi.`,
           };
       break;
 
     case 'bab':
       profile = isCasual
         ? {
-            targetPersona: `Pengguna gaya hidup moden yang mahu ubah rutin harian kepada pengalaman lebih lancar dengan ${subject} daripada ${brandName}.`,
-            coreTrigger: `Bayangkan peralihan daripada cara lama yang leceh kepada ${verticalCopy.desireCasual} bersama ${brandName} (${highlight}).`,
-            frictionObjections: `Ragu sama ada ${subject} benar-benar praktikal digunakan setiap hari berbanding pilihan biasa.`,
-            trustAnchors: `${brandName} menonjolkan ${verticalCopy.trustVertical} serta panduan langkah demi langkah di WhatsApp.`,
+            targetPersona: `${cues.audienceCasual} yang nak tukar cara lama yang memenatkan kepada ${cues.desireCasual}.`,
+            coreTrigger: `Visual jelas bagaimana ${brandName} (${highlight}) bantu urusan harian rasa jauh lebih ringan.`,
+            frictionObjections: `Tertanya-tanya sama ada ${subject} betul-betul berbaloi dipakai setiap minggu.`,
+            trustAnchors: `${brandName} buktikan dengan ${cues.trustVertical} dan sokongan pantas sebelum bayar.`,
           }
         : {
-            targetPersona: `Pelanggan berfokuskan gaya hidup teratur yang mahu menaik taraf rutin kerja atau harian melalui ${subject} di ${brandName}.`,
-            coreTrigger: `Jambatan jelas dari rutin sedia ada yang memakan masa kepada ${verticalCopy.desirePro} dengan ${highlight}.`,
-            frictionObjections: `Keperluan kepastian tentang kemudahan adaptasi, jadual penyerahan, dan piawaian ${brandName}.`,
-            trustAnchors: `Standard pengurusan ${brandName}, ${verticalCopy.trustVertical}, dan konsultasi terus sebelum pengesahan.`,
+            targetPersona: `${cues.audiencePro} yang ingin menaik taraf aliran harian kepada ${cues.desirePro}.`,
+            coreTrigger: `Peralihan praktikal daripada kos luar berulang kepada ${subject} (${highlight}) bersama ${brandName}.`,
+            frictionObjections: `Menilai kesesuaian spesifikasi${uspLine}, jadual penghantaran serta terma pakej.`,
+            trustAnchors: `Piawaian ${brandName}: ${cues.trustVertical} dan pengesahan terus pasukan rasmi.`,
           };
       break;
 
@@ -229,16 +304,16 @@ export function buildCustomerPsychology(
         : appendCollabIfAbsent(subject, details.collabTag, 'parens');
       profile = isCasual
         ? {
-            targetPersona: `Pembeli media sosial yang gemar ulasan jujur, video unboxing, dan pengalaman sebenar sebelum mendapatkan ${subject} di ${brandName}.`,
-            coreTrigger: `POV pelanggan sebenar yang berkongsi mengapa ${povSubject} menjadi pilihan utama (${shortOffer}).`,
-            frictionObjections: `Risau iklan terlalu melambung atau produk sebenar tidak sepadan dengan jangkaan visual.`,
-            trustAnchors: `Perkongsian jujur pelanggan ${brandName}, paparan foto sebenar tanpa suntingan berlebihan, serta semakan stok telus.`,
+            targetPersona: `${cues.audienceCasual} yang selalu tengok unboxing & review jujur sebelum tekan link beli.`,
+            coreTrigger: `Cerita jujur pengguna bila nampak sendiri kemasan ${povSubject}${uspLine} + promo "${shortOffer}".`,
+            frictionObjections: `Ragu gambar iklan terlebih edit atau kualiti binaan tak padan dengan harga.`,
+            trustAnchors: `Foto dekat produk sebenar ${brandName}, ${cues.trustVertical} & respon pantas tanpa skrip kaku.`,
           }
         : {
-            targetPersona: `Pembeli teliti yang merujuk ulasan berfakta dan maklum balas pengguna sebenar mengenai ${subject} daripada ${brandName}.`,
-            coreTrigger: `Penilaian praktikal pengguna terdahulu terhadap prestasi ${subject} serta nilai pakej "${shortOffer}".`,
-            frictionObjections: `Keperluan bukti pengalaman pengguna yang sahih dan kejelasan terma sebelum membuat komitmen.`,
-            trustAnchors: `Rekod maklum balas pelanggan ${brandName}, ${verticalCopy.trustVertical}, dan saluran WhatsApp rasmi.`,
+            targetPersona: `${cues.audiencePro} yang merujuk maklum balas pengguna sebenar mengenai ${subject} di ${brandName}.`,
+            coreTrigger: `Sorotan pengalaman pelanggan terhadap ${cues.uspHook} serta nilai "${shortOffer}".`,
+            frictionObjections: `Memerlukan gambaran fizikal sebenar dan perincian terma sebelum membuat tempahan.`,
+            trustAnchors: `Testimoni seimbang pelanggan ${brandName} serta ${cues.trustVertical}.`,
           };
       break;
     }
@@ -246,35 +321,35 @@ export function buildCustomerPsychology(
     case 'smart_buyer':
       profile = isCasual
         ? {
-            targetPersona: `Pembeli bijak bajet di Malaysia yang membandingkan harga, ${details.discountPercent ?? 'diskaun'}, dan nilai ekstra sebelum membeli ${subject} daripada ${brandName}.`,
-            coreTrigger: `Pecahan nilai jelas (${highlight}) menjadikan ${brandName} jauh lebih jimat berbanding beli secara berasingan.`,
-            frictionObjections: `Ingin memastikan setiap sen berbaloi, tiada caj tambahan tersembunyi, dan betul-betul dapat ${details.bundleOrFreebie ?? highlight}.`,
-            trustAnchors: `Senarai harga telus daripada ${brandName}, pecahan nilai mudah difahami, dan semakan terus melalui WhatsApp.`,
+            targetPersona: `${cues.audienceCasual} jenis teliti kira kos per penggunaan sebelum keluarkan duit.`,
+            coreTrigger: `Pecahan matematik jelas (${highlight}${uspLine}) nampakkan penjimatan ketara berbanding beli asing.`,
+            frictionObjections: `Nak pastikan harga akhir dah termasuk semua item (${details.bundleOrFreebie ?? highlight}) tanpa caj mengejut.`,
+            trustAnchors: `Senarai harga terbuka ${brandName}, ${cues.trustVertical} & pengesahan bertulis di WhatsApp.`,
           }
         : {
-            targetPersona: `Pembuat keputusan berasaskan pulangan nilai yang menilai nisbah kos-kepada-manfaat ${subject} di ${brandName}.`,
-            coreTrigger: `Analisis kos berbaloi: ${highlight} menawarkan penjimatan terukur untuk kegunaan jangka panjang.`,
-            frictionObjections: `Memerlukan butiran penuh komponen pakej, terma ${details.discountPercent ?? 'harga'}, dan nilai tambah sebenar.`,
-            trustAnchors: `Struktur harga telus ${brandName}, ${verticalCopy.trustVertical}, dan pengesahan bertulis melalui WhatsApp rasmi.`,
+            targetPersona: `${cues.audiencePro} yang mengira nisbah nilai-kepada-kos untuk ${subject} di ${brandName}.`,
+            coreTrigger: `Kelebihan kewangan ${highlight}${uspLine} memberi pulangan lebih berbaloi untuk tempoh panjang.`,
+            frictionObjections: `Menyemak perincian komponen pakej, syarat ${details.discountPercent ?? 'harga'} dan sokongan selepas jualan.`,
+            trustAnchors: `Struktur harga telus ${brandName} (${cues.trustVertical}) melalui WhatsApp rasmi.`,
           };
       break;
 
     case 'fomo_drop': {
       const fomoOccasion = containsTokenCaseInsensitive(brandName, details.collabTag)
-        ? (details.occasion ?? 'peluang terawal')
-        : appendCollabIfAbsent(details.occasion ?? 'peluang terawal', details.collabTag);
+        ? (details.occasion ?? 'batch awal')
+        : appendCollabIfAbsent(details.occasion ?? 'batch awal', details.collabTag);
       profile = isCasual
         ? {
-            targetPersona: `Peminat edisi terhad dan pembeli pantas yang memburu ${fomoOccasion} di ${brandName}.`,
-            coreTrigger: `Gelombang ${details.occasion ?? 'jualan terawal'} dengan ${details.scarcityCue ?? 'kuota terhad'} (${shortOffer}) mendorong tempahan segera.`,
-            frictionObjections: `Takut terlepas unit terawal atau terlambat sahkan tempahan sebelum kuota ${details.occasion ?? 'minggu ini'} ditutup.`,
-            trustAnchors: `Kemaskini stok masa nyata di WhatsApp ${brandName}, proses tempahan pantas, dan keutamaan pelanggan terawal.`,
+            targetPersona: `${cues.audienceCasual} yang pantas sambar ${fomoOccasion} di ${brandName} sebelum sold out.`,
+            coreTrigger: `Mood ${details.occasion ?? 'minggu gaji'} + ${details.scarcityCue ?? 'kuota batch awal'} (${shortOffer})${uspLine}.`,
+            frictionObjections: `Risau slot/stok habis sementara tunggu gaji masuk atau lambat dapat balasan WhatsApp.`,
+            trustAnchors: `Update baki stok terus di WhatsApp ${brandName} & keutamaan penghantaran untuk tempahan awal.`,
           }
         : {
-            targetPersona: `Pembeli awal yang mengutamakan akses eksklusif untuk ${details.occasion ?? 'pelancaran terhad'} ${subject} daripada ${brandName}.`,
-            coreTrigger: `Peruntukan terhad bagi ${details.occasion ?? 'tempoh promosi'} (${highlight}) menggalakkan pengesahan awal sebelum penutupan kuota.`,
-            frictionObjections: `Kepastian ketersediaan peruntukan terkini serta tempoh pengesahan rasmi bersama ${brandName}.`,
-            trustAnchors: `Pengurusan tempahan terawal ${brandName}, ${verticalCopy.trustVertical}, dan respons pantas pasukan rasmi.`,
+            targetPersona: `${cues.audiencePro} yang mahukan peruntukan terawal untuk ${details.occasion ?? 'edisi terhad'} ${brandName}.`,
+            coreTrigger: `Peruntukan terhad bagi ${details.occasion ?? 'kempen semasa'} (${highlight})${uspLine} menggalakkan pengesahan segera.`,
+            frictionObjections: `Kepastian ketersediaan unit terkini dan garis masa penyerahan rasmi.`,
+            trustAnchors: `Pengurusan giliran telus ${brandName} bersama ${cues.trustVertical}.`,
           };
       break;
     }
@@ -288,17 +363,29 @@ export function buildCustomerPsychology(
   };
 }
 
+const SHORT_BRAND_CONNECTOR_RX = /^(?:x|×|&|-|\+|dan)$/i;
+
 function buildShortBrandTag(brandName: string, maxLen: number): string {
   const trimmed = stripLoneSurrogates(brandName.trim()) || 'Bisnes';
   if (trimmed.length <= maxLen) {
     return trimmed;
   }
   const words = trimmed.split(/\s+/).filter(Boolean);
-  if (words.length >= 2) {
+  if (words.length >= 2 && !SHORT_BRAND_CONNECTOR_RX.test(words[1])) {
     const twoWords = `${words[0]} ${words[1]}`;
     if (twoWords.length <= maxLen) {
       return twoWords;
     }
+  }
+  if (words.length >= 1) {
+    if (words[0].length <= maxLen) {
+      return words[0];
+    }
+    return (
+      truncateAtWordBoundary(words[0], maxLen) ||
+      sliceSafeUtf16(words[0], maxLen).trimEnd() ||
+      'Bisnes'
+    );
   }
   return sliceSafeUtf16(trimmed, maxLen).trimEnd() || 'Bisnes';
 }
@@ -307,16 +394,25 @@ export function generateCampaignCopyForAngle(
   brand: BrandProfile,
   offerSentence: string,
   angle: AngleId,
-  variationIndex = 1
+  variationIndex = 1,
+  uspAndAudience?: string
 ): ChannelCopy {
   const brandName = brand.name.trim() || 'Bisnes Saya';
   const cleanOffer = cleanOfferText(offerSentence);
-  const details = extractOfferDetails(brandName, cleanOffer);
+  const details = extractOfferDetails(brandName, cleanOffer, uspAndAudience);
   const framework = getFrameworkForVariation(variationIndex);
   const focus = extractOfferFocus(cleanOffer);
   const subject = getDistinctSubject(details, cleanOffer);
+  const rsaSubject = truncateAtWordBoundary(subject, 18) || focus;
+  const rsaValueTag =
+    details.priceTag ??
+    (details.discountPercent ? `Diskaun ${details.discountPercent}` : rsaSubject);
   const highlight = formatOfferHighlight(details);
-  const verticalCopy = getVerticalPainAndDesire(details.vertical);
+  const cues = getVerticalPerformanceCues(
+    details.vertical,
+    details.uspSummary,
+    details.targetAudience
+  );
   const isCasual = brand.tone === 'casual';
   const waUrl = buildWhatsappCtaUrl({
     phone: brand.whatsappNumber,
@@ -330,24 +426,31 @@ export function generateCampaignCopyForAngle(
   const hashBrand = shortBrand14.replace(/[^A-Za-z0-9]/g, '') || 'BisnesMY';
   const hashCollab = details.collabTag
     ? `#${details.collabTag.replace(/[^A-Za-z0-9]/g, '')}`
-    : '#PilihanLokal';
+    : '#SmeMalaysia';
   const occasionLabel = details.occasion ?? 'Minggu Ini';
-  const scarcityLabel = details.scarcityCue ?? 'Kuota Terawal Terhad';
+  const scarcityLabel = details.scarcityCue ?? 'Slot Awal Terhad';
+  const uspBullet = details.uspSummary
+    ? truncateAtWordBoundary(details.uspSummary, 80)
+    : cues.uspHook;
+  const audienceTag = details.targetAudience
+    ? truncateAtWordBoundary(details.targetAudience, 56)
+    : isCasual
+      ? cues.audienceCasual
+      : cues.audiencePro;
 
-  // Framework-specific copy per angle & channel
   const buildForFramework = (): ChannelCopy => {
     // 1. PAS (Problem - Agitate - Solve)
     if (framework === 'pas') {
       if (angle === 'urgency') {
         const fbHeadline = isCasual
-          ? `${brandName} — Selesaikan Masalah ${subject} Hari Ini`
+          ? `${brandName} — Jangan Tunggu ${subject} Habis Baru Nak Cari!`
           : `${brandName} — Promosi Masa Terhad`;
         const fbDesc = isCasual
-          ? `${scarcityLabel} • Sahkan ${highlight} di WhatsApp`
-          : `Penyelesaian ${subject} teratur melalui WhatsApp rasmi`;
+          ? `🔥 ${highlight} • ${scarcityLabel} — Terus WhatsApp`
+          : `Tempahan awal ${subject} • Hubungi WhatsApp rasmi`;
         const fbPrimary = isCasual
-          ? `${verticalCopy.painCasual}? Jangan biar masalah tu berlarutan! ${brandName} hadir dengan ${subject} (${highlight}) supaya urusan anda terus selesai. ${cleanOffer} Tekan WhatsApp sebelum ${scarcityLabel.toLowerCase()}: ${waUrl}`
-          : `${verticalCopy.painPro}. Usah tangguhkan keperluan anda — ${brandName} menawarkan penyelesaian ${subject} (${highlight}) dengan ${scarcityLabel.toLowerCase()}. ${cleanOffer} Hubungi pasukan kami melalui WhatsApp rasmi untuk pengesahan hari ini: ${waUrl}`;
+          ? `${cues.painCasual}! 😩\n\nSebab tu ramai tukar ke ${brandName} untuk ${subject}:\n✅ ${uspBullet}\n✅ ${highlight}\n✅ Sesuai untuk ${audienceTag}\n\n⚡ ${cleanOffer}\nKlik WhatsApp sekarang sebelum ${scarcityLabel.toLowerCase()}: ${waUrl}`
+          : `${cues.painPro}.\n\n${brandName} membawakan ${subject} dengan kelebihan utama:\n• ${uspBullet}\n• ${highlight}\n• Direka untuk ${audienceTag}\n\n${cleanOffer} Hubungi pasukan kami melalui WhatsApp rasmi untuk pengesahan segera: ${waUrl}`;
 
         return {
           facebook: {
@@ -358,37 +461,37 @@ export function generateCampaignCopyForAngle(
           },
           instagram: {
             caption: isCasual
-              ? `Penat cari ${subject} yang kena dengan bajet? ⚡\n${brandName} selesaikan terus: ${cleanOffer}\nKlik WhatsApp sebelum penuh: ${waUrl}`
-              : `Penyelesaian praktikal ${subject} daripada ${brandName} untuk tempoh terhad.\n${cleanOffer}\nHubungi WhatsApp rasmi kami: ${waUrl}`,
+              ? `Masih hadap masalah ${subject} yang mahal & renyah? ⚡\n\n${brandName} terus bagi jalan mudah:\n✨ ${uspBullet}\n🔥 ${cleanOffer}\n\nTap link WhatsApp sebelum batch ni penuh: ${waUrl}`
+              : `Penyelesaian ${subject} bersama ${brandName} (${uspBullet}).\n${cleanOffer}\nTempah slot melalui WhatsApp rasmi: ${waUrl}`,
             hashtags: isCasual
-              ? `#${hashBrand} ${hashCollab} #SolusiPantas #KuotaTerhad #BisnesMalaysia`
-              : `#${hashBrand} ${hashCollab} #PromosiRasmi #SolusiTeratur #SMEMalaysia`,
+              ? `#${hashBrand} ${hashCollab} #SolusiPantas #SlotTerhad #SupportLokal`
+              : `#${hashBrand} ${hashCollab} #PromosiRasmi #SMEMalaysia #KualitiJelas`,
             whatsappUrl: waUrl,
           },
           tiktok: {
             hook: isCasual
-              ? `Penat hadap isu ${subject} yang mahal & leceh? Ini jalan pintas di ${brandName}!`
-              : `Mengapa menunda keperluan ${subject} apabila penyelesaian ${brandName} sedia membantu.`,
+              ? `Stop buat silap yang sama bila cari ${subject} — tengok solusi ${brandName} ni dalam 5 saat!`
+              : `Mengapa ${audienceTag} memilih ${brandName} untuk ${subject} minggu ini.`,
             script: isCasual
-              ? `0-2s: Masalah biasa bila cari ${subject}. 2-4s: Solusi ${brandName} (${cleanOffer}). 4-6s: Klik WhatsApp di bio sebelum slot penuh (${waUrl}).`
-              : `0-2s: Cabaran rutin pelanggan. 2-4s: Pendekatan ${brandName} — ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi (${waUrl}).`,
+              ? `0-2s: Hook "${cues.painCasual}". 2-4s: Close-up ${brandName} (${uspBullet}) + ${cleanOffer}. 4-6s: Tekan link WhatsApp di bio sebelum habis (${waUrl}).`
+              : `0-2s: Cabaran pelanggan. 2-4s: Kelebihan ${brandName} — ${uspBullet} (${cleanOffer}). 4-6s: WhatsApp rasmi (${waUrl}).`,
             caption: isCasual
-              ? `Solusi pantas ${subject} di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`
-              : `Promosi masa terhad ${focus} di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
+              ? `Jalan pintas ${subject} di ${brandName} ⚡ ${cleanOffer} • WhatsApp: ${waUrl}`
+              : `Promosi masa terhad ${subject} di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
             whatsappUrl: waUrl,
           },
           google_rsa: {
             headlines: [
-              enforceRsaLength(isCasual ? `${shortBrand14} Solusi Kini` : `${shortBrand14} Rasmi`, 30, 'Promosi Terhad Kini'),
-              enforceRsaLength(isCasual ? `Atasi Isu ${details.productTopic}` : `Solusi ${details.productTopic}`, 30, 'Pilihan Utama Hari Ini'),
-              enforceRsaLength(isCasual ? 'WhatsApp Sebelum Habis' : 'Sahkan Slot WhatsApp Kini', 30, 'Tempah WhatsApp Segera'),
+              enforceRsaLength(isCasual ? `${shortBrand14} Promo Kini` : `${shortBrand14} Rasmi`, 30, 'Promosi Terhad Kini'),
+              enforceRsaLength(isCasual ? `${details.productTopic} Mudah` : `Pakej ${details.productTopic}`, 30, 'Harga Jelas Hari Ini'),
+              enforceRsaLength(isCasual ? 'WhatsApp Sebelum Habis' : 'Tempah Slot WhatsApp', 30, 'WhatsApp Kami Segera'),
             ],
             descriptions: [
-              enforceRsaLength(`${shortBrand12}: ${cleanOffer}`, 90, 'Pilihan terhad untuk pelanggan terawal. Hubungi kami sekarang.'),
+              enforceRsaLength(`${shortBrand12}: ${cleanOffer}`, 90, 'Slot terawal dibuka. Hubungi kami di WhatsApp sekarang.'),
               enforceRsaLength(
                 isCasual
-                  ? `Selesaikan keperluan ${details.productTopic} di ${shortBrand12}. WhatsApp terus.`
-                  : `Penyelesaian ${details.productTopic} teratur bersama ${shortBrand12} di WhatsApp rasmi.`,
+                  ? `${uspBullet} di ${shortBrand12}. Klik WhatsApp untuk semak stok.`
+                  : `${uspBullet} bersama ${shortBrand12} di WhatsApp rasmi.`,
                 90,
                 'Hubungi WhatsApp rasmi kami untuk menyemak ketersediaan hari ini.'
               ),
@@ -401,50 +504,50 @@ export function generateCampaignCopyForAngle(
 
       if (angle === 'value') {
         const fbHeadline = isCasual
-          ? `${brandName} — Solusi ${subject} Paling Berbaloi`
-          : `${brandName} — Piawaian Nilai & Penyelesaian`;
+          ? `${brandName} — Berbaloi Habis: ${highlight}`
+          : `${brandName} — Nilai Telus ${subject}`;
         const fbDesc = isCasual
-          ? `Tiada caj tersembunyi • ${highlight}`
-          : `Ketelusan harga dan mutu teratur di ${brandName}`;
+          ? `✨ ${uspBullet} • Harga jelas dari awal`
+          : `Pecahan pakej jelas & kualiti konsisten di ${brandName}`;
         const fbPrimary = isCasual
-          ? `Sering risau bayar mahal tapi hasil tak seberapa? Di ${brandName}, anda dapat ${subject} dengan nilai jelas (${highlight}). ${cleanOffer} Tanya pecahan penuh di WhatsApp sekarang: ${waUrl}`
-          : `Elakkan kos berulang dengan memilih ${subject} yang telus bersama ${brandName} (${highlight}). ${cleanOffer} Dapatkan butiran lengkap melalui WhatsApp rasmi kami: ${waUrl}`;
+          ? `Pernah rasa bayar mahal tapi rasa tak padan langsung? 💸\n\nDengan ${brandName}, setiap ringgit jelas:\n✅ ${uspBullet}\n✅ ${highlight}\n✅ Memang ngam untuk ${audienceTag}\n\n${cleanOffer} Minta pecahan harga penuh di WhatsApp: ${waUrl}`
+          : `Bandingkan nilai sebenar sebelum membuat komitmen bersama ${brandName}:\n• ${uspBullet}\n• ${highlight}\n• Sesuai untuk ${audienceTag}\n\n${cleanOffer} Dapatkan perincian penuh di WhatsApp rasmi: ${waUrl}`;
 
         return {
           facebook: { primaryText: fbPrimary, headline: fbHeadline, description: fbDesc, whatsappUrl: waUrl },
           instagram: {
             caption: isCasual
-              ? `Tak perlu risau caj tersorok bila pilih ${brandName} ✨\n${cleanOffer}\nJom semak detail di WhatsApp: ${waUrl}`
-              : `Nilai telus & kualiti konsisten untuk ${subject} di ${brandName}.\n${cleanOffer}\nHubungi WhatsApp rasmi: ${waUrl}`,
+              ? `Tak payah risau caj tersorok bila order dengan ${brandName} 💡\n✅ ${uspBullet}\n✅ ${cleanOffer}\n\nDM/WhatsApp terus untuk senarai pakej: ${waUrl}`
+              : `Nilai telus dan kemasan rapi untuk ${subject} di ${brandName} (${uspBullet}).\n${cleanOffer}\nWhatsApp rasmi: ${waUrl}`,
             hashtags: isCasual
-              ? `#${hashBrand} ${hashCollab} #HargaTelus #Berbaloi #SupportLokal`
-              : `#${hashBrand} ${hashCollab} #NilaiKorporat #KualitiKonsisten #PerniagaanMalaysia`,
+              ? `#${hashBrand} ${hashCollab} #HargaTelus #BerbaloiMY #SupportLokal`
+              : `#${hashBrand} ${hashCollab} #NilaiJelas #KualitiKonsisten #PerniagaanMalaysia`,
             whatsappUrl: waUrl,
           },
           tiktok: {
             hook: isCasual
-              ? `Jangan tersalah bayar lebih! Ini cara ${brandName} jimatkan kos ${subject} anda.`
-              : `Bagaimana ${brandName} memastikan setiap ringgit untuk ${subject} memberi pulangan nilai.`,
+              ? `Jangan terkejut tengok berapa banyak boleh jimat bila ambil ${subject} di ${brandName}!`
+              : `Pecahan nilai ${brandName}: apa yang anda dapat dengan ${highlight}.`,
             script: isCasual
-              ? `0-2s: Masalah kos tersorok. 2-4s: Pecahan ${brandName} (${cleanOffer}). 4-6s: WhatsApp kami untuk senarai harga (${waUrl}).`
-              : `0-2s: Kriteria pemilihan pintar. 2-4s: Piawaian ${brandName} — ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi (${waUrl}).`,
+              ? `0-2s: Benda yang orang selalu terlepas pandang. 2-4s: ${uspBullet} + ${cleanOffer}. 4-6s: Klik WhatsApp minta price list (${waUrl}).`
+              : `0-2s: Kriteria nilai penting. 2-4s: Tawaran ${brandName} — ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi (${waUrl}).`,
             caption: isCasual
-              ? `Penyelesaian nilai ${subject} di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`
-              : `Piawaian kualiti & harga telus di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
+              ? `Nilai sebenar ${subject} di ${brandName} ✨ ${cleanOffer} • WhatsApp: ${waUrl}`
+              : `Nilai & kualiti ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
             whatsappUrl: waUrl,
           },
           google_rsa: {
             headlines: [
-              enforceRsaLength(isCasual ? `${shortBrand14} Berbaloi` : `${shortBrand14} Berkualiti`, 30, 'Kualiti & Nilai Berbaloi'),
-              enforceRsaLength(isCasual ? `Jelas ${highlight}` : `Piawaian ${focus} Jelas`, 30, 'Harga Telus & Jelas'),
-              enforceRsaLength(isCasual ? 'Semak Harga di WhatsApp' : 'Dapatkan Sebut Harga Rasmi', 30, 'Semak Pakej WhatsApp'),
+              enforceRsaLength(isCasual ? `${shortBrand14} Berbaloi` : `${shortBrand14} Berkualiti`, 30, 'Kualiti & Nilai Jelas'),
+              enforceRsaLength(isCasual ? `${highlight}` : `Harga ${rsaSubject} Telus`, 30, 'Harga Telus & Jelas'),
+              enforceRsaLength(isCasual ? 'Semak Harga di WhatsApp' : 'Minta Sebut Harga Rasmi', 30, 'Semak Pakej WhatsApp'),
             ],
             descriptions: [
               enforceRsaLength(`Nilai ${shortBrand12}: ${cleanOffer}`, 90, 'Kualiti konsisten dan harga telus untuk pelanggan Malaysia.'),
               enforceRsaLength(
                 isCasual
-                  ? `Tiada caj tersembunyi di ${shortBrand12}. Klik WhatsApp untuk senarai pilihan.`
-                  : `Ketelusan harga dan mutu teratur di ${shortBrand12}. Hubungi WhatsApp rasmi.`,
+                  ? `${uspBullet}. Klik WhatsApp ${shortBrand12} untuk harga penuh.`
+                  : `Ketelusan harga ${uspBullet} di ${shortBrand12}. WhatsApp rasmi.`,
                 90,
                 'Dapatkan penerangan pakej dan harga penuh melalui WhatsApp hari ini.'
               ),
@@ -459,21 +562,21 @@ export function generateCampaignCopyForAngle(
       return {
         facebook: {
           primaryText: isCasual
-            ? `Ramai yang dulu pening cari ${subject}, lepas cuba ${brandName} terus jadi pelanggan tetap! ${cleanOffer} Tengok sendiri kenapa ramai rekomen — WhatsApp kami sekarang: ${waUrl}`
-            : `Ramai pelanggan menyelesaikan keperluan ${subject} mereka bersama ${brandName} dengan rekod kepuasan yang konsisten. ${cleanOffer} Hubungi WhatsApp rasmi untuk maklumat lanjut: ${waUrl}`,
-          headline: isCasual ? `${brandName} — Pilihan Ramai Pelanggan` : `${brandName} — Dipercayai Pelanggan Tempatan`,
+            ? `Ramai yang dulu pening cari ${subject}, lepas cuba ${brandName} terus rekomen kat kawan! 💙\n\nApa yang buat pelanggan suka:\n✅ ${uspBullet}\n✅ ${highlight}\n✅ Respon WhatsApp laju & mesra\n\n${cleanOffer} Jom tanya stok hari ini: ${waUrl}`
+            : `Ramai pelanggan di Malaysia memilih ${brandName} untuk ${subject} kerana ${uspBullet} dan layanan mesra pelanggan.\n\n${cleanOffer} Hubungi WhatsApp rasmi kami untuk semakan lanjut: ${waUrl}`,
+          headline: isCasual ? `${brandName} — Ramai Dah Repeat Order!` : `${brandName} — Dipercayai Pelanggan Malaysia`,
           description: isCasual
-            ? `Maklum balas positif untuk ${subject} • WhatsApp kami`
-            : `Rekod kepuasan pelanggan yang konsisten di Malaysia`,
+            ? `⭐ Digemari ${audienceTag} • WhatsApp terus`
+            : `Maklum balas positif & sokongan pantas melalui WhatsApp rasmi`,
           whatsappUrl: waUrl,
         },
         instagram: {
           caption: isCasual
-            ? `Bila pelanggan dah jumpa solusi ${subject} di ${brandName}, memang repeat 💙\n${cleanOffer}\nJom WhatsApp kami: ${waUrl}`
-            : `Dipercayai oleh pelanggan individu dan organisasi di ${brandName}.\n${cleanOffer}\nHubungi WhatsApp rasmi: ${waUrl}`,
+            ? `Bila pelanggan dah rasa sendiri ${uspBullet} di ${brandName}, memang senang repeat 💙\n${cleanOffer}\nKlik WhatsApp kami sekarang: ${waUrl}`
+            : `Dipercayai oleh ${audienceTag} di ${brandName}.\n${cleanOffer}\nWhatsApp rasmi: ${waUrl}`,
           hashtags: isCasual
             ? `#${hashBrand} ${hashCollab} #PilihanRamai #RepeatOrder #BisnesMalaysia`
-            : `#${hashBrand} ${hashCollab} #KepercayaanPelanggan #RekodPositif #SMEMalaysia`,
+            : `#${hashBrand} ${hashCollab} #KepercayaanPelanggan #MaklumBalasPositif #SMEMalaysia`,
           whatsappUrl: waUrl,
         },
         tiktok: {
@@ -481,25 +584,25 @@ export function generateCampaignCopyForAngle(
             ? `Kenapa ramai pelanggan tetap balik semula ke ${brandName} untuk ${subject}?`
             : `Mengapa pelanggan terus mempercayai ${brandName} untuk keperluan ${subject}.`,
           script: isCasual
-            ? `0-2s: Keluhan lama pelanggan. 2-4s: Pengalaman di ${brandName} (${cleanOffer}). 4-6s: Tekan WhatsApp sekarang (${waUrl}).`
-            : `0-2s: Standard khidmat ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi (${waUrl}).`,
+            ? `0-2s: Reaksi pelanggan bila guna ${brandName}. 2-4s: ${uspBullet} (${cleanOffer}). 4-6s: Tekan WhatsApp sekarang (${waUrl}).`
+            : `0-2s: Sorotan kepuasan pelanggan. 2-4s: ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi (${waUrl}).`,
           caption: isCasual
-            ? `Pilihan ramai pelanggan di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`
-            : `Dipercayai ramai di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
+            ? `Ramai dah cuba ${brandName} 💙 ${cleanOffer} • WhatsApp: ${waUrl}`
+            : `Dipercayai pelanggan ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
           whatsappUrl: waUrl,
         },
         google_rsa: {
           headlines: [
-            enforceRsaLength(isCasual ? `${shortBrand14} Pilihan Ramai` : `${shortBrand14} Dipercayai`, 30, 'Pilihan Ramai Pelanggan'),
-            enforceRsaLength(isCasual ? `Disukai Ramai ${focus}` : `Rekod Positif ${focus}`, 30, 'Dipercayai Pelanggan MY'),
-            enforceRsaLength(isCasual ? 'Tanya Pilihan Popular Kini' : 'Hubungi Wakil Rasmi Kini', 30, 'Tanya Pakej WhatsApp'),
+            enforceRsaLength(isCasual ? `${shortBrand14} Disukai Ramai` : `${shortBrand14} Dipercayai`, 30, 'Disukai Ramai Pelanggan'),
+            enforceRsaLength(isCasual ? `Ramai Pilih ${rsaSubject}` : `Ulasan Positif ${rsaSubject}`, 30, 'Dipercayai Pelanggan MY'),
+            enforceRsaLength(isCasual ? 'Tanya Pilihan Popular' : 'Hubungi Wakil Rasmi', 30, 'Tanya Pakej WhatsApp'),
           ],
           descriptions: [
-            enforceRsaLength(`Pilihan ramai ${shortBrand12}: ${cleanOffer}`, 90, 'Dipercayai pelanggan Malaysia dengan layanan pantas dan mesra.'),
+            enforceRsaLength(`Ramai pilih ${shortBrand12}: ${cleanOffer}`, 90, 'Dipercayai pelanggan Malaysia dengan layanan pantas dan mesra.'),
             enforceRsaLength(
               isCasual
-                ? `Ramai pelanggan berpuas hati dengan ${shortBrand12}. WhatsApp kami sekarang.`
-                : `Khidmat pelanggan yang konsisten di ${shortBrand12}. Hubungi WhatsApp rasmi.`,
+                ? `${uspBullet} — WhatsApp ${shortBrand12} sekarang.`
+                : `Layanan konsisten di ${shortBrand12}. Hubungi WhatsApp rasmi.`,
               90,
               'Ketahui pakej paling popular kami melalui saluran WhatsApp rasmi.'
             ),
@@ -516,37 +619,37 @@ export function generateCampaignCopyForAngle(
         return {
           facebook: {
             primaryText: isCasual
-              ? `Dulu kena bersusah payah dengan cara lama yang memakan masa — kini beralih ke ${verticalCopy.desireCasual} bersama ${brandName}! Jambatannya mudah: ${cleanOffer}. Rebut sementara ${scarcityLabel.toLowerCase()} di WhatsApp: ${waUrl}`
-              : `Daripada proses lama yang tidak teratur kepada ${verticalCopy.desirePro} bersama ${brandName}. Manfaatkan ${highlight} untuk tempoh ${occasionLabel} ini. ${cleanOffer} Hubungi WhatsApp rasmi kami: ${waUrl}`,
-            headline: `${brandName} — Naik Taraf Gaya Hidup ${subject}`,
-            description: `Peralihan lebih selesa dengan ${highlight} • ${scarcityLabel}`,
+              ? `Bayangkan tak perlu lagi penat hadap cara lama yang makan masa — sekarang ${audienceTag} boleh nikmati ${cues.desireCasual} dengan ${brandName}! ✨\n\n🎁 ${highlight}\n🔥 ${cleanOffer}\n\nRebut sementara ${scarcityLabel.toLowerCase()} di WhatsApp: ${waUrl}`
+              : `Tukarkan rutin lama yang memenatkan kepada ${cues.desirePro} bersama ${brandName}.\n\nManfaatkan ${highlight} untuk tempoh ${occasionLabel} (${uspBullet}).\n${cleanOffer} Sahkan slot anda melalui WhatsApp rasmi: ${waUrl}`,
+            headline: `${brandName} — Naik Taraf Pengalaman ${subject}`,
+            description: `✨ ${uspBullet} • ${scarcityLabel}`,
             whatsappUrl: waUrl,
           },
           instagram: {
             caption: isCasual
-              ? `Tinggalkan rutin lama yang leceh! Masa untuk ${verticalCopy.desireCasual} dengan ${brandName} ✨\n${cleanOffer}\nWhatsApp sekarang: ${waUrl}`
-              : `Naik taraf pengalaman harian anda kepada ${verticalCopy.desirePro} di ${brandName}.\n${cleanOffer}\nHubungi WhatsApp rasmi: ${waUrl}`,
+              ? `Cukup-cukuplah cara lama yang renyah! Masa untuk ${cues.desireCasual} dengan ${brandName} ✨\n${cleanOffer}\nWhatsApp sekarang: ${waUrl}`
+              : `Naik taraf rutin harian kepada ${cues.desirePro} di ${brandName}.\n${cleanOffer}\nWhatsApp rasmi: ${waUrl}`,
             hashtags: `#${hashBrand} ${hashCollab} #GayaHidupModen #NaikTarafRutin #Malaysia`,
             whatsappUrl: waUrl,
           },
           tiktok: {
             hook: isCasual
-              ? `Cara lama vs rutin baharu dengan ${brandName} — beza rasa ketara!`
-              : `Perbandingan rutin tradisional berbanding pendekatan moden bersama ${brandName}.`,
+              ? `Cara lama yang leceh vs rutin baru dengan ${brandName} — memang lain macam senang dia!`
+              : `Perbandingan aliran lama berbanding pengalaman moden bersama ${brandName}.`,
             script: isCasual
-              ? `0-2s: Rutin lama yang leceh. 2-4s: Gaya hidup baharu dengan ${subject} (${cleanOffer}). 4-6s: WhatsApp ${brandName} (${waUrl}).`
-              : `0-2s: Cabaran aliran kerja lama. 2-4s: Kelebihan ${brandName} (${cleanOffer}). 4-6s: Tempah melalui WhatsApp rasmi (${waUrl}).`,
-            caption: `Transformasi rutin harian bersama ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
+              ? `0-2s: Cara lama yang makan masa. 2-4s: Tukar ke ${brandName} (${uspBullet}) — ${cleanOffer}. 4-6s: Tekan link WhatsApp sekarang (${waUrl}).`
+              : `0-2s: Cabaran rutin lama. 2-4s: Kelebihan ${brandName} (${cleanOffer}). 4-6s: Tempah melalui WhatsApp rasmi (${waUrl}).`,
+            caption: `Rutin baru lebih ringan bersama ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
             whatsappUrl: waUrl,
           },
           google_rsa: {
             headlines: [
               enforceRsaLength(`${shortBrand14} Gaya Moden`, 30, 'Naik Taraf Gaya Hidup'),
               enforceRsaLength(`Rutin Baru ${details.productTopic}`, 30, 'Pengalaman Lebih Selesa'),
-              enforceRsaLength('Tanya Jambatan Pakej Kini', 30, 'WhatsApp Info Kini'),
+              enforceRsaLength('WhatsApp Tukar Sekarang', 30, 'WhatsApp Info Kini'),
             ],
             descriptions: [
-              enforceRsaLength(`Ubah rutin lama ke ${verticalCopy.desireCasual} bersama ${shortBrand12}.`, 90, 'Pengalaman lebih kemas dan selesa untuk rutin harian anda.'),
+              enforceRsaLength(`Nikmati ${cues.desireCasual} bersama ${shortBrand12}.`, 90, 'Pengalaman lebih kemas dan selesa untuk rutin harian anda.'),
               enforceRsaLength(`${cleanOffer} — WhatsApp ${shortBrand12} untuk slot ${occasionLabel}.`, 90, 'Hubungi kami di WhatsApp untuk maklumat penuh.'),
             ],
             negativeKeywords: ['percuma', 'tiruan', 'cara lama', 'rosak', 'terpakai'],
@@ -559,25 +662,25 @@ export function generateCampaignCopyForAngle(
         return {
           facebook: {
             primaryText: isCasual
-              ? `Bayangkan jimat masa & wang setiap minggu berbanding rutin lama! ${brandName} bawakan ${subject} dengan ${highlight}. ${cleanOffer} Jom mula langkah baru di WhatsApp: ${waUrl}`
-              : `Peralihan daripada kos berulang yang tinggi kepada ${verticalCopy.desirePro} melalui ${brandName} (${highlight}). ${cleanOffer} Dapatkan perincian pakej di WhatsApp rasmi: ${waUrl}`,
-            headline: `${brandName} — Nilai Gaya Hidup Lebih Teratur`,
+              ? `Cuba kira berapa banyak masa & duit selamat tiap bulan bila tukar ke ${brandName}! 💡\n\n✅ ${uspBullet}\n✅ ${highlight}\n\n${cleanOffer} Jom mula langkah baru di WhatsApp: ${waUrl}`
+              : `Beralih daripada perbelanjaan berulang kepada ${cues.desirePro} bersama ${brandName} (${highlight}).\n\n${cleanOffer} Dapatkan pecahan pakej di WhatsApp rasmi: ${waUrl}`,
+            headline: `${brandName} — Lebih Senang & Lebih Berbaloi`,
             description: `Rutin harian lebih ringan dengan ${highlight}`,
             whatsappUrl: waUrl,
           },
           instagram: {
             caption: isCasual
-              ? `Lebih tenang, lebih teratur dengan ${subject} daripada ${brandName} 🌿\n${cleanOffer}\nKlik WhatsApp untuk info: ${waUrl}`
-              : `Rutin lebih efisien dan nilai terjaga bersama ${brandName}.\n${cleanOffer}\nWhatsApp rasmi: ${waUrl}`,
+              ? `Lebih tenang, lebih jimat masa dengan ${subject} daripada ${brandName} 🌿\n${uspBullet}\n${cleanOffer}\nKlik WhatsApp untuk info: ${waUrl}`
+              : `Rutin lebih teratur dan nilai jelas bersama ${brandName}.\n${cleanOffer}\nWhatsApp rasmi: ${waUrl}`,
             hashtags: `#${hashBrand} ${hashCollab} #RutinTeratur #NilaiGayaHidup #BisnesLokal`,
             whatsappUrl: waUrl,
           },
           tiktok: {
             hook: isCasual
-              ? `Macam mana ${subject} di ${brandName} buat rutin harian jadi dua kali lebih senang!`
-              : `Bagaimana ${brandName} membantu pelanggan beralih kepada sistem yang lebih efisien.`,
+              ? `Macam mana ${brandName} buat kerja yang dulu makan masa sejam jadi siap dalam sekelip mata!`
+              : `Bagaimana ${brandName} bantu pelanggan menjimatkan masa dan kos harian.`,
             script: isCasual
-              ? `0-2s: Masa banyak habis cara lama. 2-4s: Kemudahan ${brandName} (${cleanOffer}). 4-6s: Klik WhatsApp (${waUrl}).`
+              ? `0-2s: Masa habis dengan cara lama. 2-4s: Senangnya ${brandName} (${uspBullet}) — ${cleanOffer}. 4-6s: Klik WhatsApp (${waUrl}).`
               : `0-2s: Kos masa cara lama. 2-4s: Nilai ${brandName} (${cleanOffer}). 4-6s: Hubungi WhatsApp rasmi (${waUrl}).`,
             caption: `Rutin baru lebih jimat bersama ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
             whatsappUrl: waUrl,
@@ -590,7 +693,7 @@ export function generateCampaignCopyForAngle(
             ],
             descriptions: [
               enforceRsaLength(`Beralih dari cara rumit ke ${shortBrand12}: ${cleanOffer}`, 90, 'Lebih mudah diurus dengan nilai yang jelas setiap hari.'),
-              enforceRsaLength(`Ketahui bagaimana ${shortBrand12} mudahkan rutin anda melalui WhatsApp.`, 90, 'Hubungi wakil kami untuk penerangan pakej.'),
+              enforceRsaLength(`Ketahui bagaimana ${shortBrand12} ringankan rutin anda via WhatsApp.`, 90, 'Hubungi wakil kami untuk penerangan pakej.'),
             ],
             negativeKeywords: ['percuma', 'susah guna', 'kualiti rendah', 'borong', 'terpakai'],
             whatsappUrl: waUrl,
@@ -601,9 +704,9 @@ export function generateCampaignCopyForAngle(
       return {
         facebook: {
           primaryText: isCasual
-            ? `Ramai pelanggan kongsi betapa leganya lepas tukar ke ${brandName} untuk ${subject}! Daripada pening kepala dulu, sekarang rutin rasa lebih kemas. ${cleanOffer} Jom sembang di WhatsApp: ${waUrl}`
-            : `Pelanggan kami menghargai peralihan kepada ${verticalCopy.desirePro} selepas memilih ${brandName}. ${cleanOffer} Sertai mereka melalui WhatsApp rasmi: ${waUrl}`,
-          headline: `${brandName} — Pengalaman Baharu Pilihan Ramai`,
+            ? `Ramai pelanggan cerita betapa leganya lepas tukar ke ${brandName} untuk ${subject}! Daripada serabut dulu, sekarang semuanya rasa lebih lancar. 💙\n\n${cleanOffer} Jom sembang di WhatsApp: ${waUrl}`
+            : `Pelanggan kami menghargai peralihan kepada ${cues.desirePro} selepas memilih ${brandName}. ${cleanOffer} Sertai mereka melalui WhatsApp rasmi: ${waUrl}`,
+          headline: `${brandName} — Pengalaman Baharu Yang Ramai Suka`,
           description: `Kisah peralihan pelanggan bersama ${brandName}`,
           whatsappUrl: waUrl,
         },
@@ -616,10 +719,10 @@ export function generateCampaignCopyForAngle(
         },
         tiktok: {
           hook: isCasual
-            ? `Dulu ragu nak tukar, lepas cuba ${brandName} terus rasa beza rutin harian!`
+            ? `Dulu ragu-ragu nak tukar, sekali dah cuba ${brandName} terus rasa beza rutin harian!`
             : `Mengapa ramai pengguna beralih kepada ${brandName} untuk rutin lebih teratur.`,
           script: isCasual
-            ? `0-2s: Keraguan sebelum mencuba. 2-4s: Suasana selesa dengan ${subject} (${cleanOffer}). 4-6s: Tanya kami di WhatsApp (${waUrl}).`
+            ? `0-2s: Keraguan sebelum mencuba. 2-4s: Pengalaman selesa dengan ${subject} (${cleanOffer}). 4-6s: Tanya kami di WhatsApp (${waUrl}).`
             : `0-2s: Maklum balas peralihan pelanggan. 2-4s: ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi (${waUrl}).`,
           caption: `Kisah gaya hidup baru bersama ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
           whatsappUrl: waUrl,
@@ -646,15 +749,15 @@ export function generateCampaignCopyForAngle(
         return {
           facebook: {
             primaryText: isCasual
-              ? `POV: Unboxing & cuba sendiri ${subject} daripada ${brandName} — jujur cakap, memang patut grab awal sebelum ${scarcityLabel.toLowerCase()}! ${cleanOffer} Kalau nak check stok live, terus WhatsApp sini: ${waUrl}`
-              : `Ulasan terperinci pengguna: Mengapa tempahan awal ${subject} di ${brandName} (${highlight}) wajar dibuat sebelum kuota ${occasionLabel} tamat. ${cleanOffer} Hubungi WhatsApp rasmi: ${waUrl}`,
+              ? `POV: Unboxing & test sendiri ${subject} dari ${brandName} — jujur cakap, menyesal tak grab awal! 📦✨\n\nYang paling power:\n👉 ${uspBullet}\n👉 ${highlight}\n\n${cleanOffer} Nak tengok stok live, terus WhatsApp sini: ${waUrl}`
+              : `Ulasan terperinci pengguna: Mengapa tempahan awal ${subject} di ${brandName} (${highlight}) berbaloi dibuat sebelum kuota ${occasionLabel} tamat. ${cleanOffer} Hubungi WhatsApp rasmi: ${waUrl}`,
             headline: `${brandName} — Review Jujur & Unboxing ${occasionLabel}`,
-            description: `Perkongsian sebenar ${subject} • ${scarcityLabel}`,
+            description: `📦 Testimoni sebenar ${subject} • ${scarcityLabel}`,
             whatsappUrl: waUrl,
           },
           instagram: {
             caption: isCasual
-              ? `Review jujur tanpa filter! Baru unboxing ${subject} dari ${brandName} 📦✨\n${cleanOffer}\nCepat WhatsApp tanya stok: ${waUrl}`
+              ? `Review jujur tanpa filter! Baru unboxing ${subject} dari ${brandName} 📦✨\n${uspBullet}\n${cleanOffer}\nCepat WhatsApp tanya stok: ${waUrl}`
               : `Perkongsian pengalaman sebenar menggunakan ${subject} daripada ${brandName}.\n${cleanOffer}\nWhatsApp rasmi untuk semakan stok: ${waUrl}`,
             hashtags: `#${hashBrand} ${hashCollab} #UnboxingMalaysia #ReviewJujur #UGCStyle`,
             whatsappUrl: waUrl,
@@ -664,7 +767,7 @@ export function generateCampaignCopyForAngle(
               ? `POV: Kenapa aku menyesal tak grab ${appendCollabIfAbsent(brandName, details.collabTag)} dari awal lagi!`
               : `Ulasan ringkas 6 saat: Apa yang membuatkan ${brandName} menonjol minggu ini.`,
             script: isCasual
-              ? `0-2s: Buka kotak / close-up ${subject}. 2-4s: Tunjuk detail sebenar (${cleanOffer}). 4-6s: Tekan link WhatsApp sebelum habis (${waUrl}).`
+              ? `0-2s: Buka kotak / close-up ${subject}. 2-4s: Tunjuk detail sebenar — ${uspBullet} (${cleanOffer}). 4-6s: Tekan link WhatsApp sebelum habis (${waUrl}).`
               : `0-2s: Paparan dekat ciri utama ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Sahkan pesanan melalui WhatsApp rasmi (${waUrl}).`,
             caption: `Unboxing & POV jujur ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
             whatsappUrl: waUrl,
@@ -689,7 +792,7 @@ export function generateCampaignCopyForAngle(
         return {
           facebook: {
             primaryText: isCasual
-              ? `Ramai tanya berbaloi ke beli ${subject} di ${brandName}? Lepas tengok kualiti fizikal & dapat ${highlight}, memang puas hati! ${cleanOffer} Nak tengok gambar sebenar? WhatsApp terus: ${waUrl}`
+              ? `Ramai DM tanya: "Betul ke berbaloi ${subject} di ${brandName}?" Lepas pegang sendiri kualiti dia & dapat ${highlight}, memang puas hati! 😍\n\n✅ ${uspBullet}\n✅ ${cleanOffer}\n\nNak gambar/video sebenar? WhatsApp terus: ${waUrl}`
               : `Penilaian pengguna terhadap nilai sebenar ${subject} di ${brandName}: kemasan teliti sepadan dengan ${highlight}. ${cleanOffer} Dapatkan info lanjut di WhatsApp rasmi: ${waUrl}`,
             headline: `${brandName} — Ulasan Nilai Sebenar Pengguna`,
             description: `Foto sebenar & pecahan ${highlight} • Tanya di WhatsApp`,
@@ -697,17 +800,17 @@ export function generateCampaignCopyForAngle(
           },
           instagram: {
             caption: isCasual
-              ? `Real talk: Berbaloi ke ${subject} dari ${brandName}? Jawapannya ya, tengok saja kemasan & ${highlight} ni 👀\n${cleanOffer}\nWhatsApp sini: ${waUrl}`
+              ? `Real talk: Berbaloi ke ${subject} dari ${brandName}? Jawapannya ya, tengok saja ${uspBullet} & ${highlight} ni 👀\n${cleanOffer}\nWhatsApp sini: ${waUrl}`
               : `Penilaian jujur terhadap mutu dan nilai ${subject} di ${brandName}.\n${cleanOffer}\nWhatsApp rasmi: ${waUrl}`,
             hashtags: `#${hashBrand} ${hashCollab} #ReviewBerbaloi #RealTalkMY #SupportLokal`,
             whatsappUrl: waUrl,
           },
           tiktok: {
             hook: isCasual
-              ? `Jujur cakap, ini benda yang orang tak bagitahu pasal ${subject} di ${brandName}...`
+              ? `Jujur cakap, ini benda yang orang jarang bagitahu pasal ${subject} di ${brandName}...`
               : `3 perkara yang kami perhatikan selepas menguji ${subject} daripada ${brandName}.`,
             script: isCasual
-              ? `0-2s: Tunjuk tekstur/kemasan sebenar. 2-4s: Beritahu nilai ${highlight} (${cleanOffer}). 4-6s: WhatsApp untuk info penuh (${waUrl}).`
+              ? `0-2s: Tunjuk tekstur/kemasan sebenar. 2-4s: ${uspBullet} + nilai ${highlight} (${cleanOffer}). 4-6s: WhatsApp untuk info penuh (${waUrl}).`
               : `0-2s: Pemerhatian kualiti binaan. 2-4s: ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi (${waUrl}).`,
             caption: `Review jujur nilai ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
             whatsappUrl: waUrl,
@@ -731,7 +834,7 @@ export function generateCampaignCopyForAngle(
       return {
         facebook: {
           primaryText: isCasual
-            ? `Bukan cakap kosong — tengok sendiri kenapa feed ramai penuh dengan unboxing ${appendCollabIfAbsent(brandName, details.collabTag)}! ${cleanOffer} Nak join gelombang pengguna puas hati? WhatsApp kami: ${waUrl}`
+            ? `Bukan cakap kosong — tengok sendiri kenapa feed ramai penuh dengan unboxing ${appendCollabIfAbsent(brandName, details.collabTag)}! 🔥\n${uspBullet}\n\n${cleanOffer} Nak join gelombang pengguna puas hati? WhatsApp kami: ${waUrl}`
             : `Perkongsian komuniti pengguna mengenai pengalaman mereka bersama ${brandName} untuk ${subject}. ${cleanOffer} Hubungi WhatsApp rasmi untuk pertanyaan: ${waUrl}`,
           headline: `${brandName} — Pilihan Komuniti & Pencipta Konten`,
           description: `Ulasan pengguna sebenar seluruh Malaysia • WhatsApp kami`,
@@ -784,15 +887,15 @@ export function generateCampaignCopyForAngle(
         return {
           facebook: {
             primaryText: isCasual
-              ? `Kiraan pembeli bijak untuk ${occasionLabel}: Dengan ${brandName}, anda dapat ${subject} pada ${mathBreakdown}! Bandingkan sendiri kos jangka panjang sebelum promosi tamat. ${cleanOffer} Kunci harga ini di WhatsApp: ${waUrl}`
-              : `Analisis nilai segera ${brandName}: Perolehan ${subject} dengan ${mathBreakdown} bagi tempoh ${occasionLabel}. ${cleanOffer} Sahkan kadar istimewa ini melalui WhatsApp rasmi: ${waUrl}`,
+              ? `Kiraan pembeli bijak untuk ${occasionLabel} 🧮:\nDengan ${brandName}, anda terus dapat ${subject} pada ${mathBreakdown}!\n✅ ${uspBullet}\n\nBandingkan sendiri sebelum promo tamat. ${cleanOffer} Kunci harga ini di WhatsApp: ${waUrl}`
+              : `Analisis nilai segera ${brandName}: Perolehan ${subject} dengan ${mathBreakdown} bagi tempoh ${occasionLabel} (${uspBullet}). ${cleanOffer} Sahkan kadar istimewa ini melalui WhatsApp rasmi: ${waUrl}`,
             headline: `${brandName} — Kiraan Berbaloi (${mathBreakdown})`,
             description: `Bandingkan nilai sebenar sebelum tamat • WhatsApp sekarang`,
             whatsappUrl: waUrl,
           },
           instagram: {
             caption: isCasual
-              ? `Pembeli bijak buat kiraan dulu! 🧮✨\n${subject} di ${brandName}: ${mathBreakdown}\n${cleanOffer}\nKunci harga anda di WhatsApp: ${waUrl}`
+              ? `Pembeli bijak buat kiraan dulu! 🧮✨\n${subject} di ${brandName}: ${mathBreakdown}\n${uspBullet}\n${cleanOffer}\nKunci harga anda di WhatsApp: ${waUrl}`
               : `Pecahan nilai telus ${brandName} untuk tempoh terhad: ${mathBreakdown}.\n${cleanOffer}\nWhatsApp rasmi: ${waUrl}`,
             hashtags: `#${hashBrand} ${hashCollab} #PembeliBijak #KiraanBerbaloi #JimatCermat`,
             whatsappUrl: waUrl,
@@ -810,7 +913,7 @@ export function generateCampaignCopyForAngle(
           google_rsa: {
             headlines: [
               enforceRsaLength(`Kiraan ${shortBrand14}`, 30, 'Kiraan Nilai Berbaloi'),
-              enforceRsaLength(details.discountPercent ? `Jimat ${details.discountPercent} ${details.priceTag ?? ''}`.trim() : `Nilai ${details.priceTag ?? focus}`, 30, 'Penjimatan Jelas Kini'),
+              enforceRsaLength(details.discountPercent ? `Jimat ${details.discountPercent} ${details.priceTag ?? ''}`.trim() : `Nilai ${rsaValueTag}`, 30, 'Penjimatan Jelas Kini'),
               enforceRsaLength('Kunci Harga Di WhatsApp', 30, 'Semak Harga WhatsApp'),
             ],
             descriptions: [
@@ -827,7 +930,7 @@ export function generateCampaignCopyForAngle(
         return {
           facebook: {
             primaryText: isCasual
-              ? `Kenapa bayar berulang kali kalau sekali ambil di ${brandName} anda terus dapat ${mathBreakdown}? Setiap sen dikira untuk kualiti ${subject}. ${cleanOffer} Minta jadual harga penuh di WhatsApp: ${waUrl}`
+              ? `Kenapa bayar berulang kali kalau sekali ambil di ${brandName} anda terus dapat ${mathBreakdown}? 💡\n\n✅ ${uspBullet}\n✅ Setiap sen dikira untuk kualiti ${subject}\n\n${cleanOffer} Minta jadual harga penuh di WhatsApp: ${waUrl}`
               : `Perbandingan pulangan pelaburan: Memilih ${subject} di ${brandName} (${mathBreakdown}) menjimatkan perbelanjaan jangka panjang. ${cleanOffer} Hubungi WhatsApp rasmi untuk sebut harga: ${waUrl}`,
             headline: `${brandName} — Perbandingan Nilai & Penjimatan`,
             description: `Pecahan ${mathBreakdown} yang telus & jelas`,
@@ -853,7 +956,7 @@ export function generateCampaignCopyForAngle(
           google_rsa: {
             headlines: [
               enforceRsaLength(`Nilai ${shortBrand14}`, 30, 'Banding Nilai Terbaik'),
-              enforceRsaLength(`Pecahan ${details.priceTag ?? focus}`, 30, 'Harga Telus Setiap Sen'),
+              enforceRsaLength(`Pecahan ${rsaValueTag}`, 30, 'Harga Telus Setiap Sen'),
               enforceRsaLength('Semak Jadual Harga Kini', 30, 'Tanya Sebut Harga'),
             ],
             descriptions: [
@@ -869,7 +972,7 @@ export function generateCampaignCopyForAngle(
       return {
         facebook: {
           primaryText: isCasual
-            ? `Ramai pembeli bijak pilih ${brandName} lepas buat perbandingan sendiri — sebab ${mathBreakdown} memang sukar ditandingi untuk ${subject}! ${cleanOffer} Semak pilihan paling laku di WhatsApp: ${waUrl}`
+            ? `Ramai pembeli bijak pilih ${brandName} lepas buat perbandingan sendiri — sebab ${mathBreakdown} memang padu untuk ${subject}! ${cleanOffer} Semak pilihan paling laku di WhatsApp: ${waUrl}`
             : `Pelanggan yang membuat perbandingan terperinci memilih ${brandName} atas ketelusan ${mathBreakdown}. ${cleanOffer} Hubungi WhatsApp rasmi untuk konsultasi: ${waUrl}`,
           headline: `${brandName} — Pilihan Pembeli Bijak Malaysia`,
           description: `Terbukti berbaloi dengan ${mathBreakdown} • WhatsApp kami`,
@@ -885,7 +988,7 @@ export function generateCampaignCopyForAngle(
         tiktok: {
           hook: isCasual
             ? `Orang yang jenis teliti harga pun akhirnya pilih ${brandName} — ini sebabnya!`
-            : `Mengapa pembeli korporat dan pengguna bijak memilih pakej ${brandName}.`,
+            : `Mengapa pembeli yang teliti memilih pakej nilai ${brandName}.`,
           script: isCasual
             ? `0-2s: Reaksi pembeli lepas banding harga. 2-4s: ${mathBreakdown} (${cleanOffer}). 4-6s: Tanya di WhatsApp (${waUrl}).`
             : `0-2s: Kriteria pembeli teliti. 2-4s: ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi (${waUrl}).`,
@@ -895,7 +998,7 @@ export function generateCampaignCopyForAngle(
         google_rsa: {
           headlines: [
             enforceRsaLength(`Bijak Pilih ${shortBrand14}`, 30, 'Pilihan Pembeli Bijak'),
-            enforceRsaLength(`Rekod Nilai ${details.priceTag ?? focus}`, 30, 'Berbaloi & Dipercayai'),
+            enforceRsaLength(`Rekod Nilai ${rsaValueTag}`, 30, 'Berbaloi & Dipercayai'),
             enforceRsaLength('Banding Pakej Di WhatsApp', 30, 'Tanya Pakej WhatsApp'),
           ],
           descriptions: [
@@ -916,15 +1019,15 @@ export function generateCampaignCopyForAngle(
       return {
         facebook: {
           primaryText: isCasual
-            ? `DROP ${dropTag.toUpperCase()} KINI DIBUKA! 🚨 ${brandName} lepaskan kuota awal untuk ${subject} (${highlight}) — ${scarcityLabel.toLowerCase()} untuk batch kali ini! ${cleanOffer} Terus masuk line di WhatsApp sekarang: ${waUrl}`
-            : `PELANCARAN ${dropTag.toUpperCase()} ${brandName}: Peruntukan awal ${subject} (${highlight}) dibuka dengan ${scarcityLabel.toLowerCase()}. ${cleanOffer} Sahkan giliran anda melalui WhatsApp rasmi: ${waUrl}`,
+            ? `DROP ${dropTag.toUpperCase()} KINI DIBUKA! 🚨\n${brandName} lepaskan kuota awal untuk ${subject} (${highlight}) — ${scarcityLabel.toLowerCase()} untuk batch kali ini!\n✨ ${uspBullet}\n\n${cleanOffer} Terus masuk line di WhatsApp sekarang: ${waUrl}`
+            : `PELANCARAN ${dropTag.toUpperCase()} ${brandName}: Peruntukan awal ${subject} (${highlight}) dibuka dengan ${scarcityLabel.toLowerCase()} (${uspBullet}). ${cleanOffer} Sahkan giliran anda melalui WhatsApp rasmi: ${waUrl}`,
           headline: `${brandName} — Drop ${dropTag} (${scarcityLabel})`,
           description: `Akses awal ${highlight} • Rebut sebelum batch ditutup`,
           whatsappUrl: waUrl,
         },
         instagram: {
           caption: isCasual
-            ? `🚨 ${dropTag} DROP di ${brandName}! Stok batch awal bergerak laju 🔥\n${cleanOffer}\nLocked slot anda di WhatsApp: ${waUrl}`
+            ? `🚨 ${dropTag} DROP di ${brandName}! Stok batch awal bergerak laju 🔥\n${uspBullet}\n${cleanOffer}\nLock slot anda di WhatsApp: ${waUrl}`
             : `Edisi ${dropTag} daripada ${brandName} kini dibuka untuk tempahan awal.\n${cleanOffer}\nWhatsApp rasmi: ${waUrl}`,
           hashtags: `#${hashBrand} ${hashCollab} #EdisiKhas #DropTerhad #MingguGaji`,
           whatsappUrl: waUrl,
@@ -933,8 +1036,8 @@ export function generateCampaignCopyForAngle(
           hook: isCasual
             ? `AMARAN ${dropTag.toUpperCase()}! Batch awal ${brandName} ni memang tak tunggu orang lambat!`
             : `Pengumuman pelancaran ${dropTag}: Peruntukan awal ${brandName} kini dibuka.`,
-            script: isCasual
-            ? `0-2s: Visual hype ${dropTag} ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Laju tekan WhatsApp sebelum sold out (${waUrl}).`
+          script: isCasual
+            ? `0-2s: Visual hype ${dropTag} ${brandName}. 2-4s: ${uspBullet} — ${cleanOffer}. 4-6s: Laju tekan WhatsApp sebelum sold out (${waUrl}).`
             : `0-2s: Pengumuman edisi ${dropTag}. 2-4s: ${cleanOffer}. 4-6s: Sahkan peruntukan di WhatsApp rasmi (${waUrl}).`,
           caption: `Drop ${dropTag} di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
           whatsappUrl: waUrl,
@@ -959,8 +1062,8 @@ export function generateCampaignCopyForAngle(
       return {
         facebook: {
           primaryText: isCasual
-            ? `Pelanggan terawal ${dropTag} di ${brandName} paling untung sebab dapat ${highlight} sekali gus! ${cleanOffer} Jangan tunggu batch biasa harga penuh — WhatsApp sekarang: ${waUrl}`
-            : `Kelebihan tempahan awal ${dropTag} di ${brandName}: Akses kepada ${highlight} dengan peruntukan terhad. ${cleanOffer} Hubungi WhatsApp rasmi: ${waUrl}`,
+            ? `Pelanggan terawal ${dropTag} di ${brandName} paling untung sebab dapat ${highlight} sekali gus! 🎁\n✅ ${uspBullet}\n\n${cleanOffer} Jangan tunggu batch biasa harga penuh — WhatsApp sekarang: ${waUrl}`
+            : `Kelebihan tempahan awal ${dropTag} di ${brandName}: Akses kepada ${highlight} dengan peruntukan terhad (${uspBullet}). ${cleanOffer} Hubungi WhatsApp rasmi: ${waUrl}`,
           headline: `${brandName} — Kelebihan Terawal ${dropTag}`,
           description: `Dapatkan ${highlight} sebelum harga kembali normal`,
           whatsappUrl: waUrl,
@@ -1001,7 +1104,7 @@ export function generateCampaignCopyForAngle(
     return {
       facebook: {
         primaryText: isCasual
-          ? `Setiap kali ${brandName} buka drop ${dropTag}, pelanggan tetap memang paling laju masuk mesej! ${cleanOffer} Jangan tengok saja orang lain grab — WhatsApp sekarang: ${waUrl}`
+          ? `Setiap kali ${brandName} buka drop ${dropTag}, pelanggan tetap memang paling laju masuk mesej! 🔥\n${cleanOffer} Jangan tengok saja orang lain grab — WhatsApp sekarang: ${waUrl}`
           : `Sambutan hangat pelanggan setia terhadap setiap pelancaran ${dropTag} di ${brandName}. ${cleanOffer} Sertai senarai terawal melalui WhatsApp rasmi: ${waUrl}`,
         headline: `${brandName} — Rebutan Drop ${dropTag}`,
         description: `Sentiasa jadi pilihan pelanggan terawal • WhatsApp sekarang`,
@@ -1076,36 +1179,96 @@ export function generateCampaignCopyForAngle(
 export function generateCampaignCopyMap(
   brand: BrandProfile,
   offerSentence: string,
-  variationIndex = 1
+  variationIndex = 1,
+  uspAndAudience?: string
 ): Record<AngleId, ChannelCopy> {
   return {
-    urgency: generateCampaignCopyForAngle(brand, offerSentence, 'urgency', variationIndex),
-    value: generateCampaignCopyForAngle(brand, offerSentence, 'value', variationIndex),
-    social_proof: generateCampaignCopyForAngle(brand, offerSentence, 'social_proof', variationIndex),
+    urgency: generateCampaignCopyForAngle(brand, offerSentence, 'urgency', variationIndex, uspAndAudience),
+    value: generateCampaignCopyForAngle(brand, offerSentence, 'value', variationIndex, uspAndAudience),
+    social_proof: generateCampaignCopyForAngle(brand, offerSentence, 'social_proof', variationIndex, uspAndAudience),
   };
+}
+
+function buildFeatureGridPoints(params: {
+  details: OfferDetails;
+  cues: ReturnType<typeof getVerticalPerformanceCues>;
+  uspHighlightPoints: string[];
+  brandName: string;
+}): string[] {
+  const { details, cues, uspHighlightPoints } = params;
+  const candidates = [
+    ...uspHighlightPoints,
+    details.discountPercent ? `Jimat ${details.discountPercent}` : '',
+    details.priceTag ? `Hanya ${details.priceTag}` : '',
+    details.bundleOrFreebie ? `${details.bundleOrFreebie}` : '',
+    details.scarcityCue ? `${details.scarcityCue}` : '',
+    cues.uspHook,
+    'Info harga telus & jelas',
+    'Order pantas via WhatsApp',
+  ]
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 3);
+
+  const unique: string[] = [];
+  for (const item of candidates) {
+    const clean = ensureSafeField(truncateAtWordBoundary(item, 48), params.brandName);
+    if (clean && !unique.some((u) => u.toLowerCase() === clean.toLowerCase())) {
+      unique.push(clean);
+    }
+    if (unique.length >= 4) break;
+  }
+
+  while (unique.length < 4) {
+    const fallback = [
+      'Kualiti terjamin & kemas',
+      'Sesuai kegunaan harian',
+      'Respon WhatsApp pantas',
+      'Stok sedia dihantar',
+    ][unique.length];
+    unique.push(fallback);
+  }
+
+  return unique;
 }
 
 export function buildCarouselSlides(
   brand: BrandProfile,
   offerSentence: string,
   variationIndex = 1,
-  productVisionSummary?: string | null
+  productVisionSummary?: string | null,
+  uspAndAudience?: string
 ): CarouselSlide[] {
   const brandName = brand.name.trim() || 'Bisnes Saya';
   const cleanOffer = cleanOfferText(offerSentence);
-  const details = extractOfferDetails(brandName, cleanOffer);
+  const details = extractOfferDetails(brandName, cleanOffer, uspAndAudience);
+  const uspParsed = extractUspAndAudience(uspAndAudience);
+  const cues = getVerticalPerformanceCues(
+    details.vertical,
+    details.uspSummary,
+    details.targetAudience
+  );
   const framework = getFrameworkForVariation(variationIndex);
   const subject = getDistinctSubject(details, cleanOffer);
   const highlight = formatOfferHighlight(details);
   const isCasual = brand.tone === 'casual';
-  const shortOffer = cleanOffer.length > 56 ? `${sliceSafeUtf16(cleanOffer, 53).trimEnd()}...` : cleanOffer;
+  const shortOffer =
+    cleanOffer.length > 56 ? `${truncateAtWordBoundary(cleanOffer, 53)}...` : cleanOffer;
   const visionNote = productVisionSummary?.trim()
-    ? sliceSafeUtf16(productVisionSummary.trim(), 62)
+    ? truncateAtWordBoundary(productVisionSummary.trim(), 62)
+    : null;
+  const uspSub = details.uspSummary
+    ? truncateAtWordBoundary(details.uspSummary, 58)
     : null;
   const collabMention = containsTokenCaseInsensitive(brandName, details.collabTag)
     ? brandName
     : (details.collabTag ?? brandName);
   const dropTitleBrand = appendCollabIfAbsent(brandName, details.collabTag);
+  const highlightPoints = buildFeatureGridPoints({
+    details,
+    cues,
+    uspHighlightPoints: uspParsed.highlightPoints,
+    brandName,
+  });
 
   const s = (text: string) => ensureSafeField(text, brandName);
 
@@ -1117,12 +1280,12 @@ export function buildCarouselSlides(
           index: 0,
           role: 'hook',
           photoIndex: 0,
-          badgeText: s(brandName),
+          badgeText: s(details.discountPercent ? `${brandName} • ${details.discountPercent}` : brandName),
           headline: s(isCasual ? `Penat Cari ${subject}?` : `Solusi ${subject} — ${brandName}`),
           subheadline: s(
             visionNote
-              ? `Solusi: ${visionNote}`
-              : `${brandName} mudahkan urusan anda dengan harga telus.`
+              ? `Fokus: ${visionNote}`
+              : uspSub ?? `${brandName} tawarkan ${cues.uspHook}`
           ),
           ctaText: 'Slide 1 / 4',
           editedByUser: false,
@@ -1132,9 +1295,9 @@ export function buildCarouselSlides(
           index: 1,
           role: 'offer',
           photoIndex: 1,
-          badgeText: s(details.discountPercent ? `JIMAT ${details.discountPercent}` : 'SOLUSI UTAMA'),
-          headline: s(`Solusi Tepat: ${shortOffer}`),
-          subheadline: s(`Eksklusif di ${brandName} (${highlight})`),
+          badgeText: s(details.discountPercent ? `JIMAT ${details.discountPercent}` : 'MASALAH → SOLUSI'),
+          headline: s(`Terus Selesai: ${shortOffer}`),
+          subheadline: s(`${cues.painCasual} → ${highlight}`),
           ctaText: s(details.scarcityCue ?? 'Kuota Terawal'),
           editedByUser: false,
         },
@@ -1143,10 +1306,11 @@ export function buildCarouselSlides(
           index: 2,
           role: 'proof',
           photoIndex: 0,
-          badgeText: 'KEPERCAYAAN',
-          headline: s(isCasual ? `Pilihan Ramai Untuk ${subject}` : 'Rekod Kepuasan Pelanggan'),
-          subheadline: s(isCasual ? 'Layanan mesra, respons pantas & jelas.' : 'Piawaian konsisten & telus.'),
-          ctaText: 'Dipercayai Ramai',
+          badgeText: 'KELEBIHAN UTAMA',
+          headline: s(isCasual ? `Kenapa Ramai Pilih ${subject}` : `Kelebihan ${subject} ${brandName}`),
+          subheadline: s(uspSub ?? `${cues.trustVertical}`),
+          highlightPoints,
+          ctaText: 'Pilihan Berbaloi',
           editedByUser: false,
         },
         {
@@ -1170,11 +1334,11 @@ export function buildCarouselSlides(
           role: 'hook',
           photoIndex: 0,
           badgeText: s(`${brandName} • GAYA BAHARU`),
-          headline: s(`Tinggalkan Rutin Lama Yang Leceh`),
+          headline: s(`Upgrade Rutin Harian Anda`),
           subheadline: s(
             visionNote
               ? `Gaya baharu: ${visionNote}`
-              : `Naik taraf pengalaman harian bersama ${subject}.`
+              : uspSub ?? cues.desireCasual
           ),
           ctaText: 'Slide 1 / 4',
           editedByUser: false,
@@ -1184,9 +1348,9 @@ export function buildCarouselSlides(
           index: 1,
           role: 'offer',
           photoIndex: 1,
-          badgeText: 'JAMBATAN SOLUSI',
-          headline: s(`Rutin Lebih Kemas: ${highlight}`),
-          subheadline: s(`Peralihan mudah — ${shortOffer}`),
+          badgeText: 'CARA LAMA VS BARU',
+          headline: s(`Rutin Lebih Ringan: ${highlight}`),
+          subheadline: s(`Tukar hari ini — ${shortOffer}`),
           ctaText: s(details.occasion ?? 'Mula Hari Ini'),
           editedByUser: false,
         },
@@ -1196,9 +1360,10 @@ export function buildCarouselSlides(
           role: 'proof',
           photoIndex: 0,
           badgeText: 'PENGALAMAN NYATA',
-          headline: s(`Lebih Selesa & Menjimatkan Masa`),
-          subheadline: s(`Pelanggan ${brandName} nikmati rutin lebih teratur setiap hari.`),
-          ctaText: 'Gaya Hidup Teratur',
+          headline: s(`Lebih Selesa & Jimat Masa`),
+          subheadline: s(uspSub ?? `Pelanggan ${brandName} nikmati ${cues.desireCasual}.`),
+          highlightPoints,
+          ctaText: 'Rutin Lebih Kemas',
           editedByUser: false,
         },
         {
@@ -1226,7 +1391,7 @@ export function buildCarouselSlides(
           subheadline: s(
             visionNote
               ? `Foto sebenar: ${visionNote}`
-              : `Kenapa ramai cakap pasal ${collabMention}?`
+              : uspSub ?? `Kenapa ramai cakap pasal ${collabMention}?`
           ),
           ctaText: 'Slide 1 / 4',
           editedByUser: false,
@@ -1242,7 +1407,7 @@ export function buildCarouselSlides(
               ? `Apa Dalam Set: ${details.bundleOrFreebie} (${highlight})`
               : `Apa Yang Anda Dapat: ${highlight}`
           ),
-          subheadline: s(`Foto sebenar produk & servis di ${brandName}`),
+          subheadline: s(`Foto sebenar produk & ciri di ${brandName}`),
           ctaText: 'Lihat Perincian',
           editedByUser: false,
         },
@@ -1253,7 +1418,8 @@ export function buildCarouselSlides(
           photoIndex: 0,
           badgeText: 'ULASAN KOMUNITI',
           headline: s(`Maklum Balas Jujur Pelanggan Sebenar`),
-          subheadline: s(`Kemasan kemas, layanan pantas, dan ${highlight}.`),
+          subheadline: s(uspSub ?? `Kemasan rapi, respon pantas & ${highlight}.`),
+          highlightPoints,
           ctaText: 'Ulasan Sebenar',
           editedByUser: false,
         },
@@ -1282,7 +1448,7 @@ export function buildCarouselSlides(
           subheadline: s(
             visionNote
               ? `Nilai fizikal: ${visionNote}`
-              : `Bandingkan setiap sen sebelum buat keputusan.`
+              : uspSub ?? `Bandingkan setiap sen sebelum buat keputusan.`
           ),
           ctaText: 'Slide 1 / 4',
           editedByUser: false,
@@ -1305,7 +1471,8 @@ export function buildCarouselSlides(
           photoIndex: 0,
           badgeText: 'BERBALOI',
           headline: s(`Lebih Jimat Berbanding Beli Asing`),
-          subheadline: s(`Kualiti konsisten ${brandName} dengan harga telus.`),
+          subheadline: s(uspSub ?? `Kualiti terjamin ${brandName} pada harga berpatutan.`),
+          highlightPoints,
           ctaText: 'Pulangan Nilai',
           editedByUser: false,
         },
@@ -1334,7 +1501,7 @@ export function buildCarouselSlides(
           subheadline: s(
             visionNote
               ? `Batch terawal: ${visionNote}`
-              : `${details.scarcityCue ?? 'Kuota terhad'} untuk pelanggan pantas.`
+              : uspSub ?? `${details.scarcityCue ?? 'Kuota terhad'} untuk pelanggan pantas.`
           ),
           ctaText: 'Slide 1 / 4',
           editedByUser: false,
@@ -1357,7 +1524,8 @@ export function buildCarouselSlides(
           photoIndex: 0,
           badgeText: 'SAMBUTAN HANGAT',
           headline: s(`Pelanggan Setia Sudah Mula Tempah`),
-          subheadline: s(`Jangan tunggu stok batch ${details.occasion ?? 'ini'} ditutup.`),
+          subheadline: s(uspSub ?? `Jangan tunggu stok batch ${details.occasion ?? 'ini'} ditutup.`),
+          highlightPoints,
           ctaText: 'Stok Bergerak Laju',
           editedByUser: false,
         },
@@ -1381,11 +1549,17 @@ export function buildStoryboardFrames(
   offerSentence: string,
   lyrics: string,
   variationIndex = 1,
-  productVisionSummary?: string | null
+  productVisionSummary?: string | null,
+  uspAndAudience?: string
 ): StoryboardFrame[] {
   const brandName = brand.name.trim() || 'Bisnes Saya';
   const cleanOffer = cleanOfferText(offerSentence);
-  const details = extractOfferDetails(brandName, cleanOffer);
+  const details = extractOfferDetails(brandName, cleanOffer, uspAndAudience);
+  const cues = getVerticalPerformanceCues(
+    details.vertical,
+    details.uspSummary,
+    details.targetAudience
+  );
   const framework = getFrameworkForVariation(variationIndex);
   const subject = getDistinctSubject(details, cleanOffer);
   const highlight = formatOfferHighlight(details);
@@ -1393,35 +1567,49 @@ export function buildStoryboardFrames(
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
-  const shortOffer = cleanOffer.length > 48 ? `${sliceSafeUtf16(cleanOffer, 45).trimEnd()}...` : cleanOffer;
+  const shortOffer =
+    cleanOffer.length > 48 ? `${truncateAtWordBoundary(cleanOffer, 45)}...` : cleanOffer;
   const s = (text: string) => ensureSafeField(text, brandName);
 
   const visionBit = productVisionSummary?.trim()
-    ? sliceSafeUtf16(productVisionSummary.trim(), 40)
+    ? truncateAtWordBoundary(productVisionSummary.trim(), 40)
     : null;
+  const uspFrameBit = details.uspSummary ? truncateAtWordBoundary(details.uspSummary, 32) : null;
 
   let headlines: [string, string, string, string];
   switch (framework) {
     case 'pas':
       headlines = [
         `${brandName}: Solusi ${subject}`,
-        visionBit ? `Solusi: ${visionBit}` : `Mudah & Kemas Untuk Rutin Anda`,
-        `Pilihan Jelas: ${shortOffer}`,
+        visionBit
+          ? `Sorotan: ${visionBit}`
+          : uspFrameBit
+            ? `Solusi: ${uspFrameBit}`
+            : cues.uspHook,
+        `Tawaran Kini: ${shortOffer}`,
         `WhatsApp +${brand.whatsappNumber} Sekarang`,
       ];
       break;
     case 'bab':
       headlines = [
-        `${brandName}: Rutin Baru Lebih Selesa`,
-        visionBit ? `Rutin Baru: ${visionBit}` : `Tinggalkan Cara Lama Yang Leceh`,
+        `${brandName}: Cara Baru Lebih Senang`,
+        visionBit
+          ? `Rutin Baru: ${visionBit}`
+          : uspFrameBit
+            ? `Rutin Baru: ${uspFrameBit}`
+            : cues.desireCasual,
         `Gaya Baharu: ${highlight}`,
-        `Tukar Rutin: WhatsApp +${brand.whatsappNumber}`,
+        `Tukar Sekarang: WA +${brand.whatsappNumber}`,
       ];
       break;
     case 'pov_ugc':
       headlines = [
         `POV Unboxing ${brandName}`,
-        visionBit ? `Foto Nyata: ${visionBit}` : `Review Jujur ${subject}`,
+        visionBit
+          ? `Foto Nyata: ${visionBit}`
+          : uspFrameBit
+            ? `Review Nyata: ${uspFrameBit}`
+            : `Review Jujur ${subject}`,
         details.bundleOrFreebie
           ? `Dalam Kotak: ${details.bundleOrFreebie}`
           : `Ulasan Nyata: ${highlight}`,
@@ -1431,7 +1619,7 @@ export function buildStoryboardFrames(
     case 'smart_buyer':
       headlines = [
         `Kiraan Bijak ${brandName}`,
-        `Banding Nilai: ${highlight}`,
+        uspFrameBit ? `USP: ${uspFrameBit}` : `Banding Nilai: ${highlight}`,
         `Kiraan Jimat: ${highlight}`,
         `Kunci Nilai: WA +${brand.whatsappNumber}`,
       ];
@@ -1441,7 +1629,9 @@ export function buildStoryboardFrames(
         `Drop ${details.occasion ?? 'Khas'} ${brandName}`,
         details.scarcityCue
           ? `Pantas: ${details.scarcityCue}`
-          : `Kuota Terawal Bergerak Laju`,
+          : uspFrameBit
+            ? `Rebut: ${uspFrameBit}`
+            : `Kuota Terawal Bergerak Laju`,
         `Drop Terawal: ${shortOffer}`,
         `Slot Terawal: WA +${brand.whatsappNumber}`,
       ];
@@ -1456,7 +1646,7 @@ export function buildStoryboardFrames(
       endSec: 1.35,
       photoIndex: 0,
       overlayHeadline: s(headlines[0]),
-      lyricLine: lines[0] ?? `Pilihan tepat bersama ${brandName},`,
+      lyricLine: lines[0] ?? `${brandName} pilihan tepat anda,`,
     },
     {
       id: 'frame-2',
@@ -1465,7 +1655,7 @@ export function buildStoryboardFrames(
       endSec: 2.75,
       photoIndex: 1,
       overlayHeadline: s(headlines[1]),
-      lyricLine: lines[1] ?? `Nilai jelas untuk ${subject},`,
+      lyricLine: lines[1] ?? `${cues.uspHook},`,
     },
     {
       id: 'frame-3',
@@ -1537,11 +1727,11 @@ function sanitizeRsaItem(
   brandName: string
 ): string {
   const safeFallback =
-    checkCopyCompliance(fallback).length === 0 ? fallback : 'Pilihan Utama';
+    checkCopyCompliance(fallback).length === 0 ? fallback : 'Tawaran Terhad';
   const sanitized = sanitizeChannelText(candidate, safeFallback, brandName);
   const bounded = enforceRsaLength(sanitized, maxLen, safeFallback);
   if (checkCopyCompliance(bounded).length > 0) {
-    return enforceRsaLength(safeFallback, maxLen, 'Pilihan Utama');
+    return enforceRsaLength(safeFallback, maxLen, 'Tawaran Terhad');
   }
   return bounded;
 }
@@ -1557,7 +1747,7 @@ function sanitizeSingleAngleCopy(
     ? parsed.google_rsa.headlines.slice(0, 3)
     : baseline.google_rsa.headlines;
   while (rawHeadlines.length < 3) {
-    rawHeadlines.push(baseline.google_rsa.headlines[rawHeadlines.length] ?? 'Pilihan Utama');
+    rawHeadlines.push(baseline.google_rsa.headlines[rawHeadlines.length] ?? 'Tawaran Terhad');
   }
 
   const rawDescriptions = Array.isArray(parsed?.google_rsa?.descriptions)
@@ -1712,12 +1902,6 @@ export async function resolvePhotoInlineDataPart(
   return null;
 }
 
-function stripJsonCodeFence(rawText: string): string {
-  const trimmed = rawText.trim();
-  const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  return fenceMatch ? fenceMatch[1].trim() : trimmed;
-}
-
 function linkAbortSignals(
   externalSignal: AbortSignal | undefined,
   timeoutMs: number
@@ -1757,15 +1941,15 @@ function linkAbortSignals(
 function getFrameworkPromptDirective(framework: VariationFrameworkId): string {
   switch (framework) {
     case 'pas':
-      return 'Variasi #1 — Masalah -> Penyelesaian (PAS): Mulakan dengan kesukaran harian sebenar pembeli tanpa melanggar polisi Meta, tunjukkan impaknya, lalu tawarkan produk/servis ini sebagai penyelesaian praktikal.';
+      return 'Variasi #1 — Masalah -> Solusi (PAS): Hook pada masalah harian yang dekat dengan audiens Malaysia, tambah emosi/impak, lalu beri penyelesaian pantas + CTA WhatsApp.';
     case 'bab':
-      return 'Variasi #2 — Transformasi & Gaya Hidup (Before-After-Bridge): Bandingkan rutin lama yang rumit dengan gaya hidup baharu yang lebih selesa. DILARANG menulis frasa literal "sebelum dan selepas" atau "before and after".';
+      return 'Variasi #2 — Transformasi & Gaya Hidup (BAB): Bandingkan rutin lama yang memenatkan dengan kehidupan baru yang jauh lebih senang. DILARANG menulis frasa literal "sebelum dan selepas" atau "before and after".';
     case 'pov_ugc':
-      return 'Variasi #3 — POV / Review Jujur & Unboxing (Gaya UGC): Gunakan suara orang pertama Malaysia yang autentik, bercerita tentang ciri fizikal produk yang dilihat dalam foto serta pengalaman penggunaan sebenar.';
+      return 'Variasi #3 — POV / Review Jujur & Unboxing (Gaya UGC): Suara orang pertama Malaysia yang natural ("Jujur cakap...", "Menyesal tak grab awal..."), ceritakan ciri fizikal & USP sebenar.';
     case 'smart_buyer':
-      return 'Variasi #4 — Kiraan Berbaloi & Perbandingan Nilai (Smart Buyer): Pecahkan nilai sebenar berdasarkan peratus diskaun, harga RM, bundle/percuma, atau penjimatan kos per penggunaan.';
+      return 'Variasi #4 — Kiraan Berbaloi & Perbandingan Nilai (Smart Buyer): Pecahkan penjimatan sebenar guna nombor (% diskaun, harga RM, bundle/percuma, kos per penggunaan).';
     case 'fomo_drop':
-      return 'Variasi #5 — Edisi Khas / FOMO Pelanggan Terawal: Tonjolkan tenaga pelancaran terhad, minggu gaji/edisi khas, kolaborasi, dan kepentingan mengesahkan kuota awal.';
+      return 'Variasi #5 — Edisi Khas / FOMO Pelanggan Terawal: Tenaga pelancaran batch awal, minggu gaji/edisi khas, kolaborasi, dan gesaan kunci slot awal.';
   }
 }
 
@@ -1779,12 +1963,16 @@ export interface MultimodalCampaignResult {
     headline: string;
     subheadline: string;
     ctaText: string;
+    highlightPoints?: string[];
   }>;
   jingleLyrics: string;
   storyboardFrames: Array<{
     overlayHeadline: string;
     lyricLine: string;
   }>;
+  byokErrorReason?: string | null;
+  pollinationsErrorReason?: string | null;
+  cooldownUntilMs?: number | null;
 }
 
 interface RawGeminiMultimodalPayload {
@@ -1796,6 +1984,7 @@ interface RawGeminiMultimodalPayload {
     headline?: unknown;
     subheadline?: unknown;
     ctaText?: unknown;
+    highlightPoints?: unknown;
   }>;
   jingleLyrics?: unknown;
   storyboardFrames?: Array<{
@@ -1804,11 +1993,253 @@ interface RawGeminiMultimodalPayload {
   }>;
 }
 
+function buildBaselineSnapshotResult(params: {
+  brand: BrandProfile;
+  cleanOffer: string;
+  variationIndex: number;
+  uspAndAudience?: string;
+}): {
+  baselinePsych: CustomerPsychologyProfile;
+  baselineCopyMap: Record<AngleId, ChannelCopy>;
+  baselineSlides: CarouselSlide[];
+  baselineLyrics: string;
+  baselineFrames: StoryboardFrame[];
+} {
+  const baselinePsych = buildCustomerPsychology(
+    params.brand,
+    params.cleanOffer,
+    params.variationIndex,
+    params.uspAndAudience
+  );
+  const baselineCopyMap = generateCampaignCopyMap(
+    params.brand,
+    params.cleanOffer,
+    params.variationIndex,
+    params.uspAndAudience
+  );
+  const baselineSlides = buildCarouselSlides(
+    params.brand,
+    params.cleanOffer,
+    params.variationIndex,
+    null,
+    params.uspAndAudience
+  );
+  const baselineLyrics = buildJingleLyrics(
+    params.brand.name,
+    params.cleanOffer,
+    params.variationIndex,
+    params.uspAndAudience
+  );
+  const baselineFrames = buildStoryboardFrames(
+    params.brand,
+    params.cleanOffer,
+    baselineLyrics,
+    params.variationIndex,
+    null,
+    params.uspAndAudience
+  );
+  return {
+    baselinePsych,
+    baselineCopyMap,
+    baselineSlides,
+    baselineLyrics,
+    baselineFrames,
+  };
+}
+
+function hydratePayloadToCampaignResult(params: {
+  source: CampaignGenerationSource;
+  parsed: RawGeminiMultimodalPayload;
+  brand: BrandProfile;
+  baselinePsych: CustomerPsychologyProfile;
+  baselineCopyMap: Record<AngleId, ChannelCopy>;
+  baselineSlides: CarouselSlide[];
+  baselineLyrics: string;
+  baselineFrames: StoryboardFrame[];
+  byokErrorReason?: string | null;
+  cooldownUntilMs?: number | null;
+}): MultimodalCampaignResult {
+  const { parsed, brand, baselinePsych, baselineCopyMap, baselineSlides, baselineLyrics, baselineFrames } =
+    params;
+  const brandName = brand.name.trim() || 'Bisnes Saya';
+
+  const visualSummaryRaw =
+    typeof parsed.visualSummary === 'string' && parsed.visualSummary.trim()
+      ? sanitizeChannelText(parsed.visualSummary, '', brandName)
+      : null;
+  const visualSummary = visualSummaryRaw || null;
+
+  const psychology: CustomerPsychologyProfile = {
+    targetPersona: sanitizeChannelText(
+      parsed.psychology?.targetPersona,
+      baselinePsych.targetPersona,
+      brandName
+    ),
+    coreTrigger: sanitizeChannelText(
+      parsed.psychology?.coreTrigger,
+      baselinePsych.coreTrigger,
+      brandName
+    ),
+    frictionObjections: sanitizeChannelText(
+      parsed.psychology?.frictionObjections,
+      baselinePsych.frictionObjections,
+      brandName
+    ),
+    trustAnchors: sanitizeChannelText(
+      parsed.psychology?.trustAnchors,
+      baselinePsych.trustAnchors,
+      brandName
+    ),
+    ...(visualSummary ? { productVisionSummary: visualSummary } : {}),
+  };
+
+  const copyByAngle: Record<AngleId, ChannelCopy> = {
+    urgency: sanitizeSingleAngleCopy(
+      parsed.angles?.urgency,
+      baselineCopyMap.urgency,
+      brandName
+    ),
+    value: sanitizeSingleAngleCopy(
+      parsed.angles?.value,
+      baselineCopyMap.value,
+      brandName
+    ),
+    social_proof: sanitizeSingleAngleCopy(
+      parsed.angles?.social_proof,
+      baselineCopyMap.social_proof,
+      brandName
+    ),
+  };
+
+  const carouselSlides = baselineSlides.map((baseSlide, idx) => {
+    const candidate = Array.isArray(parsed.carouselSlides)
+      ? parsed.carouselSlides[idx]
+      : undefined;
+    const candidatePoints = Array.isArray(candidate?.highlightPoints)
+      ? candidate.highlightPoints
+          .map((p) => (typeof p === 'string' ? sanitizeChannelText(p, '', brandName) : ''))
+          .filter(Boolean)
+          .slice(0, 4)
+      : undefined;
+
+    return {
+      badgeText: sanitizeChannelText(candidate?.badgeText, baseSlide.badgeText, brandName),
+      headline: sanitizeChannelText(candidate?.headline, baseSlide.headline, brandName),
+      subheadline: sanitizeChannelText(
+        candidate?.subheadline,
+        baseSlide.subheadline,
+        brandName
+      ),
+      ctaText: sanitizeChannelText(candidate?.ctaText, baseSlide.ctaText, brandName),
+      ...(candidatePoints && candidatePoints.length > 0
+        ? { highlightPoints: candidatePoints }
+        : baseSlide.highlightPoints
+          ? { highlightPoints: baseSlide.highlightPoints }
+          : {}),
+    };
+  });
+
+  let jingleLyrics = sanitizeChannelText(parsed.jingleLyrics, baselineLyrics, brandName);
+  if (!jingleLyrics.toLowerCase().includes(brandName.toLowerCase())) {
+    jingleLyrics = `${brandName} — ${jingleLyrics}`;
+  }
+
+  const storyboardFrames = baselineFrames.map((baseFrame, idx) => {
+    const candidate = Array.isArray(parsed.storyboardFrames)
+      ? parsed.storyboardFrames[idx]
+      : undefined;
+    let overlayHeadline = sanitizeChannelText(
+      candidate?.overlayHeadline,
+      baseFrame.overlayHeadline,
+      brandName
+    );
+    if (idx === 0 && !overlayHeadline.toLowerCase().includes(brandName.toLowerCase())) {
+      overlayHeadline = `${brandName}: ${overlayHeadline}`;
+    }
+    if (idx === 3 && !overlayHeadline.includes(`+${brand.whatsappNumber}`)) {
+      overlayHeadline = baseFrame.overlayHeadline;
+    }
+    const lyricLine = sanitizeChannelText(
+      candidate?.lyricLine,
+      baseFrame.lyricLine,
+      brandName
+    );
+    return { overlayHeadline, lyricLine };
+  });
+
+  return {
+    source: params.source,
+    visualSummary,
+    psychology,
+    copyByAngle,
+    carouselSlides,
+    jingleLyrics,
+    storyboardFrames,
+    byokErrorReason: params.byokErrorReason ?? null,
+    cooldownUntilMs: params.cooldownUntilMs ?? null,
+  };
+}
+
+const MALAYSIAN_PERFORMANCE_SYSTEM_PROMPT = [
+  'Anda ialah Pengarah Kreatif & Pakar Copywriting Direct-Response Performance Marketing Malaysia.',
+  'Gaya penulisan WAJIB kedengaran seperti marketer Malaysia sebenar (padat, scroll-stopping, emosional, jelas pecahan nilai & emoji berstruktur) — DILARANG sama sekali bahasa surat rasmi kaku atau ayat templat klise seperti "Daripada proses lama yang tidak teratur", "Risau caj tersembunyi", atau "Pelanggan aktif di Malaysia yang mencari".',
+  'Sentiasa patuhi polisi iklan Meta Personal Attributes & etika pengiklanan Malaysia.',
+  'Pulangkan SATU objek JSON sah sahaja tanpa teks pengenalan atau penutup.',
+].join(' ');
+
+function buildSingleCallCampaignPrompt(params: {
+  brand: BrandProfile;
+  cleanOffer: string;
+  details: OfferDetails;
+  uspAndAudience?: string;
+  variationIndex: number;
+  framework: VariationFrameworkId;
+  withPhotosNote: boolean;
+}): string {
+  const { brand, cleanOffer, details, uspAndAudience, variationIndex, framework, withPhotosNote } =
+    params;
+  const brandName = brand.name.trim() || 'Bisnes Saya';
+  return [
+    withPhotosNote
+      ? 'Teliti kedua-dua gambar produk yang dilampirkan (jika ada) untuk mengenal pasti kategori produk, ciri visual, warna/kolaborasi, dan kelebihan utama.'
+      : 'Gunakan konteks jenama, tawaran, dan USP/sasaran pelanggan di bawah untuk menghasilkan aset kempen yang tajam & khusus.',
+    `Jenama: ${brandName}. Nada: ${brand.tone === 'casual' ? 'Santai & Mesra Malaysia (guna bullet/emoji yang kemas)' : 'Profesional & Meyakinkan (korporat moden, bukan kaku)'}. WhatsApp: +${brand.whatsappNumber}.`,
+    `Tawaran Kempen: ${cleanOffer}`,
+    `USP & Sasaran Pelanggan: ${uspAndAudience?.trim() || 'Rujuk butiran tawaran & kategori produk'}`,
+    `Butiran Dikesan: topik="${details.productTopic}", kolaborasi="${details.collabTag ?? '-'}", diskaun="${details.discountPercent ?? '-'}", harga="${details.priceTag ?? '-'}", pakej/percuma="${details.bundleOrFreebie ?? '-'}", acara="${details.occasion ?? '-'}".`,
+    `Rangka Kerja Wajib (Variasi #${variationIndex}): ${getFrameworkPromptDirective(framework)}`,
+    'Pulangkan SATU objek JSON sahaja dengan struktur tepat:',
+    '{',
+    '  "visualSummary": "Ringkasan 1 ayat produk & kelebihan utama yang dikesan",',
+    '  "psychology": { "targetPersona": "...", "coreTrigger": "...", "frictionObjections": "...", "trustAnchors": "..." },',
+    '  "angles": {',
+    '    "urgency": { "facebook": {"primaryText","headline","description"}, "instagram": {"caption","hashtags"}, "tiktok": {"hook","script","caption"}, "google_rsa": {"headlines":[3],"descriptions":[2],"negativeKeywords":[5]} },',
+    '    "value": { ... },',
+    '    "social_proof": { ... }',
+    '  },',
+    '  "carouselSlides": [',
+    '    {"badgeText","headline","subheadline","ctaText"},',
+    '    {"badgeText","headline","subheadline","ctaText"},',
+    '    {"badgeText","headline","subheadline","ctaText","highlightPoints":[4 point ringkas <=6 patah perkataan]},',
+    '    {"badgeText","headline","subheadline","ctaText"}',
+    '  ],',
+    '  "jingleLyrics": "Korus 4 baris Bahasa Melayu berirama yang menyebut nama jenama",',
+    '  "storyboardFrames": [4 objek {"overlayHeadline","lyricLine"} — Frame 1 mesti ada nama jenama, Frame 4 mesti ada +' + brand.whatsappNumber + ']',
+    '}',
+    'Peraturan ketat:',
+    '- DILARANG mengulang perkataan "Tawaran Tawaran".',
+    '- DILARANG guna frasa klise: "Daripada proses lama", "Risau caj tersembunyi", "Pelanggan aktif di Malaysia", "Tanya Jambatan Pakej Kini", "Pilihan Utama".',
+    '- DILARANG melanggar Meta Personal Attributes atau Polisi Iklan MY: elakkan "kulit anda kusam", "anda bermasalah", "100%", "dijamin", "terbaik", "No. 1", "#1", "sebelum dan selepas", "before and after".',
+    '- google_rsa.headlines setiap satu <= 30 aksara; google_rsa.descriptions setiap satu <= 90 aksara.',
+  ].join('\n');
+}
+
 export async function generateMultimodalCampaignWithGemini(params: {
   apiKey: string;
   isDemoMode: boolean;
   brand: BrandProfile;
   offerSentence: string;
+  uspAndAudience?: string;
   photos: [PhotoAsset, PhotoAsset];
   variationIndex: number;
   signal?: AbortSignal;
@@ -1817,20 +2248,25 @@ export async function generateMultimodalCampaignWithGemini(params: {
   const cleanOffer = cleanOfferText(params.offerSentence);
   const variationIndex = Math.max(1, Math.floor(params.variationIndex || 1));
   const framework = getFrameworkForVariation(variationIndex);
-  const details = extractOfferDetails(brandName, cleanOffer);
+  const details = extractOfferDetails(brandName, cleanOffer, params.uspAndAudience);
 
-  const baselinePsych = buildCustomerPsychology(params.brand, cleanOffer, variationIndex);
-  const baselineCopyMap = generateCampaignCopyMap(params.brand, cleanOffer, variationIndex);
-  const baselineSlides = buildCarouselSlides(params.brand, cleanOffer, variationIndex);
-  const baselineLyrics = buildJingleLyrics(brandName, cleanOffer, variationIndex);
-  const baselineFrames = buildStoryboardFrames(
-    params.brand,
-    cleanOffer,
+  const {
+    baselinePsych,
+    baselineCopyMap,
+    baselineSlides,
     baselineLyrics,
-    variationIndex
-  );
+    baselineFrames,
+  } = buildBaselineSnapshotResult({
+    brand: params.brand,
+    cleanOffer,
+    variationIndex,
+    uspAndAudience: params.uspAndAudience,
+  });
 
-  const buildOfflineResult = (source: CampaignGenerationSource): MultimodalCampaignResult => ({
+  const buildOfflineResult = (
+    source: CampaignGenerationSource,
+    byokErrorReason: string | null = null
+  ): MultimodalCampaignResult => ({
     source,
     visualSummary: null,
     psychology: baselinePsych,
@@ -1840,27 +2276,29 @@ export async function generateMultimodalCampaignWithGemini(params: {
       headline: slide.headline,
       subheadline: slide.subheadline,
       ctaText: slide.ctaText,
+      ...(slide.highlightPoints ? { highlightPoints: slide.highlightPoints } : {}),
     })),
     jingleLyrics: baselineLyrics,
     storyboardFrames: baselineFrames.map((frame) => ({
       overlayHeadline: frame.overlayHeadline,
       lyricLine: frame.lyricLine,
     })),
+    byokErrorReason,
+    cooldownUntilMs: null,
   });
 
   if (params.isDemoMode) {
-    return buildOfflineResult('offline-smart-demo');
+    return buildOfflineResult('offline-smart-demo', null);
   }
 
   if (!isValidGeminiKeyFormat(params.apiKey)) {
-    return buildOfflineResult('offline-smart-fallback');
+    return buildOfflineResult('offline-smart-fallback', null);
   }
 
   if (params.signal?.aborted) {
-    return buildOfflineResult('offline-smart-fallback');
+    return buildOfflineResult('offline-smart-fallback', null);
   }
 
-  // Convert both uploaded/sample photos into inlineData parts
   const resolvedParts = await Promise.all([
     resolvePhotoInlineDataPart(params.photos[0], params.signal),
     resolvePhotoInlineDataPart(params.photos[1], params.signal),
@@ -1868,34 +2306,18 @@ export async function generateMultimodalCampaignWithGemini(params: {
   const photoParts = resolvedParts.filter((part): part is GeminiInlineDataPart => part !== null);
 
   if (params.signal?.aborted) {
-    return buildOfflineResult('offline-smart-fallback');
+    return buildOfflineResult('offline-smart-fallback', null);
   }
 
-  const prompt = [
-    'Anda ialah Pakar Strategi Kreatif & Penulis Iklan Berprestasi Tinggi Malaysia (Bahasa Melayu natural, bukan templat klise).',
-    'Teliti kedua-dua gambar produk yang dilampirkan (jika ada) untuk mengenal pasti kategori produk, ciri visual, warna/kolaborasi, dan nilai jualan unik (USP).',
-    `Jenama: ${brandName}. Nada: ${params.brand.tone}. Nombor WhatsApp: +${params.brand.whatsappNumber}.`,
-    `Tawaran Pengguna: ${cleanOffer}`,
-    `Butiran Dikesan: topik="${details.productTopic}", kolaborasi="${details.collabTag ?? '-'}", diskaun="${details.discountPercent ?? '-'}", harga="${details.priceTag ?? '-'}", pakej/percuma="${details.bundleOrFreebie ?? '-'}", acara="${details.occasion ?? '-'}".`,
-    `Rangka Kerja Wajib (Variasi #${variationIndex}): ${getFrameworkPromptDirective(framework)}`,
-    'Pulangkan SATU objek JSON sahaja dengan struktur tepat:',
-    '{',
-    '  "visualSummary": "Ringkasan 1 ayat produk & ciri visual daripada foto",',
-    '  "psychology": { "targetPersona": "...", "coreTrigger": "...", "frictionObjections": "...", "trustAnchors": "..." },',
-    '  "angles": {',
-    '    "urgency": { "facebook": {"primaryText","headline","description"}, "instagram": {"caption","hashtags"}, "tiktok": {"hook","script","caption"}, "google_rsa": {"headlines":[3],"descriptions":[2],"negativeKeywords":[5]} },',
-    '    "value": { ... },',
-    '    "social_proof": { ... }',
-    '  },',
-    '  "carouselSlides": [4 objek {"badgeText","headline","subheadline","ctaText"}],',
-    '  "jingleLyrics": "Korus 4 baris Bahasa Melayu yang menyebut nama jenama",',
-    '  "storyboardFrames": [4 objek {"overlayHeadline","lyricLine"}]',
-    '}',
-    'Peraturan ketat:',
-    '- DILARANG mengulang perkataan "Tawaran Tawaran".',
-    '- DILARANG melanggar Meta Personal Attributes atau Polisi Iklan MY: elakkan "anda kusam", "anda bermasalah", "100%", "dijamin", "terbaik", "No. 1", "#1", "sebelum dan selepas", "before and after".',
-    '- google_rsa.headlines setiap satu <= 30 aksara; google_rsa.descriptions setiap satu <= 90 aksara.',
-  ].join('\n');
+  const prompt = buildSingleCallCampaignPrompt({
+    brand: params.brand,
+    cleanOffer,
+    details,
+    uspAndAudience: params.uspAndAudience,
+    variationIndex,
+    framework,
+    withPhotosNote: true,
+  });
 
   const requestParts: Array<{ text: string } | GeminiInlineDataPart> = [
     { text: prompt },
@@ -1903,13 +2325,14 @@ export async function generateMultimodalCampaignWithGemini(params: {
   ];
 
   const modelsToTry: readonly GeminiModelId[] = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  let lastByokError: string | null = null;
 
   for (const model of modelsToTry) {
     if (params.signal?.aborted) {
-      return buildOfflineResult('offline-smart-fallback');
+      return buildOfflineResult('offline-smart-fallback', lastByokError);
     }
 
-    const { controller, cleanup } = linkAbortSignals(params.signal, 15_000);
+    const { controller, wasTimeout, cleanup } = linkAbortSignals(params.signal, 15_000);
     try {
       const response = await fetch(buildGeminiGenerateEndpoint(model), {
         method: 'POST',
@@ -1925,6 +2348,10 @@ export async function generateMultimodalCampaignWithGemini(params: {
       });
 
       if (!response.ok) {
+        lastByokError = formatByokErrorReason({
+          provider: 'Google BYOK',
+          status: response.status,
+        });
         continue;
       }
 
@@ -1933,126 +2360,200 @@ export async function generateMultimodalCampaignWithGemini(params: {
       };
       const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!rawText) {
+        lastByokError = formatByokErrorReason({
+          provider: 'Google BYOK',
+          detail: 'invalid_json',
+        });
         continue;
       }
 
-      const parsed = JSON.parse(stripJsonCodeFence(rawText)) as RawGeminiMultimodalPayload;
+      const parsed = JSON.parse(
+        stripJsonCodeFenceAndExtract(rawText)
+      ) as RawGeminiMultimodalPayload;
       if (!parsed || typeof parsed !== 'object') {
+        lastByokError = formatByokErrorReason({
+          provider: 'Google BYOK',
+          detail: 'invalid_json',
+        });
         continue;
       }
 
-      const visualSummaryRaw =
-        typeof parsed.visualSummary === 'string' && parsed.visualSummary.trim()
-          ? sanitizeChannelText(parsed.visualSummary, '', brandName)
-          : null;
-      const visualSummary = visualSummaryRaw || null;
-
-      const psychology: CustomerPsychologyProfile = {
-        targetPersona: sanitizeChannelText(
-          parsed.psychology?.targetPersona,
-          baselinePsych.targetPersona,
-          brandName
-        ),
-        coreTrigger: sanitizeChannelText(
-          parsed.psychology?.coreTrigger,
-          baselinePsych.coreTrigger,
-          brandName
-        ),
-        frictionObjections: sanitizeChannelText(
-          parsed.psychology?.frictionObjections,
-          baselinePsych.frictionObjections,
-          brandName
-        ),
-        trustAnchors: sanitizeChannelText(
-          parsed.psychology?.trustAnchors,
-          baselinePsych.trustAnchors,
-          brandName
-        ),
-        ...(visualSummary ? { productVisionSummary: visualSummary } : {}),
-      };
-
-      const copyByAngle: Record<AngleId, ChannelCopy> = {
-        urgency: sanitizeSingleAngleCopy(
-          parsed.angles?.urgency,
-          baselineCopyMap.urgency,
-          brandName
-        ),
-        value: sanitizeSingleAngleCopy(
-          parsed.angles?.value,
-          baselineCopyMap.value,
-          brandName
-        ),
-        social_proof: sanitizeSingleAngleCopy(
-          parsed.angles?.social_proof,
-          baselineCopyMap.social_proof,
-          brandName
-        ),
-      };
-
-      const carouselSlides = baselineSlides.map((baseSlide, idx) => {
-        const candidate = Array.isArray(parsed.carouselSlides)
-          ? parsed.carouselSlides[idx]
-          : undefined;
-        return {
-          badgeText: sanitizeChannelText(candidate?.badgeText, baseSlide.badgeText, brandName),
-          headline: sanitizeChannelText(candidate?.headline, baseSlide.headline, brandName),
-          subheadline: sanitizeChannelText(
-            candidate?.subheadline,
-            baseSlide.subheadline,
-            brandName
-          ),
-          ctaText: sanitizeChannelText(candidate?.ctaText, baseSlide.ctaText, brandName),
-        };
-      });
-
-      let jingleLyrics = sanitizeChannelText(parsed.jingleLyrics, baselineLyrics, brandName);
-      if (!jingleLyrics.toLowerCase().includes(brandName.toLowerCase())) {
-        jingleLyrics = `${brandName} — ${jingleLyrics}`;
-      }
-
-      const storyboardFrames = baselineFrames.map((baseFrame, idx) => {
-        const candidate = Array.isArray(parsed.storyboardFrames)
-          ? parsed.storyboardFrames[idx]
-          : undefined;
-        let overlayHeadline = sanitizeChannelText(
-          candidate?.overlayHeadline,
-          baseFrame.overlayHeadline,
-          brandName
-        );
-        if (idx === 0 && !overlayHeadline.toLowerCase().includes(brandName.toLowerCase())) {
-          overlayHeadline = `${brandName}: ${overlayHeadline}`;
-        }
-        if (idx === 3 && !overlayHeadline.includes(`+${params.brand.whatsappNumber}`)) {
-          overlayHeadline = baseFrame.overlayHeadline;
-        }
-        const lyricLine = sanitizeChannelText(
-          candidate?.lyricLine,
-          baseFrame.lyricLine,
-          brandName
-        );
-        return { overlayHeadline, lyricLine };
-      });
-
-      return {
+      return hydratePayloadToCampaignResult({
         source: model,
-        visualSummary,
-        psychology,
-        copyByAngle,
-        carouselSlides,
-        jingleLyrics,
-        storyboardFrames,
-      };
-    } catch {
-      if (params.signal?.aborted) {
-        return buildOfflineResult('offline-smart-fallback');
+        parsed,
+        brand: params.brand,
+        baselinePsych,
+        baselineCopyMap,
+        baselineSlides,
+        baselineLyrics,
+        baselineFrames,
+        byokErrorReason: null,
+      });
+    } catch (err) {
+      if (params.signal?.aborted && !wasTimeout()) {
+        return buildOfflineResult('offline-smart-fallback', lastByokError);
       }
-      // Try next model in fallback chain
+      lastByokError = formatByokErrorReason({
+        provider: 'Google BYOK',
+        timedOut: wasTimeout(),
+        detail: err instanceof Error && err.message ? err.message : undefined,
+      });
     } finally {
       cleanup();
     }
   }
 
-  return buildOfflineResult('offline-smart-fallback');
+  return buildOfflineResult(
+    'offline-smart-fallback',
+    lastByokError ?? formatByokErrorReason({ provider: 'Google BYOK' })
+  );
+}
+
+export async function generateCampaignWithPollinations(params: {
+  isDemoMode: boolean;
+  brand: BrandProfile;
+  offerSentence: string;
+  uspAndAudience?: string;
+  variationIndex: number;
+  byokErrorReason?: string | null;
+  signal?: AbortSignal;
+}): Promise<MultimodalCampaignResult> {
+  const brandName = params.brand.name.trim() || 'Bisnes Saya';
+  const cleanOffer = cleanOfferText(params.offerSentence);
+  const variationIndex = Math.max(1, Math.floor(params.variationIndex || 1));
+  const framework = getFrameworkForVariation(variationIndex);
+  const details = extractOfferDetails(brandName, cleanOffer, params.uspAndAudience);
+
+  const {
+    baselinePsych,
+    baselineCopyMap,
+    baselineSlides,
+    baselineLyrics,
+    baselineFrames,
+  } = buildBaselineSnapshotResult({
+    brand: params.brand,
+    cleanOffer,
+    variationIndex,
+    uspAndAudience: params.uspAndAudience,
+  });
+
+  const buildFallbackResult = (
+    source: CampaignGenerationSource,
+    pollinationsErrorReason: string | null,
+    cooldownUntilMs: number | null
+  ): MultimodalCampaignResult => ({
+    source,
+    visualSummary: null,
+    psychology: baselinePsych,
+    copyByAngle: baselineCopyMap,
+    carouselSlides: baselineSlides.map((slide) => ({
+      badgeText: slide.badgeText,
+      headline: slide.headline,
+      subheadline: slide.subheadline,
+      ctaText: slide.ctaText,
+      ...(slide.highlightPoints ? { highlightPoints: slide.highlightPoints } : {}),
+    })),
+    jingleLyrics: baselineLyrics,
+    storyboardFrames: baselineFrames.map((frame) => ({
+      overlayHeadline: frame.overlayHeadline,
+      lyricLine: frame.lyricLine,
+    })),
+    byokErrorReason: params.byokErrorReason ?? null,
+    pollinationsErrorReason,
+    cooldownUntilMs,
+  });
+
+  if (params.isDemoMode) {
+    return buildFallbackResult('offline-smart-demo', null, null);
+  }
+
+  const userPrompt = buildSingleCallCampaignPrompt({
+    brand: params.brand,
+    cleanOffer,
+    details,
+    uspAndAudience: params.uspAndAudience,
+    variationIndex,
+    framework,
+    withPhotosNote: false,
+  });
+
+  const apiRes = await callPollinationsJson<RawGeminiMultimodalPayload>({
+    isDemoMode: params.isDemoMode,
+    systemPrompt: MALAYSIAN_PERFORMANCE_SYSTEM_PROMPT,
+    userPrompt,
+    temperature: 0.75,
+    timeoutMs: 24_000,
+    signal: params.signal,
+  });
+
+  if (!apiRes.ok) {
+    const errorMsg = apiRes.skippedByGuard ? null : apiRes.reason;
+    return buildFallbackResult(
+      'offline-smart-fallback',
+      errorMsg,
+      apiRes.cooldownUntilMs
+    );
+  }
+
+  return hydratePayloadToCampaignResult({
+    source: 'pollinations-openai-fast',
+    parsed: apiRes.data,
+    brand: params.brand,
+    baselinePsych,
+    baselineCopyMap,
+    baselineSlides,
+    baselineLyrics,
+    baselineFrames,
+    byokErrorReason: params.byokErrorReason ?? null,
+    cooldownUntilMs: apiRes.cooldownUntilMs,
+  });
+}
+
+export async function generateCampaignWithAiCascade(params: {
+  apiKey: string;
+  isDemoMode: boolean;
+  brand: BrandProfile;
+  offerSentence: string;
+  uspAndAudience?: string;
+  photos: [PhotoAsset, PhotoAsset];
+  variationIndex: number;
+  signal?: AbortSignal;
+}): Promise<MultimodalCampaignResult> {
+  if (params.isDemoMode) {
+    return generateCampaignWithPollinations({
+      isDemoMode: true,
+      brand: params.brand,
+      offerSentence: params.offerSentence,
+      uspAndAudience: params.uspAndAudience,
+      variationIndex: params.variationIndex,
+      signal: params.signal,
+    });
+  }
+
+  let byokErrorReason: string | null = null;
+
+  if (isValidGeminiKeyFormat(params.apiKey)) {
+    const geminiResult = await generateMultimodalCampaignWithGemini(params);
+    if (
+      geminiResult.source === 'gemini-2.5-flash' ||
+      geminiResult.source === 'gemini-2.0-flash'
+    ) {
+      return geminiResult;
+    }
+    byokErrorReason =
+      geminiResult.byokErrorReason ??
+      formatByokErrorReason({ provider: 'Google BYOK' });
+  }
+
+  return generateCampaignWithPollinations({
+    isDemoMode: params.isDemoMode,
+    brand: params.brand,
+    offerSentence: params.offerSentence,
+    uspAndAudience: params.uspAndAudience,
+    variationIndex: params.variationIndex,
+    byokErrorReason,
+    signal: params.signal,
+  });
 }
 
 export async function enhanceCopyWithGemini(params: {
@@ -2060,78 +2561,126 @@ export async function enhanceCopyWithGemini(params: {
   isDemoMode: boolean;
   brand: BrandProfile;
   offerSentence: string;
+  uspAndAudience?: string;
   angle: AngleId;
   variationIndex?: number;
   photos?: [PhotoAsset, PhotoAsset];
-}): Promise<{ copy: ChannelCopy; source: 'gemini' | 'baseline' }> {
+}): Promise<{
+  copy: ChannelCopy;
+  source: 'gemini' | 'pollinations' | 'baseline';
+  errorReason?: string | null;
+  cooldownUntilMs?: number | null;
+}> {
   const variationIndex = params.variationIndex ?? 1;
   const baseline = generateCampaignCopyForAngle(
     params.brand,
     params.offerSentence,
     params.angle,
-    variationIndex
+    variationIndex,
+    params.uspAndAudience
   );
 
-  if (params.isDemoMode || !isValidGeminiKeyFormat(params.apiKey)) {
-    return { copy: baseline, source: 'baseline' };
+  if (params.isDemoMode) {
+    return { copy: baseline, source: 'baseline', errorReason: null };
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const framework = getFrameworkForVariation(variationIndex);
+  const prompt = [
+    MALAYSIAN_PERFORMANCE_SYSTEM_PROMPT,
+    `Jenama: ${params.brand.name}. Nada: ${params.brand.tone}. Sudut: ${params.angle}.`,
+    `Rangka Kerja: ${getFrameworkPromptDirective(framework)}`,
+    `Tawaran: ${cleanOfferText(params.offerSentence)}.`,
+    `USP & Sasaran: ${params.uspAndAudience?.trim() || '-'}.`,
+    `Pulangkan JSON sahaja mengikut struktur ChannelCopy (facebook, instagram, tiktok, google_rsa).`,
+    `Had wajib: google_rsa.headlines setiap satu <= 30 aksara; google_rsa.descriptions setiap satu <= 90 aksara.`,
+    `Dilarang menggunakan: dakwaan ciri peribadi (kulit anda kusam/anda bermasalah), 100%, dijamin, terbaik, No. 1, sebelum dan selepas, atau perkataan berulang "Tawaran Tawaran".`,
+  ].join('\n');
 
-  try {
-    const framework = getFrameworkForVariation(variationIndex);
-    const prompt = [
-      `Anda ialah penulis iklan pemasaran digital SME Malaysia yang mematuhi polisi Meta Personal Attributes & etika pengiklanan Malaysia.`,
-      `Jenama: ${params.brand.name}. Nada: ${params.brand.tone}. Sudut: ${params.angle}.`,
-      `Rangka Kerja: ${getFrameworkPromptDirective(framework)}`,
-      `Tawaran: ${cleanOfferText(params.offerSentence)}.`,
-      `Pulangkan JSON sahaja mengikut struktur ChannelCopy (facebook, instagram, tiktok, google_rsa).`,
-      `Had wajib: google_rsa.headlines setiap satu <= 30 aksara; google_rsa.descriptions setiap satu <= 90 aksara.`,
-      `Dilarang menggunakan: dakwaan ciri peribadi (seperti kulit anda kusam/anda bermasalah), 100%, dijamin, terbaik, No. 1, sebelum dan selepas, atau perkataan berulang "Tawaran Tawaran".`,
-    ].join('\n');
+  let byokError: string | null = null;
 
-    const parts: Array<{ text: string } | GeminiInlineDataPart> = [{ text: prompt }];
-    if (params.photos) {
-      for (const p of params.photos) {
-        if (p?.src?.startsWith('data:')) {
-          const part = await resolvePhotoInlineDataPart(p, controller.signal);
-          if (part) parts.push(part);
+  if (isValidGeminiKeyFormat(params.apiKey)) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    try {
+      const parts: Array<{ text: string } | GeminiInlineDataPart> = [{ text: prompt }];
+      if (params.photos) {
+        for (const p of params.photos) {
+          if (p?.src?.startsWith('data:')) {
+            const part = await resolvePhotoInlineDataPart(p, controller.signal);
+            if (part) parts.push(part);
+          }
         }
       }
+
+      const response = await fetch(GEMINI_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': params.apiKey.trim(),
+        },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: { responseMimeType: 'application/json' },
+        }),
+        signal: controller.signal,
+      });
+
+      if (response.ok) {
+        const json = (await response.json()) as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) {
+          const parsed = JSON.parse(
+            stripJsonCodeFenceAndExtract(rawText)
+          ) as Partial<ChannelCopy>;
+          const enhanced = sanitizeSingleAngleCopy(parsed, baseline, params.brand.name);
+          return { copy: enhanced, source: 'gemini', errorReason: null };
+        }
+        byokError = formatByokErrorReason({
+          provider: 'Google BYOK',
+          detail: 'invalid_json',
+        });
+      } else {
+        byokError = formatByokErrorReason({
+          provider: 'Google BYOK',
+          status: response.status,
+        });
+      }
+    } catch (err) {
+      byokError = formatByokErrorReason({
+        provider: 'Google BYOK',
+        detail: err instanceof Error && err.message ? err.message : undefined,
+      });
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const response = await fetch(GEMINI_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': params.apiKey.trim(),
-      },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: { responseMimeType: 'application/json' },
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      return { copy: baseline, source: 'baseline' };
-    }
-
-    const json = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const rawText = json.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) {
-      return { copy: baseline, source: 'baseline' };
-    }
-
-    const parsed = JSON.parse(stripJsonCodeFence(rawText)) as Partial<ChannelCopy>;
-    const enhanced = sanitizeSingleAngleCopy(parsed, baseline, params.brand.name);
-    return { copy: enhanced, source: 'gemini' };
-  } catch {
-    return { copy: baseline, source: 'baseline' };
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  // Built-in Pollinations fallback / primary when no BYOK key or BYOK failed
+  const pollRes = await callPollinationsJson<Partial<ChannelCopy>>({
+    isDemoMode: params.isDemoMode,
+    systemPrompt: MALAYSIAN_PERFORMANCE_SYSTEM_PROMPT,
+    userPrompt: prompt,
+    temperature: 0.75,
+    timeoutMs: 16_000,
+  });
+
+  if (pollRes.ok) {
+    const enhanced = sanitizeSingleAngleCopy(pollRes.data, baseline, params.brand.name);
+    return {
+      copy: enhanced,
+      source: 'pollinations',
+      errorReason: byokError,
+      cooldownUntilMs: pollRes.cooldownUntilMs,
+    };
+  }
+
+  return {
+    copy: baseline,
+    source: 'baseline',
+    errorReason: byokError ?? (pollRes.skippedByGuard ? null : pollRes.reason),
+    cooldownUntilMs: pollRes.cooldownUntilMs,
+  };
 }

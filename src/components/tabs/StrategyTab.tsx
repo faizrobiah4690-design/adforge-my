@@ -41,8 +41,10 @@ const EXTRA_LABELS: Record<
     toneCasualBadge: string;
     toneProBadge: string;
     enhanceByokBtn: string;
+    enhanceBuiltInBtn: string;
     enhancingByokBtn: string;
     enhanceByokReady: string;
+    enhanceBuiltInReady: string;
     enhanceByokFallback: string;
     applySafeRewriteBtn: string;
     resetComplianceBtn: string;
@@ -60,9 +62,11 @@ const EXTRA_LABELS: Record<
     toneCasualBadge: 'Nada: Santai',
     toneProBadge: 'Nada: Profesional',
     enhanceByokBtn: 'Tingkatkan dengan Gemini (BYOK)',
+    enhanceBuiltInBtn: 'Perhalusi Salinan (AI Terbina Dalam)',
     enhancingByokBtn: 'Menjana...',
     enhanceByokReady: 'Salinan dipertingkat oleh Gemini',
-    enhanceByokFallback: 'Menggunakan templat selamat terbina',
+    enhanceBuiltInReady: 'Salinan diperhalusi oleh AI Terbina Dalam',
+    enhanceByokFallback: 'Menggunakan enjin salinan terbina',
     applySafeRewriteBtn: 'Guna Ayat Selamat',
     resetComplianceBtn: 'Muat dari Teks Facebook',
     metaCategory: 'Meta Personal Attributes',
@@ -78,9 +82,11 @@ const EXTRA_LABELS: Record<
     toneCasualBadge: 'Tone: Casual',
     toneProBadge: 'Tone: Professional',
     enhanceByokBtn: 'Enhance with Gemini (BYOK)',
+    enhanceBuiltInBtn: 'Refine Copy (Built-In AI)',
     enhancingByokBtn: 'Enhancing...',
     enhanceByokReady: 'Copy enhanced with Gemini',
-    enhanceByokFallback: 'Using built-in compliant template',
+    enhanceBuiltInReady: 'Copy refined by Built-In AI',
+    enhanceByokFallback: 'Using built-in instant copy engine',
     applySafeRewriteBtn: 'Apply Safe Rewrite',
     resetComplianceBtn: 'Load from Facebook Copy',
     metaCategory: 'Meta Personal Attributes',
@@ -129,6 +135,7 @@ export function StrategyTab() {
   const {
     launchedBrand,
     launchedOfferSentence,
+    launchedUspAndAudience,
     campaignLaunchEpoch,
     variationIndex,
     customerPsychology: psychology,
@@ -140,12 +147,19 @@ export function StrategyTab() {
     setCpaInputs,
     isEnhancingStrategy,
     strategyEnhanceNoticeByAngle,
+    strategyEnhanceErrorByAngle,
     enhanceStrategyAngleWithGemini,
   } = useCampaign();
 
   const baselineMap = useMemo(
-    () => generateCampaignCopyMap(launchedBrand, launchedOfferSentence, variationIndex),
-    [launchedBrand, launchedOfferSentence, variationIndex]
+    () =>
+      generateCampaignCopyMap(
+        launchedBrand,
+        launchedOfferSentence,
+        variationIndex,
+        launchedUspAndAudience
+      ),
+    [launchedBrand, launchedOfferSentence, variationIndex, launchedUspAndAudience]
   );
 
   const angleCopy: ChannelCopy = useMemo(() => {
@@ -202,6 +216,7 @@ export function StrategyTab() {
   );
 
   const canUseByok = !isDemoMode && isValidGeminiKeyFormat(byokKey);
+  const canUseAiEnhance = !isDemoMode;
   const angleTag = ANGLE_WHATSAPP_TAGS[selectedAngle];
   const toneLabel =
     launchedBrand.tone === 'casual' ? extra.toneCasualBadge : extra.toneProBadge;
@@ -281,7 +296,7 @@ export function StrategyTab() {
   }
 
   function handleByokEnhance() {
-    if (!canUseByok || isEnhancingStrategy) {
+    if (!canUseAiEnhance || isEnhancingStrategy) {
       return;
     }
     void enhanceStrategyAngleWithGemini(selectedAngle);
@@ -325,6 +340,7 @@ export function StrategyTab() {
         : t('tab1.cpaOverLimit');
 
   const currentEnhanceNotice = strategyEnhanceNoticeByAngle[selectedAngle] ?? null;
+  const currentEnhanceError = strategyEnhanceErrorByAngle[selectedAngle] ?? null;
 
   return (
     <div
@@ -345,28 +361,52 @@ export function StrategyTab() {
             <p className="text-xs text-slate-400 [overflow-wrap:anywhere] mt-0.5">
               {launchedOfferSentence}
             </p>
+            {launchedUspAndAudience.trim() ? (
+              <p
+                data-testid="strategy-usp-summary"
+                className="text-[11px] text-sky-300/90 [overflow-wrap:anywhere] mt-0.5"
+              >
+                USP & Sasaran: {launchedUspAndAudience}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className="rounded-full border border-slate-700 bg-[#111827] px-2.5 py-1 text-xs font-medium text-sky-300">
               {toneLabel}
             </span>
-            {canUseByok ? (
+            {canUseAiEnhance ? (
               <button
                 type="button"
                 onClick={handleByokEnhance}
                 disabled={isEnhancingStrategy}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/15 px-3 py-1.5 text-xs font-medium text-indigo-200 hover:bg-indigo-500/25 disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/15 px-3 py-1.5 text-xs font-medium text-indigo-200 hover:bg-indigo-500/25 disabled:opacity-50 cursor-pointer whitespace-normal break-words leading-snug text-left"
               >
                 <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                <span>{isEnhancingStrategy ? extra.enhancingByokBtn : extra.enhanceByokBtn}</span>
+                <span>
+                  {isEnhancingStrategy
+                    ? extra.enhancingByokBtn
+                    : canUseByok
+                      ? extra.enhanceByokBtn
+                      : extra.enhanceBuiltInBtn}
+                </span>
               </button>
             ) : null}
           </div>
         </div>
 
-        {currentEnhanceNotice ? (
-          <p data-testid="strategy-enhance-notice" className="text-xs text-indigo-300">
-            {currentEnhanceNotice === 'gemini' ? extra.enhanceByokReady : extra.enhanceByokFallback}
+        {currentEnhanceNotice || currentEnhanceError ? (
+          <p
+            data-testid="strategy-enhance-notice"
+            className={`text-xs break-words ${
+              currentEnhanceError ? 'text-amber-300' : 'text-indigo-300'
+            }`}
+          >
+            {currentEnhanceNotice === 'gemini'
+              ? extra.enhanceByokReady
+              : currentEnhanceNotice === 'pollinations'
+                ? extra.enhanceBuiltInReady
+                : extra.enhanceByokFallback}
+            {currentEnhanceError ? ` (${currentEnhanceError})` : ''}
           </p>
         ) : null}
 

@@ -1,16 +1,37 @@
-import { Briefcase, Languages } from 'lucide-react';
+import { Briefcase, Languages, Sparkles } from 'lucide-react';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import { WorkspaceShell } from './components/WorkspaceShell';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
 import { CampaignProvider } from './state/CampaignContext';
 import { WorkbenchProvider, useWorkbench } from './state/WorkbenchContext';
+import { isValidGeminiKeyFormat } from './utils/copyGenerator';
 
 function WorkspaceHeader() {
   const { locale, setLocale, t } = useI18n();
-  const { activeScreen, setActiveScreen, activeBrand, isLoggedIn, byokKey, isDemoMode } =
-    useWorkbench();
-  const canEnterWorkbench = isLoggedIn && (Boolean(byokKey.trim()) || isDemoMode);
+  const {
+    activeScreen,
+    setActiveScreen,
+    activeBrand,
+    isLoggedIn,
+    byokKey,
+    isDemoMode,
+    builtInAiActive,
+  } = useWorkbench();
+  const canEnterWorkbench =
+    isLoggedIn && (builtInAiActive || Boolean(byokKey.trim()) || isDemoMode);
   const isModalOverlayOpen = canEnterWorkbench && activeScreen === 'onboarding';
+  const hasValidByok = !isDemoMode && isValidGeminiKeyFormat(byokKey);
+  const aiModeLabel = isDemoMode
+    ? locale === 'ms'
+      ? 'Mod Demo (Luar Talian)'
+      : 'Demo Mode (Offline)'
+    : hasValidByok
+      ? locale === 'ms'
+        ? 'Google BYOK Aktif'
+        : 'Google BYOK Active'
+      : locale === 'ms'
+        ? 'AI Terbina Dalam (Percuma)'
+        : 'Built-In AI (Keyless)';
 
   return (
     <header
@@ -39,7 +60,21 @@ function WorkspaceHeader() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 min-w-0">
+        <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+          <span
+            data-testid="header-ai-mode-badge"
+            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold max-w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] leading-tight ${
+              isDemoMode
+                ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                : hasValidByok
+                  ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-200'
+                  : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+            }`}
+          >
+            <Sparkles className="h-3 w-3 shrink-0" />
+            <span>{aiModeLabel}</span>
+          </span>
+
           <span
             data-testid="header-active-brand"
             className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-[#111827] px-2.5 py-1 text-xs text-slate-300"
@@ -53,12 +88,13 @@ function WorkspaceHeader() {
             </span>
           </span>
 
-          <div className="inline-flex rounded-lg border border-slate-800 bg-[#111827] p-0.5">
+          <div className="inline-flex flex-wrap rounded-lg border border-slate-800 bg-[#111827] p-0.5 max-w-full min-w-0">
             <button
               type="button"
               data-testid="nav-onboarding"
+              aria-label={t('app.navOnboardingAria')}
               onClick={() => setActiveScreen('onboarding')}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer ${
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer whitespace-normal break-words leading-tight ${
                 activeScreen === 'onboarding' || !canEnterWorkbench
                   ? 'bg-sky-500 text-slate-950'
                   : 'text-slate-300 hover:text-white'
@@ -76,7 +112,7 @@ function WorkspaceHeader() {
                   setActiveScreen('workbench');
                 }
               }}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-normal break-words leading-tight ${
                 activeScreen === 'workbench' && canEnterWorkbench
                   ? 'bg-sky-500 text-slate-950'
                   : 'text-slate-300 hover:text-white'
@@ -126,8 +162,9 @@ function WorkspaceHeader() {
 }
 
 function AppRouter() {
-  const { activeScreen, isLoggedIn, byokKey, isDemoMode } = useWorkbench();
-  const canEnterWorkbench = isLoggedIn && (Boolean(byokKey.trim()) || isDemoMode);
+  const { activeScreen, isLoggedIn, byokKey, isDemoMode, builtInAiActive } = useWorkbench();
+  const canEnterWorkbench =
+    isLoggedIn && (builtInAiActive || Boolean(byokKey.trim()) || isDemoMode);
 
   return (
     <div className="min-h-screen bg-[#0B0F19] text-slate-100 min-w-0 max-w-full overflow-x-hidden">

@@ -10,6 +10,7 @@ export interface SmeOfferPreset {
   labelMs: string;
   labelEn: string;
   offer: string;
+  uspHint: string;
 }
 
 export const SME_OFFER_PRESETS: readonly SmeOfferPreset[] = [
@@ -19,6 +20,8 @@ export const SME_OFFER_PRESETS: readonly SmeOfferPreset[] = [
     labelEn: 'F&B / Cafe',
     offer:
       'Kombo Kopi & Kek Istimewa RM19.90 untuk 2 orang — tempah awal atau WhatsApp untuk delivery hari ini.',
+    uspHint:
+      'Kopi biji panggang segar + kek bakar harian, siap bungkus rapi untuk pekerja pejabat & pasangan santai',
   },
   {
     id: 'retail',
@@ -26,6 +29,8 @@ export const SME_OFFER_PRESETS: readonly SmeOfferPreset[] = [
     labelEn: 'Retail & Fashion',
     offer:
       'Koleksi Edisi Baharu: Beli 2 Percuma 1 penghantaran Semenanjung — stok saiz terhad, WhatsApp sekarang.',
+    uspHint:
+      'Kain sejuk tak mudah berkedut, potongan kemas saiz S–XXL untuk kegunaan harian & majlis',
   },
   {
     id: 'services',
@@ -33,6 +38,8 @@ export const SME_OFFER_PRESETS: readonly SmeOfferPreset[] = [
     labelEn: 'Services & Workshop',
     offer:
       'Pakej Servis Penuh & Pemeriksaan Awal sempena minggu gaji — slot harian terhad, WhatsApp terus.',
+    uspHint:
+      'Semakan teliti siap 45 minit dengan pecahan harga jelas sebelum mula — untuk pemilik kereta harian',
   },
 ];
 

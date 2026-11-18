@@ -37,6 +37,8 @@ test.describe('Tier 2 — A1: Onboarding Boundaries (6 Tests)', () => {
     await gotoFreshApp(page);
     const loc = appLocators(page);
 
+    await loc.headerApiSettings.click();
+    await loc.onboarding.settingsModal.getByRole('button', { name: /Log Keluar|Sign Out/i }).click();
     await loc.onboarding.googleLoginBtn.click();
     await loc.onboarding.byokInput.fill('   ');
     await loc.onboarding.byokSaveBtn.click();
@@ -49,6 +51,8 @@ test.describe('Tier 2 — A1: Onboarding Boundaries (6 Tests)', () => {
     await gotoFreshApp(page);
     const loc = appLocators(page);
 
+    await loc.headerApiSettings.click();
+    await loc.onboarding.settingsModal.getByRole('button', { name: /Log Keluar|Sign Out/i }).click();
     await loc.onboarding.googleLoginBtn.click();
     await loc.onboarding.byokInput.fill('bad-key-123');
     await loc.onboarding.byokSaveBtn.click();
@@ -72,7 +76,7 @@ test.describe('Tier 2 — A1: Onboarding Boundaries (6 Tests)', () => {
     await gotoFreshApp(page);
     const loc = appLocators(page);
 
-    await loc.onboarding.googleLoginBtn.click();
+    await loc.headerApiSettings.click();
     await loc.onboarding.demoBtn.click();
     if (await loc.onboarding.continueBtn.isVisible().catch(() => false)) {
       await loc.onboarding.continueBtn.click();
@@ -91,7 +95,7 @@ test.describe('Tier 2 — A1: Onboarding Boundaries (6 Tests)', () => {
     await gotoFreshApp(page);
     const loc = appLocators(page);
 
-    await loc.onboarding.googleLoginBtn.click();
+    await loc.headerApiSettings.click();
     await loc.onboarding.byokInput.fill('sk-live-secret-key-999');
     expect(await loc.onboarding.byokInput.getAttribute('type')).toBe('password');
 
@@ -104,10 +108,20 @@ test.describe('Tier 2 — A1: Onboarding Boundaries (6 Tests)', () => {
     await expect(loc.onboarding.byokInput).toHaveValue('sk-live-secret-key-999');
   });
 
-  test('T2-A1-05: Skip Google Login attempt keeps dashboard gated', async ({ page }) => {
+  test('T2-A1-05: Skip Google Login attempt after Sign Out keeps dashboard gated', async ({ page }) => {
     await gotoFreshApp(page);
     const loc = appLocators(page);
 
+    await loc.headerApiSettings.click();
+    await loc.onboarding.settingsModal.getByRole('button', { name: /Log Keluar|Sign Out/i }).click();
+
+    const builtInVisible = await loc.onboarding.useBuiltInBtn.isVisible().catch(() => false);
+    if (builtInVisible) {
+      const enabled = await loc.onboarding.useBuiltInBtn.isEnabled().catch(() => false);
+      if (enabled) {
+        await loc.onboarding.useBuiltInBtn.click();
+      }
+    }
     const demoVisible = await loc.onboarding.demoBtn.isVisible().catch(() => false);
     if (demoVisible) {
       const enabled = await loc.onboarding.demoBtn.isEnabled().catch(() => false);

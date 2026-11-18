@@ -39,6 +39,7 @@ interface PersistedWorkbenchState {
   freelancerEmail: string | null;
   byokKey: string;
   isDemoMode: boolean;
+  builtInAiActive: boolean;
   activeScreen: WorkbenchScreen;
   brands: BrandProfile[];
   activeBrandId: string;
@@ -73,11 +74,12 @@ function createDefaultWorkbenchState(): PersistedWorkbenchState {
   const seeded = createSeededBrands();
   return {
     version: 1,
-    isLoggedIn: false,
-    freelancerEmail: null,
+    isLoggedIn: true,
+    freelancerEmail: 'freelancer@adforge.my',
     byokKey: '',
     isDemoMode: false,
-    activeScreen: 'onboarding',
+    builtInAiActive: true,
+    activeScreen: 'workbench',
     brands: seeded,
     activeBrandId: seeded[0].id,
   };
@@ -135,7 +137,12 @@ function safeReadWorkbenchStorage(): PersistedWorkbenchState {
     const isLoggedIn = record.isLoggedIn === true;
     const byokKey = typeof record.byokKey === 'string' ? record.byokKey.trim() : '';
     const isDemoMode = record.isDemoMode === true;
-    const canEnterWorkbench = isLoggedIn && (byokKey.trim().length > 0 || isDemoMode);
+    const builtInAiActive =
+      typeof record.builtInAiActive === 'boolean'
+        ? record.builtInAiActive
+        : !isDemoMode && byokKey.length === 0;
+    const canEnterWorkbench =
+      isLoggedIn && (builtInAiActive || byokKey.trim().length > 0 || isDemoMode);
     const activeScreen: WorkbenchScreen =
       canEnterWorkbench && record.activeScreen === 'workbench' ? 'workbench' : 'onboarding';
 
@@ -145,6 +152,7 @@ function safeReadWorkbenchStorage(): PersistedWorkbenchState {
       freelancerEmail: typeof record.freelancerEmail === 'string' ? record.freelancerEmail : null,
       byokKey,
       isDemoMode,
+      builtInAiActive,
       activeScreen,
       brands,
       activeBrandId,
@@ -259,27 +267,60 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       ...prev,
       isLoggedIn: false,
       freelancerEmail: null,
+      builtInAiActive: false,
       activeScreen: 'onboarding',
     }));
   }, []);
 
   const saveByokKey = useCallback((key: string, demoMode = false) => {
     const trimmedKey = key.trim();
+    setState((prev) => {
+      if (demoMode) {
+        return {
+          ...prev,
+          byokKey: trimmedKey,
+          isDemoMode: true,
+          builtInAiActive: false,
+          activeScreen: prev.isLoggedIn ? 'workbench' : 'onboarding',
+        };
+      }
+      if (trimmedKey.length > 0) {
+        return {
+          ...prev,
+          byokKey: trimmedKey,
+          isDemoMode: false,
+          builtInAiActive: true,
+          activeScreen: prev.isLoggedIn ? 'workbench' : 'onboarding',
+        };
+      }
+      return {
+        ...prev,
+        byokKey: '',
+        isDemoMode: false,
+        builtInAiActive: false,
+        activeScreen: 'onboarding',
+      };
+    });
+  }, []);
+
+  const activateBuiltInAi = useCallback(() => {
     setState((prev) => ({
       ...prev,
-      byokKey: trimmedKey,
-      isDemoMode: demoMode,
-      activeScreen:
-        prev.isLoggedIn && (trimmedKey.length > 0 || demoMode) ? 'workbench' : 'onboarding',
+      isLoggedIn: true,
+      freelancerEmail: prev.freelancerEmail || 'freelancer@adforge.my',
+      byokKey: '',
+      isDemoMode: false,
+      builtInAiActive: true,
+      activeScreen: 'workbench',
     }));
   }, []);
 
   const setActiveScreen = useCallback((screen: WorkbenchScreen) => {
     setState((prev) => {
-      if (
-        screen === 'workbench' &&
-        (!prev.isLoggedIn || (!prev.byokKey.trim() && !prev.isDemoMode))
-      ) {
+      const canEnter =
+        prev.isLoggedIn &&
+        (prev.builtInAiActive || prev.byokKey.trim().length > 0 || prev.isDemoMode);
+      if (screen === 'workbench' && !canEnter) {
         return prev;
       }
       return {
@@ -410,11 +451,13 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       freelancerEmail: state.freelancerEmail,
       byokKey: state.byokKey,
       isDemoMode: state.isDemoMode,
+      builtInAiActive: state.builtInAiActive,
       activeScreen: state.activeScreen,
       setActiveScreen,
       loginWithGoogle,
       logout,
       saveByokKey,
+      activateBuiltInAi,
       brands: state.brands,
       activeBrandId: activeBrand.id,
       activeBrand,
@@ -429,6 +472,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       state.freelancerEmail,
       state.byokKey,
       state.isDemoMode,
+      state.builtInAiActive,
       state.activeScreen,
       state.brands,
       activeBrand,
@@ -436,6 +480,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       loginWithGoogle,
       logout,
       saveByokKey,
+      activateBuiltInAi,
       getBrandById,
       selectBrand,
       createBrand,

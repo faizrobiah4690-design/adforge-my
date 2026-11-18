@@ -548,7 +548,7 @@ describe('M11 Offer Extraction, "Tawaran Tawaran" Fix & 5-Framework Variation En
   it('renders variation-toolbar above 4-child workspace-tabs, keeps /Gemini/i button unique, cycles Variasi #1..#5, and resets Tab 4 confirmation gate', async () => {
     render(<App />);
 
-    fireEvent.click(screen.getByTestId('google-login-btn'));
+    fireEvent.click(screen.getByTestId('nav-onboarding'));
     fireEvent.click(screen.getByTestId('byok-demo-btn'));
     fireEvent.change(screen.getByTestId('offer-input'), {
       target: { value: ULIKE_OFFER },

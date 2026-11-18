@@ -23,9 +23,9 @@ import {
   enhanceCopyWithGemini,
   generateCampaignCopyForAngle,
   generateCampaignCopyMap,
-  generateMultimodalCampaignWithGemini,
+  generateCampaignWithAiCascade,
   getFrameworkForVariation,
-  isValidGeminiKeyFormat,
+  getPollinationsCooldownUntil,
 } from '../utils/copyGenerator';
 import {
   JINGLE_DURATION_SEC,
@@ -74,30 +74,34 @@ import type {
 interface LaunchedSnapshot {
   brandId: string;
   offerSentence: string;
+  uspAndAudience: string;
   photos: [PhotoAsset, PhotoAsset];
 }
 
 function buildBaselineSlides(
   brand: BrandProfile,
   offerSentence: string,
-  variationIndex = 1
+  variationIndex = 1,
+  uspAndAudience?: string
 ): CarouselSlide[] {
-  return buildCarouselSlides(brand, offerSentence, variationIndex);
+  return buildCarouselSlides(brand, offerSentence, variationIndex, null, uspAndAudience);
 }
 
 function buildBaselineLyrics(
   brand: BrandProfile,
   offerSentence: string,
-  variationIndex = 1
+  variationIndex = 1,
+  uspAndAudience?: string
 ): string {
-  return buildJingleLyrics(brand.name, offerSentence, variationIndex);
+  return buildJingleLyrics(brand.name, offerSentence, variationIndex, uspAndAudience);
 }
 
 function buildBaselineJingle(
   brand: BrandProfile,
   offerSentence: string,
   engine: MusicEngineId = 'local',
-  variationIndex = 1
+  variationIndex = 1,
+  uspAndAudience?: string
 ): JingleState {
   return {
     style: 'pop-ceria',
@@ -105,7 +109,7 @@ function buildBaselineJingle(
     engine,
     engineEditedByUser: false,
     generatedEngine: null,
-    lyrics: buildBaselineLyrics(brand, offerSentence, variationIndex),
+    lyrics: buildBaselineLyrics(brand, offerSentence, variationIndex, uspAndAudience),
     lyricsEditedByUser: false,
     durationSec: 5.5,
     sampleRate: 48000,
@@ -124,9 +128,10 @@ function buildBaselineStoryboard(
   brand: BrandProfile,
   offerSentence: string,
   lyrics: string,
-  variationIndex = 1
+  variationIndex = 1,
+  uspAndAudience?: string
 ): StoryboardFrame[] {
-  return buildStoryboardFrames(brand, offerSentence, lyrics, variationIndex);
+  return buildStoryboardFrames(brand, offerSentence, lyrics, variationIndex, null, uspAndAudience);
 }
 
 function buildBaselineVideoState(
@@ -134,10 +139,17 @@ function buildBaselineVideoState(
   offerSentence: string,
   lyrics: string,
   engine: VideoEngineId = 'local',
-  variationIndex = 1
+  variationIndex = 1,
+  uspAndAudience?: string
 ): VideoStudioState {
   return {
-    storyboardFrames: buildBaselineStoryboard(brand, offerSentence, lyrics, variationIndex),
+    storyboardFrames: buildBaselineStoryboard(
+      brand,
+      offerSentence,
+      lyrics,
+      variationIndex,
+      uspAndAudience
+    ),
     isStoryboardConfirmed: false,
     engine,
     engineEditedByUser: false,
@@ -232,6 +244,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     brandId: activeBrandId,
     photos: [SAMPLE_BUSINESS_PHOTOS[0], SAMPLE_BUSINESS_PHOTOS[1]],
     offerSentence: SAMPLE_OFFER_CHIP,
+    uspAndAudience: '',
     generatedAt: null,
   }));
 
@@ -250,6 +263,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const [campaignGenSource, setCampaignGenSource] = useState<CampaignGenerationSource>(() =>
     isDemoMode ? 'offline-smart-demo' : 'offline-smart-fallback'
   );
+  const [campaignGenError, setCampaignGenError] = useState<string | null>(null);
+  const [pollinationsCooldownUntil, setPollinationsCooldownUntil] = useState<number | null>(null);
   const [generatedVariations, setGeneratedVariations] = useState<
     Record<number, CampaignVariationSnapshot>
   >({});
@@ -259,6 +274,9 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const [isEnhancingStrategy, setIsEnhancingStrategy] = useState<boolean>(false);
   const [strategyEnhanceNoticeByAngle, setStrategyEnhanceNoticeByAngle] =
     useState<StrategyEnhanceNoticeByAngle>({});
+  const [strategyEnhanceErrorByAngle, setStrategyEnhanceErrorByAngle] = useState<
+    Partial<Record<AngleId, string>>
+  >({});
   const [cpaInputs, setCpaInputs] = useState<CpaInputs>(() => ({ ...DEFAULT_CPA_INPUTS }));
   const [slides, setSlides] = useState<CarouselSlide[]>(() =>
     buildBaselineSlides(activeBrand, SAMPLE_OFFER_CHIP, 1)
@@ -359,11 +377,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   campaignLaunchEpochRef.current = campaignLaunchEpoch;
   const launchedBrandRef = useRef<BrandProfile>(activeBrand);
   const launchedOfferRef = useRef<string>(input.offerSentence);
+  const launchedUspRef = useRef<string>(input.uspAndAudience ?? '');
   const launchedBrandVisualKeyRef = useRef<string>(
     `${activeBrand.id}::${activeBrand.themeColor}::${activeBrand.logoDataUrl}::${activeBrand.name}::${activeBrand.whatsappNumber}`
   );
   const launchedBrandScopeKeyRef = useRef<string>(
-    `${activeBrand.id}::${activeBrand.tone}::${activeBrand.name}::${activeBrand.whatsappNumber}::${input.offerSentence}`
+    `${activeBrand.id}::${activeBrand.tone}::${activeBrand.name}::${activeBrand.whatsappNumber}::${input.offerSentence}::${input.uspAndAudience ?? ''}`
   );
   const prevLaunchedScopeKeyRef = useRef<string>(launchedBrandScopeKeyRef.current);
   const launchedPhotosRef = useRef<[PhotoAsset, PhotoAsset]>(input.photos);
@@ -426,9 +445,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     const currentOffer = launchedSnapshotRef.current
       ? launchedSnapshotRef.current.offerSentence
       : inputRef.current.offerSentence;
+    const currentUsp = launchedSnapshotRef.current
+      ? launchedSnapshotRef.current.uspAndAudience
+      : (inputRef.current.uspAndAudience ?? '');
     const activeVarIdx = variationIndexRef.current;
 
-    let nextPsych = buildCustomerPsychology(activeBrand, currentOffer, activeVarIdx);
+    let nextPsych = buildCustomerPsychology(activeBrand, currentOffer, activeVarIdx, currentUsp);
     let nextCopyMap = editedCopyByAngleRef.current;
     let nextSlides = slidesRef.current;
     let effectiveLyrics = jingleRef.current.lyrics;
@@ -451,7 +473,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
             activeBrand,
             currentOffer,
             angle,
-            activeVarIdx
+            activeVarIdx,
+            currentUsp
           );
         } else if (phoneChanged) {
           computedCopyMap[angle] = syncChannelCopyWhatsapp(existing, activeBrand.whatsappNumber);
@@ -463,7 +486,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       editedCopyByAngleRef.current = computedCopyMap;
       setEditedCopyByAngle(computedCopyMap);
 
-      const baselineSlides = buildBaselineSlides(activeBrand, currentOffer, activeVarIdx);
+      const baselineSlides = buildBaselineSlides(activeBrand, currentOffer, activeVarIdx, currentUsp);
       nextSlides = slidesRef.current.map((slide, idx) =>
         slide.editedByUser ? slide : (baselineSlides[idx] ?? slide)
       );
@@ -471,7 +494,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       setSlides(nextSlides);
 
       if (nameChanged || phoneChanged) {
-        const nextLyrics = buildBaselineLyrics(activeBrand, currentOffer, activeVarIdx);
+        const nextLyrics = buildBaselineLyrics(activeBrand, currentOffer, activeVarIdx, currentUsp);
         effectiveLyrics = jingleRef.current.lyricsEditedByUser
           ? jingleRef.current.lyrics
           : nextLyrics;
@@ -488,13 +511,19 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       videoAbortRef.current?.abort();
       videoAbortRef.current = null;
       isVideoRenderingRef.current = false;
-      const nextLyrics = buildBaselineLyrics(activeBrand, currentOffer, activeVarIdx);
+      const nextLyrics = buildBaselineLyrics(activeBrand, currentOffer, activeVarIdx, currentUsp);
       effectiveLyrics = jingleRef.current.lyricsEditedByUser
         ? jingleRef.current.lyrics
         : nextLyrics;
       const baselineFrames =
         nameChanged || phoneChanged
-          ? buildBaselineStoryboard(activeBrand, currentOffer, effectiveLyrics, activeVarIdx)
+          ? buildBaselineStoryboard(
+              activeBrand,
+              currentOffer,
+              effectiveLyrics,
+              activeVarIdx,
+              currentUsp
+            )
           : null;
 
       if (baselineFrames) {
@@ -620,11 +649,15 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const launchedOfferSentence = launchedSnapshot
     ? launchedSnapshot.offerSentence
     : input.offerSentence;
+  const launchedUspAndAudience = launchedSnapshot
+    ? launchedSnapshot.uspAndAudience
+    : (input.uspAndAudience ?? '');
   const launchedPhotos = launchedSnapshot ? launchedSnapshot.photos : input.photos;
   const launchedBrandVisualKey = `${launchedBrand.id}::${launchedBrand.themeColor}::${launchedBrand.logoDataUrl}::${launchedBrand.name}::${launchedBrand.whatsappNumber}`;
-  const launchedBrandScopeKey = `${launchedBrand.id}::${launchedBrand.tone}::${launchedBrand.name}::${launchedBrand.whatsappNumber}::${launchedOfferSentence}`;
+  const launchedBrandScopeKey = `${launchedBrand.id}::${launchedBrand.tone}::${launchedBrand.name}::${launchedBrand.whatsappNumber}::${launchedOfferSentence}::${launchedUspAndAudience}`;
   launchedBrandRef.current = launchedBrand;
   launchedOfferRef.current = launchedOfferSentence;
+  launchedUspRef.current = launchedUspAndAudience;
   launchedBrandVisualKeyRef.current = launchedBrandVisualKey;
   launchedBrandScopeKeyRef.current = launchedBrandScopeKey;
   launchedPhotosRef.current = launchedPhotos;
@@ -640,6 +673,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     isEnhancingStrategyRef.current = false;
     setIsEnhancingStrategy(false);
     setStrategyEnhanceNoticeByAngle({});
+    setStrategyEnhanceErrorByAngle({});
+    setCampaignGenError(null);
   }, [launchedBrandScopeKey]);
 
   useEffect(() => {
@@ -663,6 +698,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     isEnhancingStrategyRef.current = false;
     setIsEnhancingStrategy(false);
     setStrategyEnhanceNoticeByAngle({});
+    setStrategyEnhanceErrorByAngle({});
+    setCampaignGenError(null);
 
     jingleGenSeqRef.current += 1;
     jingleAbortRef.current?.abort();
@@ -738,6 +775,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       targetIndex: number;
       brand: BrandProfile;
       offerSentence: string;
+      uspAndAudience: string;
       photos: [PhotoAsset, PhotoAsset];
       epochAtStart: number;
       scopeKeyAtStart: string;
@@ -747,6 +785,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         targetIndex,
         brand,
         offerSentence,
+        uspAndAudience,
         photos,
         epochAtStart,
         scopeKeyAtStart,
@@ -758,22 +797,42 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       campaignVisionAbortRef.current = null;
 
       const frameworkId = getFrameworkForVariation(targetIndex);
-      const baselinePsych = buildCustomerPsychology(brand, offerSentence, targetIndex);
-      const baselineCopyMap = generateCampaignCopyMap(brand, offerSentence, targetIndex);
-      const baselineSlides = buildBaselineSlides(brand, offerSentence, targetIndex);
-      const baselineLyrics = buildBaselineLyrics(brand, offerSentence, targetIndex);
+      const baselinePsych = buildCustomerPsychology(
+        brand,
+        offerSentence,
+        targetIndex,
+        uspAndAudience
+      );
+      const baselineCopyMap = generateCampaignCopyMap(
+        brand,
+        offerSentence,
+        targetIndex,
+        uspAndAudience
+      );
+      const baselineSlides = buildBaselineSlides(
+        brand,
+        offerSentence,
+        targetIndex,
+        uspAndAudience
+      );
+      const baselineLyrics = buildBaselineLyrics(
+        brand,
+        offerSentence,
+        targetIndex,
+        uspAndAudience
+      );
       const baselineFrames = buildBaselineStoryboard(
         brand,
         offerSentence,
         baselineLyrics,
-        targetIndex
+        targetIndex,
+        uspAndAudience
       );
 
       const loggedInAtStart = isLoggedInRef.current;
       const demoAtStart = isDemoModeRef.current;
       const keyAtStart = byokKeyRef.current;
-      const canLive =
-        loggedInAtStart && !demoAtStart && isValidGeminiKeyFormat(keyAtStart);
+      const canLive = loggedInAtStart && !demoAtStart;
       const offlineSource: CampaignGenerationSource = demoAtStart
         ? 'offline-smart-demo'
         : 'offline-smart-fallback';
@@ -784,20 +843,30 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       setCustomerPsychology(baselinePsych);
       setProductVisionSummary(null);
       productVisionSummaryRef.current = null;
+      setCampaignGenError(null);
       setEditedCopyByAngle(baselineCopyMap);
       setSlides(baselineSlides);
 
       if (isFullLaunch) {
         const defaultMusicEngine = getDefaultMusicEngine(demoAtStart, keyAtStart);
         const defaultVideoEngine = getDefaultVideoEngine(demoAtStart, keyAtStart);
-        setJingle(buildBaselineJingle(brand, offerSentence, defaultMusicEngine, targetIndex));
+        setJingle(
+          buildBaselineJingle(
+            brand,
+            offerSentence,
+            defaultMusicEngine,
+            targetIndex,
+            uspAndAudience
+          )
+        );
         setVideo(
           buildBaselineVideoState(
             brand,
             offerSentence,
             baselineLyrics,
             defaultVideoEngine,
-            targetIndex
+            targetIndex,
+            uspAndAudience
           )
         );
       } else {
@@ -867,11 +936,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         byokKeyRef.current !== keyAtStart;
 
       try {
-        const result = await generateMultimodalCampaignWithGemini({
+        const result = await generateCampaignWithAiCascade({
           apiKey: keyAtStart,
           isDemoMode: demoAtStart,
           brand,
           offerSentence,
+          uspAndAudience,
           photos,
           variationIndex: targetIndex,
           signal: controller.signal,
@@ -881,15 +951,41 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const isGeminiModel =
-          result.source === 'gemini-2.5-flash' || result.source === 'gemini-2.0-flash';
+        const cooldownUntil =
+          result.cooldownUntilMs ??
+          (getPollinationsCooldownUntil() > Date.now()
+            ? getPollinationsCooldownUntil()
+            : null);
+        setPollinationsCooldownUntil(cooldownUntil);
+
+        const errorNotice = (() => {
+          if (result.byokErrorReason && result.source === 'pollinations-openai-fast') {
+            return `Kunci Google BYOK gagal (${result.byokErrorReason}) — bertukar automatik ke AI Terbina Dalam.`;
+          }
+          if (result.byokErrorReason && result.pollinationsErrorReason) {
+            return `Kunci Google BYOK gagal (${result.byokErrorReason}) & AI Terbina Dalam (${result.pollinationsErrorReason}) — menggunakan enjin pintar pantas.`;
+          }
+          if (result.byokErrorReason) {
+            return `Kunci Google BYOK gagal (${result.byokErrorReason}) — menggunakan sandaran tempatan.`;
+          }
+          if (result.pollinationsErrorReason) {
+            return `AI Terbina Dalam (${result.pollinationsErrorReason}) — menggunakan enjin pintar pantas.`;
+          }
+          return null;
+        })();
+        setCampaignGenError(errorNotice);
+
+        const isAiHydrated =
+          result.source === 'gemini-2.5-flash' ||
+          result.source === 'gemini-2.0-flash' ||
+          result.source === 'pollinations-openai-fast';
         campaignGenSourceRef.current = result.source;
         setCampaignGenSource(result.source);
         setProductVisionSummary(result.visualSummary);
         productVisionSummaryRef.current = result.visualSummary;
         setCustomerPsychology(result.psychology);
 
-        if (isGeminiModel) {
+        if (isAiHydrated) {
           setEditedCopyByAngle((prevMap) => {
             const nextMap: EditedCopyByAngle = {};
             for (const angle of ANGLES_LIST) {
@@ -1026,9 +1122,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         brandId: resolvedBrand.id,
         photos: overrideInput?.photos ?? currentInput.photos,
         offerSentence: overrideInput?.offerSentence ?? currentInput.offerSentence,
+        uspAndAudience:
+          overrideInput?.uspAndAudience ?? currentInput.uspAndAudience ?? '',
         generatedAt,
       };
       const resolvedOffer = nextInput.offerSentence;
+      const resolvedUsp = nextInput.uspAndAudience ?? '';
 
       if (resolvedBrand.id !== activeBrandId) {
         selectBrand(resolvedBrand.id);
@@ -1037,6 +1136,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       const nextSnapshot: LaunchedSnapshot = {
         brandId: resolvedBrand.id,
         offerSentence: resolvedOffer,
+        uspAndAudience: resolvedUsp,
         photos: nextInput.photos,
       };
       launchedSnapshotRef.current = nextSnapshot;
@@ -1056,11 +1156,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       campaignLaunchEpochRef.current = nextEpoch;
       setCampaignLaunchEpoch(nextEpoch);
 
-      const nextScopeKey = `${resolvedBrand.id}::${resolvedBrand.tone}::${resolvedBrand.name}::${resolvedBrand.whatsappNumber}::${resolvedOffer}`;
+      const nextScopeKey = `${resolvedBrand.id}::${resolvedBrand.tone}::${resolvedBrand.name}::${resolvedBrand.whatsappNumber}::${resolvedOffer}::${resolvedUsp}`;
       launchedBrandScopeKeyRef.current = nextScopeKey;
       prevLaunchedScopeKeyRef.current = nextScopeKey;
       launchedBrandRef.current = resolvedBrand;
       launchedOfferRef.current = resolvedOffer;
+      launchedUspRef.current = resolvedUsp;
       launchedPhotosRef.current = nextInput.photos;
       launchedBrandVisualKeyRef.current = `${resolvedBrand.id}::${resolvedBrand.themeColor}::${resolvedBrand.logoDataUrl}::${resolvedBrand.name}::${resolvedBrand.whatsappNumber}`;
 
@@ -1070,6 +1171,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         targetIndex: 1,
         brand: resolvedBrand,
         offerSentence: resolvedOffer,
+        uspAndAudience: resolvedUsp,
         photos: nextInput.photos,
         epochAtStart: nextEpoch,
         scopeKeyAtStart: nextScopeKey,
@@ -1105,6 +1207,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
       const brand = launchedBrandRef.current;
       const offerSentence = launchedOfferRef.current;
+      const uspAndAudience = launchedUspRef.current;
       const photos = launchedPhotosRef.current;
       const epochAtStart = campaignLaunchEpochRef.current;
       const scopeKeyAtStart = launchedBrandScopeKeyRef.current;
@@ -1134,7 +1237,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         }
         setEditedCopyByAngle(syncedCopy);
 
-        const baselineSlidesForWa = buildBaselineSlides(brand, offerSentence, targetIndex);
+        const baselineSlidesForWa = buildBaselineSlides(
+          brand,
+          offerSentence,
+          targetIndex,
+          uspAndAudience
+        );
         setSlides(
           cached.slides.map((slide, idx) => ({
             ...slide,
@@ -1160,7 +1268,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
           brand,
           offerSentence,
           cached.jingleLyrics,
-          targetIndex
+          targetIndex,
+          uspAndAudience
         );
         setVideo((prevVideo) => {
           safeRevokeBlobUrl(prevVideo.videoUrl);
@@ -1198,6 +1307,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         targetIndex,
         brand,
         offerSentence,
+        uspAndAudience,
         photos,
         epochAtStart,
         scopeKeyAtStart,
@@ -1214,6 +1324,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     isEnhancingStrategyRef.current = false;
     setIsEnhancingStrategy(false);
     setStrategyEnhanceNoticeByAngle({});
+    setStrategyEnhanceErrorByAngle({});
+    setCampaignGenError(null);
 
     videoRenderSeqRef.current += 1;
     videoAbortRef.current?.abort();
@@ -1230,6 +1342,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       targetIndex: nextIndex,
       brand: launchedBrandRef.current,
       offerSentence: launchedOfferRef.current,
+      uspAndAudience: launchedUspRef.current,
       photos: launchedPhotosRef.current,
       epochAtStart: campaignLaunchEpochRef.current,
       scopeKeyAtStart: launchedBrandScopeKeyRef.current,
@@ -1290,7 +1403,6 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       if (
         !loggedInAtStart ||
         demoAtStart ||
-        !isValidGeminiKeyFormat(keyAtStart) ||
         isEnhancingStrategyRef.current
       ) {
         return;
@@ -1305,11 +1417,18 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         delete next[targetAngle];
         return next;
       });
+      setStrategyEnhanceErrorByAngle((prev) => {
+        if (!(targetAngle in prev)) return prev;
+        const next = { ...prev };
+        delete next[targetAngle];
+        return next;
+      });
 
       const epochAtStart = campaignLaunchEpochRef.current;
       const scopeKeyAtStart = launchedBrandScopeKeyRef.current;
       const brandSnapshot = launchedBrandRef.current;
       const offerSnapshot = launchedOfferRef.current;
+      const uspSnapshot = launchedUspRef.current;
       const variationAtStart = variationIndexRef.current;
       const photosSnapshot = launchedPhotosRef.current;
 
@@ -1329,6 +1448,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
           isDemoMode: demoAtStart,
           brand: brandSnapshot,
           offerSentence: offerSnapshot,
+          uspAndAudience: uspSnapshot,
           angle: targetAngle,
           variationIndex: variationAtStart,
           photos: photosSnapshot,
@@ -1338,11 +1458,21 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        if (result.cooldownUntilMs) {
+          setPollinationsCooldownUntil(result.cooldownUntilMs);
+        }
+
         replaceAngleCopy(targetAngle, result.copy);
         setStrategyEnhanceNoticeByAngle((prev) => ({
           ...prev,
           [targetAngle]: result.source,
         }));
+        if (result.errorReason) {
+          setStrategyEnhanceErrorByAngle((prev) => ({
+            ...prev,
+            [targetAngle]: result.errorReason as string,
+          }));
+        }
       } finally {
         if (strategyEnhanceSeqRef.current === reqSeq) {
           isEnhancingStrategyRef.current = false;
@@ -1417,6 +1547,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         const prompt = buildLyriaJinglePrompt({
           brand: brandSnapshot,
           offerSentence: offerSnapshot,
+          uspAndAudience: launchedUspRef.current,
           style: activeStyle,
           lyrics: currentJingle.lyrics,
         });
@@ -1580,6 +1711,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         const prompt = buildVideoStoryboardPrompt({
           brand: brandSnapshot,
           offerSentence: offerSnapshot,
+          uspAndAudience: launchedUspRef.current,
           jingleStyle: jingleSnapshot.style,
           frames: framesSnapshot,
         });
@@ -1647,6 +1779,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         brand: brandSnapshot,
         audioBuffer,
         durationSec: TOTAL_VIDEO_DURATION_SEC,
+        offerSentence: offerSnapshot,
+        uspAndAudience: launchedUspRef.current,
       });
 
       if (isStale()) {
@@ -1715,6 +1849,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       launchedBrandId,
       launchedBrand,
       launchedOfferSentence,
+      launchedUspAndAudience,
       launchedPhotos,
       launchCampaign,
       variationIndex,
@@ -1723,6 +1858,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       productVisionSummary,
       campaignGenStatus,
       campaignGenSource,
+      campaignGenError,
+      pollinationsCooldownUntil,
       generatedVariations,
       selectVariation,
       generateNewVariation,
@@ -1736,6 +1873,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       setAngleCopyMap,
       isEnhancingStrategy,
       strategyEnhanceNoticeByAngle,
+      strategyEnhanceErrorByAngle,
       enhanceStrategyAngleWithGemini,
       cpaInputs,
       setCpaInputs,
@@ -1762,6 +1900,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       launchedBrandId,
       launchedBrand,
       launchedOfferSentence,
+      launchedUspAndAudience,
       launchedPhotos,
       launchCampaign,
       variationIndex,
@@ -1770,6 +1909,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       productVisionSummary,
       campaignGenStatus,
       campaignGenSource,
+      campaignGenError,
+      pollinationsCooldownUntil,
       generatedVariations,
       selectVariation,
       generateNewVariation,
@@ -1781,6 +1922,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       setAngleCopyMap,
       isEnhancingStrategy,
       strategyEnhanceNoticeByAngle,
+      strategyEnhanceErrorByAngle,
       enhanceStrategyAngleWithGemini,
       cpaInputs,
       slides,

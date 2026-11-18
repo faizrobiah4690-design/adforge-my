@@ -16,9 +16,29 @@ export async function gotoFreshApp(page: Page): Promise<void> {
 
 export async function completeOnboarding(
   page: Page,
-  options?: { useDemoMode?: boolean; apiKey?: string },
+  options?: { useDemoMode?: boolean; apiKey?: string; forceBuiltInAi?: boolean },
 ): Promise<void> {
   const loc = appLocators(page);
+
+  const alreadyOnWorkbench = await loc.vault.root.isVisible().catch(() => false);
+  if (alreadyOnWorkbench) {
+    if (!options?.useDemoMode && !options?.apiKey && !options?.forceBuiltInAi) {
+      return;
+    }
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible({ timeout: 5_000 });
+    if (options?.useDemoMode) {
+      await loc.onboarding.demoBtn.click();
+    } else if (options?.apiKey) {
+      await loc.onboarding.byokInput.fill(options.apiKey);
+      await loc.onboarding.byokSaveBtn.click();
+    } else {
+      await loc.onboarding.useBuiltInBtn.click();
+    }
+    await expect(loc.onboarding.settingsModal).toHaveCount(0, { timeout: 5_000 });
+    await expect(loc.vault.root).toBeVisible({ timeout: 10_000 });
+    return;
+  }
 
   await expect(loc.onboarding.googleLoginBtn).toBeVisible({ timeout: 10_000 });
   await loc.onboarding.googleLoginBtn.click();
@@ -26,6 +46,8 @@ export async function completeOnboarding(
 
   if (options?.useDemoMode) {
     await loc.onboarding.demoBtn.click();
+  } else if (options?.forceBuiltInAi) {
+    await loc.onboarding.useBuiltInBtn.click();
   } else {
     const key = options?.apiKey ?? 'sk-live-test-key-123456';
     await loc.onboarding.byokInput.fill(key);
@@ -153,6 +175,7 @@ export async function launchCampaign(
   options?: {
     brandName?: string;
     offerSentence?: string;
+    uspAndAudience?: string;
     attachSamplePhotos?: boolean;
   },
 ): Promise<void> {
@@ -184,6 +207,9 @@ export async function launchCampaign(
 
   const offer = options?.offerSentence ?? DEFAULT_OFFER;
   await loc.quickForm.offerInput.fill(offer);
+  if (options?.uspAndAudience !== undefined) {
+    await loc.quickForm.uspAudienceInput.fill(options.uspAndAudience);
+  }
   await loc.quickForm.launchBtn.click();
 
   await expect(loc.workspaceTabs).toBeVisible({ timeout: 10_000 });

@@ -1,11 +1,14 @@
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   Cpu,
   Download,
   Loader2,
+  Mic,
   Music,
   RotateCcw,
   Sparkles,
+  Square,
   Volume2,
 } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
@@ -98,6 +101,7 @@ export function JingleTab() {
   const {
     launchedBrand,
     launchedOfferSentence,
+    launchedUspAndAudience,
     variationIndex,
     jingle,
     setJingle,
@@ -106,6 +110,32 @@ export function JingleTab() {
     clearJingleError,
     generateJingle,
   } = useCampaign();
+
+  const [isSpeakingTts, setIsSpeakingTts] = useState(false);
+  const [playTtsWithMusic, setPlayTtsWithMusic] = useState(true);
+  const [ttsError, setTtsError] = useState<string | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const ttsStartedAudioRef = useRef(false);
+
+  const isSpeechSupported =
+    typeof window !== 'undefined' &&
+    'speechSynthesis' in window &&
+    typeof SpeechSynthesisUtterance !== 'undefined';
+
+  useEffect(() => {
+    return () => {
+      try {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+        }
+      } catch {
+        // Ignore cleanup speechSynthesis errors
+      }
+      if (audioElRef.current) {
+        audioElRef.current.volume = 1.0;
+      }
+    };
+  }, []);
 
   const liveApiReady = hasLiveApiAccess(isDemoMode, byokKey);
   const activeEngine: MusicEngineId = liveApiReady
@@ -161,13 +191,111 @@ export function JingleTab() {
     const baseline = buildJingleLyrics(
       launchedBrand.name,
       launchedOfferSentence,
-      variationIndex
+      variationIndex,
+      launchedUspAndAudience
     );
     setJingle((prev) => ({
       ...prev,
       lyrics: baseline,
       lyricsEditedByUser: false,
     }));
+  };
+
+  const stopVoiceover = () => {
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    } catch {
+      // Ignore cancel errors
+    }
+    setIsSpeakingTts(false);
+    if (audioElRef.current) {
+      audioElRef.current.volume = 1.0;
+      if (ttsStartedAudioRef.current && !audioElRef.current.paused) {
+        audioElRef.current.pause();
+      }
+    }
+    ttsStartedAudioRef.current = false;
+  };
+
+  const handleToggleVoiceover = () => {
+    setTtsError(null);
+    if (isSpeakingTts) {
+      stopVoiceover();
+      return;
+    }
+    if (!isSpeechSupported) {
+      setTtsError(
+        locale === 'ms'
+          ? 'Pelayar ini tidak menyokong Web Speech API untuk sebutan suara.'
+          : 'This browser does not support Web Speech API voiceover.'
+      );
+      return;
+    }
+    const cleanScript = jingle.lyrics.replace(/\s+/g, ' ').trim();
+    if (!cleanScript) {
+      setTtsError(
+        locale === 'ms'
+          ? 'Masukkan skrip/lirik jingle terlebih dahulu untuk pratonton suara.'
+          : 'Enter jingle lyrics first to preview voiceover.'
+      );
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(cleanScript);
+      const voices =
+        typeof window.speechSynthesis.getVoices === 'function'
+          ? window.speechSynthesis.getVoices()
+          : [];
+      const preferredVoice =
+        voices.find((v) => v.lang.toLowerCase().startsWith('ms-my')) ??
+        voices.find((v) => v.lang.toLowerCase().startsWith('ms')) ??
+        voices.find((v) => v.lang.toLowerCase().startsWith('id')) ??
+        null;
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+      utterance.lang = preferredVoice?.lang || 'ms-MY';
+      utterance.rate =
+        jingle.style === 'pop-ceria' ? 1.08 : jingle.style === 'santai-akustik' ? 0.95 : 1.02;
+
+      const finishSpeech = () => {
+        setIsSpeakingTts(false);
+        if (audioElRef.current) {
+          audioElRef.current.volume = 1.0;
+          if (ttsStartedAudioRef.current && !audioElRef.current.paused) {
+            audioElRef.current.pause();
+          }
+        }
+        ttsStartedAudioRef.current = false;
+      };
+
+      utterance.onend = finishSpeech;
+      utterance.onerror = finishSpeech;
+
+      if (playTtsWithMusic && audioElRef.current && jingle.previewUrl) {
+        audioElRef.current.currentTime = 0;
+        audioElRef.current.volume = 0.3;
+        ttsStartedAudioRef.current = true;
+        void audioElRef.current.play().catch(() => {
+          ttsStartedAudioRef.current = false;
+        });
+      }
+
+      setIsSpeakingTts(true);
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setIsSpeakingTts(false);
+      ttsStartedAudioRef.current = false;
+      setTtsError(
+        locale === 'ms'
+          ? 'Sebutan suara pelayar tidak tersedia buat masa ini.'
+          : 'Browser voiceover is unavailable right now.'
+      );
+    }
   };
 
   const handleGenerateJingle = async () => {
@@ -197,7 +325,7 @@ export function JingleTab() {
     engineStatusVariant === 'live'
       ? t('tab3.statusLiveLyria')
       : engineStatusVariant === 'fallback'
-        ? t('tab3.statusLocalFallback')
+        ? `${t('tab3.statusLocalFallback')}${jingle.fallbackReason ? ` (${jingle.fallbackReason})` : ''}`
         : t('tab3.statusLocalSelected');
 
   const handleDownloadAudio = () => {
@@ -483,6 +611,67 @@ export function JingleTab() {
             {t('tab3.downloadAudioBtn')} (.{activeAudioExt})
           </span>
         </button>
+
+        <button
+          type="button"
+          data-testid="jingle-voiceover-btn"
+          disabled={!isSpeechSupported || !jingle.lyrics.trim()}
+          onClick={handleToggleVoiceover}
+          className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition cursor-pointer max-w-full min-w-0 disabled:opacity-45 disabled:cursor-not-allowed ${
+            isSpeakingTts
+              ? 'border-rose-500/60 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25'
+              : 'border-indigo-500/50 bg-indigo-500/15 text-indigo-200 hover:bg-indigo-500/25'
+          }`}
+        >
+          {isSpeakingTts ? (
+            <Square className="h-4 w-4 shrink-0" />
+          ) : (
+            <Mic className="h-4 w-4 shrink-0" />
+          )}
+          <span className="whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
+            {isSpeakingTts
+              ? locale === 'ms'
+                ? '⏹️ Hentikan Voiceover'
+                : '⏹️ Stop Voiceover'
+              : locale === 'ms'
+                ? '🎙️ Sebutan Iklan Pintar (Voiceover)'
+                : '🎙️ Smart Ad Voiceover (TTS)'}
+          </span>
+        </button>
+      </div>
+
+      {/* TTS Mix Toggle & Unsupported / Error Notice */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300 min-w-0">
+        <label className="inline-flex items-center gap-2 cursor-pointer min-w-0">
+          <input
+            type="checkbox"
+            data-testid="jingle-voiceover-mix-toggle"
+            checked={playTtsWithMusic}
+            disabled={!jingle.previewUrl || !isSpeechSupported}
+            onChange={(e) => setPlayTtsWithMusic(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-sky-500 focus:ring-sky-500 shrink-0 cursor-pointer disabled:opacity-40"
+          />
+          <span className="break-words">
+            {locale === 'ms'
+              ? 'Mainkan bersama muzik latar (volume muzik 30%)'
+              : 'Play over backing track (30% music volume)'}
+          </span>
+        </label>
+        {!isSpeechSupported ? (
+          <span
+            data-testid="jingle-tts-unsupported"
+            className="text-[11px] text-amber-300 break-words"
+          >
+            {locale === 'ms'
+              ? 'Pelayar ini tidak menyokong Web Speech API TTS.'
+              : 'Web Speech API TTS is not supported in this browser.'}
+          </span>
+        ) : null}
+        {ttsError ? (
+          <span role="status" className="text-[11px] text-amber-300 break-words">
+            {ttsError}
+          </span>
+        ) : null}
       </div>
 
       {/* Audio Preview Player — mounted ONLY after jingle.previewUrl is generated */}
@@ -510,6 +699,7 @@ export function JingleTab() {
             </div>
           </div>
           <audio
+            ref={audioElRef}
             data-testid="jingle-audio-player"
             controls
             preload="auto"

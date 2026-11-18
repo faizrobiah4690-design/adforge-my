@@ -214,7 +214,7 @@ export function VideoTab() {
       : engineStatusVariant === 'live-veo'
         ? t('tab4.statusLiveVeo')
         : engineStatusVariant === 'fallback'
-          ? t('tab4.statusLocalFallback')
+          ? `${t('tab4.statusLocalFallback')}${video.fallbackReason ? ` (${video.fallbackReason})` : ''}`
           : t('tab4.statusLocalSelected');
 
   return (
@@ -379,21 +379,39 @@ export function VideoTab() {
           {video.storyboardFrames.map((frame, idx) => {
             const idx1 = idx + 1;
             const photo = launchedPhotos[frame.photoIndex] ?? launchedPhotos[0];
+            const roleTag =
+              idx === 0
+                ? 'HOOK'
+                : idx === 1
+                  ? locale === 'ms'
+                    ? 'SOLUSI'
+                    : 'SOLUTION'
+                  : idx === 2
+                    ? locale === 'ms'
+                      ? 'BUKTI/NILAI'
+                      : 'VALUE/PROOF'
+                    : 'CTA';
+            const motionTag =
+              idx % 2 === 0 ? 'Ken Burns Zoom-In' : 'Spotlight Pan';
             return (
               <div
                 key={frame.id}
                 data-testid={`video-storyboard-frame-${idx1}`}
                 className="rounded-xl border border-slate-800 bg-[#0B0F19] p-3 space-y-2.5 min-w-0 flex flex-col"
               >
-                <div className="flex items-center justify-between gap-2 min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-1.5 min-w-0">
                   <span className="text-[11px] font-semibold text-sky-400">
-                    #{idx1} ({frame.startSec.toFixed(2)}s–{frame.endSec.toFixed(2)}s)
+                    #{idx1} {roleTag} ({frame.startSec.toFixed(2)}s–{frame.endSec.toFixed(2)}s)
                   </span>
                   <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300 shrink-0">
                     {locale === 'ms'
                       ? `Foto ${frame.photoIndex + 1}`
                       : `Photo ${frame.photoIndex + 1}`}
                   </span>
+                </div>
+
+                <div className="text-[10px] font-medium text-emerald-300/90">
+                  {motionTag}
                 </div>
 
                 <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950">

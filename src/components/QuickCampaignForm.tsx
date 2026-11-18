@@ -391,6 +391,27 @@ export function QuickCampaignForm() {
             className="w-full min-w-0 max-w-full rounded-lg border border-slate-700 bg-[#0B0F19] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none"
           />
 
+          <div className="mt-3 min-w-0">
+            <label
+              htmlFor="usp-audience-input"
+              className="block text-xs font-medium text-slate-400 mb-1"
+            >
+              {t('form.uspLabel')}
+            </label>
+            <input
+              id="usp-audience-input"
+              data-testid="usp-audience-input"
+              type="text"
+              value={input.uspAndAudience ?? ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                setInput((prev) => ({ ...prev, uspAndAudience: value }));
+              }}
+              placeholder={t('form.uspPlaceholder')}
+              className="w-full min-w-0 max-w-full rounded-lg border border-slate-700 bg-[#0B0F19] px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none"
+            />
+          </div>
+
           {formErrorMessage ? (
             <p
               role="alert"
@@ -421,7 +442,13 @@ export function QuickCampaignForm() {
                     type="button"
                     data-testid={`offer-preset-${preset.id}`}
                     onClick={() => {
-                      setInput((prev) => ({ ...prev, offerSentence: preset.offer }));
+                      setInput((prev) => ({
+                        ...prev,
+                        offerSentence: preset.offer,
+                        uspAndAudience: (prev.uspAndAudience ?? '').trim()
+                          ? prev.uspAndAudience
+                          : preset.uspHint,
+                      }));
                       setFormErrorCode(null);
                     }}
                     className="rounded-lg border border-slate-700/80 bg-[#0B0F19] px-2.5 py-1 text-[11px] font-medium text-sky-300 hover:border-sky-500/60 hover:bg-sky-500/10 transition cursor-pointer max-w-full whitespace-normal break-words text-left leading-tight"

@@ -51,6 +51,65 @@ export function sliceSafeUtf16(text: string, maxUnits: number): string {
   return out;
 }
 
+const DANGLING_TRAILING_WORDS_RX =
+  /(?:\b(?:di|ke|dari|dan|atau|serta|untuk|dengan|pada|dalam|yang|tanpa|edisi|kolaborasi|rasa|itu|x)|(?:^|\s)×)$/i;
+
+const TIME_OR_UNIT_NOUN_RX =
+  /\b(?:hari|minggu|bulan|tahun|kali|edisi|batch)$/i;
+
+const TRAILING_TRUNCATION_PUNCT_RX = /[\s,.;:!?—–\-•|/(&+]+$/g;
+
+/**
+ * Truncates text at a safe UTF-16 and word boundary without cutting words mid-character
+ * or leaving trailing punctuation/dangling connectors.
+ */
+export function truncateAtWordBoundary(text: string, maxLen: number): string {
+  const normalized = stripLoneSurrogates(text).replace(/\s+/g, ' ').trim();
+  if (!normalized || maxLen <= 0) {
+    return '';
+  }
+  if (normalized.length <= maxLen) {
+    return normalized;
+  }
+
+  const sliced = sliceSafeUtf16(normalized, maxLen);
+  const nextChar = normalized.slice(sliced.length, sliced.length + 1);
+
+  let cut = sliced;
+  const cutsMidWord = nextChar.length > 0 && !/[\s,.;:!?—–\-)(\]/]/.test(nextChar);
+  if (cutsMidWord) {
+    const lastSpace = sliced.lastIndexOf(' ');
+    if (lastSpace >= Math.floor(maxLen * 0.4)) {
+      cut = sliced.slice(0, lastSpace);
+    }
+  }
+
+  cut = cut.replace(TRAILING_TRUNCATION_PUNCT_RX, '').trim();
+
+  const minRetainedLen = Math.max(4, Math.floor(maxLen * 0.35));
+  let prev = '';
+  while (cut !== prev) {
+    prev = cut;
+    let stripped = cut
+      .replace(DANGLING_TRAILING_WORDS_RX, '')
+      .replace(TRAILING_TRUNCATION_PUNCT_RX, '')
+      .trim();
+
+    if (/\bini$/i.test(stripped)) {
+      const beforeIni = stripped.replace(/\bini$/i, '').trim();
+      if (!TIME_OR_UNIT_NOUN_RX.test(beforeIni)) {
+        stripped = beforeIni.replace(TRAILING_TRUNCATION_PUNCT_RX, '').trim();
+      }
+    }
+
+    if (stripped.length >= minRetainedLen) {
+      cut = stripped;
+    }
+  }
+
+  return cut || sliced.trimEnd();
+}
+
 /**
  * Normalizes Malaysian (01x, 03-09, +60, 60, +60 01x) and international (+65, 0065, +0065)
  * WhatsApp numbers into bare E.164-like digit strings without enforcing length bounds.

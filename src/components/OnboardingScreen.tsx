@@ -35,6 +35,7 @@ const LOCAL_COPY: Record<
     settingsTitle: string;
     settingsSubtitle: string;
     signInFirstHint: string;
+    builtInBadge: string;
   }
 > = {
   ms: {
@@ -52,16 +53,17 @@ const LOCAL_COPY: Record<
     steps: [
       '1. Buka Google AI Studio',
       '2. Klik Create API Key',
-      '3. Tampal kunci atau guna Mod Demo',
+      '3. Tampal kunci (atau guna AI Terbina Dalam terus)',
     ],
-    settingsTitle: 'Tetapan Akses & Kunci BYOK',
+    settingsTitle: 'Tetapan Enjin AI & Kunci BYOK',
     settingsSubtitle:
-      'Kemas kini kunci Google AI Studio atau tukar ke Mod Demo tanpa menetapkan semula kempen aktif anda.',
+      'Gunakan AI Terbina Dalam tanpa kunci API secara percuma, kemas kini kunci Google AI Studio (BYOK), atau tukar ke Mod Demo luar talian tanpa menetapkan semula kempen aktif anda.',
     signInFirstHint: 'Log masuk dengan Google terlebih dahulu untuk mengaktifkan akses BYOK atau Mod Demo.',
+    builtInBadge: 'AI Terbina Dalam Aktif',
   },
   en: {
     loginRequired: 'Please sign in with Google in Step 1 first before continuing.',
-    emptyKeyError: 'Please enter a Google AI Studio API key or choose Demo Mode.',
+    emptyKeyError: 'Please enter a Google AI Studio API key or choose Built-In AI / Demo Mode.',
     invalidKeyError:
       'Invalid API key format. Google AI Studio keys must be at least 12 characters.',
     showKey: 'Show key',
@@ -74,12 +76,13 @@ const LOCAL_COPY: Record<
     steps: [
       '1. Open Google AI Studio',
       '2. Click Create API Key',
-      '3. Paste your key or use Demo Mode',
+      '3. Paste key (or use Built-In AI directly)',
     ],
-    settingsTitle: 'Access & BYOK Key Settings',
+    settingsTitle: 'AI Engine & BYOK Key Settings',
     settingsSubtitle:
-      'Update your Google AI Studio key or switch to Demo Mode without resetting your active campaign.',
+      'Use Built-In Keyless AI out of the box, update your Google AI Studio key (BYOK), or switch to Offline Demo Mode without resetting your active campaign.',
     signInFirstHint: 'Sign in with Google first to enable BYOK save or Demo Mode.',
+    builtInBadge: 'Built-In AI Active',
   },
 };
 
@@ -92,9 +95,11 @@ export function OnboardingScreen() {
     freelancerEmail,
     byokKey,
     isDemoMode,
+    builtInAiActive,
     loginWithGoogle,
     logout,
     saveByokKey,
+    activateBuiltInAi,
     setActiveScreen,
   } = useWorkbench();
 
@@ -129,7 +134,7 @@ export function OnboardingScreen() {
   }, [freelancerEmail]);
 
   const hasByokKey = Boolean(byokKey.trim());
-  const isSettingsModal = isLoggedIn && (hasByokKey || isDemoMode);
+  const isSettingsModal = isLoggedIn && (builtInAiActive || hasByokKey || isDemoMode);
 
   const closeSettingsModal = useCallback(() => {
     const target = previousFocusRef.current;
@@ -245,6 +250,21 @@ export function OnboardingScreen() {
     }
   };
 
+  const handleUseBuiltInAi = () => {
+    if (!isLoggedIn) {
+      setByokErrorCode('login_required');
+      return;
+    }
+    setByokErrorCode(null);
+    setKeyDraft('');
+    activateBuiltInAi();
+    if (isSettingsModal) {
+      closeSettingsModal();
+    } else {
+      setActiveScreen('workbench');
+    }
+  };
+
   const handleToggleGuideVideo = async () => {
     const video = videoRef.current;
     if (!video) {
@@ -280,9 +300,18 @@ export function OnboardingScreen() {
             </span>
           ) : null}
           {!isDemoMode && hasByokKey ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300 max-w-full whitespace-normal break-words leading-tight">
               <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
               {copy.byokSavedBadge}
+            </span>
+          ) : null}
+          {!isDemoMode && !hasByokKey && builtInAiActive ? (
+            <span
+              data-testid="onboarding-builtin-badge"
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300 max-w-full whitespace-normal break-words leading-tight"
+            >
+              <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              {copy.builtInBadge}
             </span>
           ) : null}
         </div>
@@ -439,10 +468,19 @@ export function OnboardingScreen() {
 
             <div className="flex flex-col sm:flex-row lg:flex-col flex-wrap gap-2.5 pt-1 min-w-0">
               <button
+                type="button"
+                data-testid="use-builtin-ai-btn"
+                disabled={!isLoggedIn}
+                onClick={handleUseBuiltInAi}
+                className="inline-flex w-full sm:flex-1 lg:w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 text-center leading-snug whitespace-normal break-words [overflow-wrap:anywhere] hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+              >
+                <span>{t('onboarding.useBuiltInBtn')}</span>
+              </button>
+              <button
                 type="submit"
                 data-testid="byok-save-btn"
                 disabled={!isLoggedIn}
-                className="inline-flex w-full sm:flex-1 lg:w-full items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 text-center leading-snug whitespace-normal hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                className="inline-flex w-full sm:flex-1 lg:w-full items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 text-center leading-snug whitespace-normal break-words [overflow-wrap:anywhere] hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
               >
                 {t('onboarding.saveKeyBtn')}
               </button>
@@ -451,7 +489,7 @@ export function OnboardingScreen() {
                 data-testid="byok-demo-btn"
                 disabled={!isLoggedIn}
                 onClick={handleDemoEnter}
-                className="inline-flex w-full sm:flex-1 lg:w-full items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-sm font-medium text-slate-200 text-center leading-snug whitespace-normal hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                className="inline-flex w-full sm:flex-1 lg:w-full items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-sm font-medium text-slate-200 text-center leading-snug whitespace-normal break-words [overflow-wrap:anywhere] hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
               >
                 <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
                 <span>{t('onboarding.demoBtn')}</span>
@@ -459,12 +497,12 @@ export function OnboardingScreen() {
             </div>
           </form>
 
-          {isLoggedIn && (hasByokKey || isDemoMode) ? (
+          {isLoggedIn && (builtInAiActive || hasByokKey || isDemoMode) ? (
             <button
               type="button"
               data-testid="continue-workbench-btn"
               onClick={closeSettingsModal}
-              className="inline-flex w-full items-center justify-center rounded-lg border border-sky-500/40 bg-sky-500/15 px-4 py-2.5 text-sm font-semibold text-sky-300 hover:bg-sky-500/25 transition cursor-pointer"
+              className="inline-flex w-full items-center justify-center rounded-lg border border-sky-500/40 bg-sky-500/15 px-4 py-2.5 text-sm font-semibold text-sky-300 hover:bg-sky-500/25 transition cursor-pointer whitespace-normal break-words leading-snug text-center"
             >
               {t('onboarding.continueBtn')}
             </button>
