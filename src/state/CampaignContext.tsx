@@ -29,6 +29,15 @@ import {
   resolveVideoAudioBuffer,
 } from '../utils/audioExport';
 import { TOTAL_VIDEO_DURATION_SEC, exportVerticalVideo } from '../utils/videoExport';
+import {
+  buildLyriaJinglePrompt,
+  buildVideoStoryboardPrompt,
+  generateLyriaJingleWithInteractions,
+  generateVideoWithInteractions,
+  getDefaultMusicEngine,
+  getDefaultVideoEngine,
+  hasLiveApiAccess,
+} from '../utils/interactionsApi';
 import { rewriteWhatsappUrlPhone } from '../utils/whatsapp';
 import type {
   AngleId,
@@ -44,9 +53,11 @@ import type {
   EditedCopyByAngle,
   JingleErrorState,
   JingleState,
+  MusicEngineId,
   PhotoAsset,
   StoryboardFrame,
   StrategyEnhanceNoticeByAngle,
+  VideoEngineId,
   VideoStudioState,
   WorkspaceTabId,
 } from '../types/campaign';
@@ -120,16 +131,27 @@ function buildBaselineLyrics(brand: BrandProfile, offerSentence: string): string
   return buildJingleLyrics(brand.name, offerSentence);
 }
 
-function buildBaselineJingle(brand: BrandProfile, offerSentence: string): JingleState {
+function buildBaselineJingle(
+  brand: BrandProfile,
+  offerSentence: string,
+  engine: MusicEngineId = 'local'
+): JingleState {
   return {
     style: 'pop-ceria',
     generatedStyle: null,
+    engine,
+    engineEditedByUser: false,
+    generatedEngine: null,
     lyrics: buildBaselineLyrics(brand, offerSentence),
     lyricsEditedByUser: false,
     durationSec: 5.5,
     sampleRate: 48000,
     wavBlob: null,
     previewUrl: null,
+    audioMimeType: null,
+    audioExtension: null,
+    generationSource: null,
+    fallbackReason: null,
     source: 'fallback-preseeded',
     version: 0,
   };
@@ -190,11 +212,17 @@ function buildBaselineStoryboard(
 function buildBaselineVideoState(
   brand: BrandProfile,
   offerSentence: string,
-  lyrics: string
+  lyrics: string,
+  engine: VideoEngineId = 'local'
 ): VideoStudioState {
   return {
     storyboardFrames: buildBaselineStoryboard(brand, offerSentence, lyrics),
     isStoryboardConfirmed: false,
+    engine,
+    engineEditedByUser: false,
+    generatedEngine: null,
+    generationSource: null,
+    fallbackReason: null,
     status: 'awaiting-confirmation',
     videoBlob: null,
     videoUrl: null,
@@ -243,6 +271,28 @@ function safeRevokeBlobUrl(url: string | null): void {
   }
 }
 
+async function probeLiveAudioMetadata(
+  blob: Blob,
+  fallbackDurationSec: number
+): Promise<{ durationSec: number; sampleRate: number }> {
+  try {
+    if (typeof OfflineAudioContext !== 'undefined') {
+      const ctx = new OfflineAudioContext(2, 1, 48000);
+      const bytes = await blob.arrayBuffer();
+      const decoded = await ctx.decodeAudioData(bytes);
+      if (Number.isFinite(decoded.duration) && decoded.duration > 0) {
+        return {
+          durationSec: decoded.duration,
+          sampleRate: decoded.sampleRate || 48000,
+        };
+      }
+    }
+  } catch {
+    // Ignore decode failure in mock/jsdom environments
+  }
+  return { durationSec: fallbackDurationSec, sampleRate: 48000 };
+}
+
 const CampaignContext = createContext<CampaignContextValue | null>(null);
 
 export function CampaignProvider({ children }: { children: ReactNode }) {
@@ -278,13 +328,22 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   );
   const [safeZoneMode, setSafeZoneMode] = useState<AspectRatioMode>('9:16');
   const [jingle, setJingle] = useState<JingleState>(() =>
-    buildBaselineJingle(activeBrand, SAMPLE_OFFER_CHIP)
+    buildBaselineJingle(
+      activeBrand,
+      SAMPLE_OFFER_CHIP,
+      getDefaultMusicEngine(isDemoMode, byokKey)
+    )
   );
   const [isGeneratingJingle, setIsGeneratingJingle] = useState<boolean>(false);
   const [jingleError, setJingleError] = useState<JingleErrorState>(null);
   const [video, setVideo] = useState<VideoStudioState>(() => {
     const initialLyrics = buildBaselineLyrics(activeBrand, SAMPLE_OFFER_CHIP);
-    return buildBaselineVideoState(activeBrand, SAMPLE_OFFER_CHIP, initialLyrics);
+    return buildBaselineVideoState(
+      activeBrand,
+      SAMPLE_OFFER_CHIP,
+      initialLyrics,
+      getDefaultVideoEngine(isDemoMode, byokKey)
+    );
   });
   const [campaignLaunchEpoch, setCampaignLaunchEpoch] = useState<number>(0);
   const [launchedSnapshot, setLaunchedSnapshot] = useState<LaunchedSnapshot | null>(null);
@@ -319,8 +378,10 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const isProviderMountedRef = useRef<boolean>(true);
   const jingleGenSeqRef = useRef<number>(0);
   const isJingleGeneratingRef = useRef<boolean>(false);
+  const jingleAbortRef = useRef<AbortController | null>(null);
   const videoRenderSeqRef = useRef<number>(0);
   const isVideoRenderingRef = useRef<boolean>(false);
+  const videoAbortRef = useRef<AbortController | null>(null);
   const strategyEnhanceSeqRef = useRef<number>(0);
   const isEnhancingStrategyRef = useRef<boolean>(false);
   const isLoggedInRef = useRef<boolean>(isLoggedIn);
@@ -449,6 +510,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
     if (nameChanged || phoneChanged || themeChanged || logoChanged) {
       videoRenderSeqRef.current += 1;
+      videoAbortRef.current?.abort();
+      videoAbortRef.current = null;
       isVideoRenderingRef.current = false;
       const nextLyrics = buildBaselineLyrics(activeBrand, currentOffer);
       const effectiveLyrics = jingleRef.current.lyricsEditedByUser
@@ -508,8 +571,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     return () => {
       isProviderMountedRef.current = false;
       jingleGenSeqRef.current += 1;
+      jingleAbortRef.current?.abort();
+      jingleAbortRef.current = null;
       isJingleGeneratingRef.current = false;
       videoRenderSeqRef.current += 1;
+      videoAbortRef.current?.abort();
+      videoAbortRef.current = null;
       isVideoRenderingRef.current = false;
       strategyEnhanceSeqRef.current += 1;
       isEnhancingStrategyRef.current = false;
@@ -561,15 +628,83 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     isEnhancingStrategyRef.current = false;
     setIsEnhancingStrategy(false);
     setStrategyEnhanceNoticeByAngle({});
+
+    jingleGenSeqRef.current += 1;
+    jingleAbortRef.current?.abort();
+    jingleAbortRef.current = null;
+    isJingleGeneratingRef.current = false;
+    setIsGeneratingJingle(false);
+
+    videoRenderSeqRef.current += 1;
+    videoAbortRef.current?.abort();
+    videoAbortRef.current = null;
+    isVideoRenderingRef.current = false;
+
+    const liveAccess = hasLiveApiAccess(isDemoMode, byokKey);
+    const defaultMusicEngine = getDefaultMusicEngine(isDemoMode, byokKey);
+    const defaultVideoEngine = getDefaultVideoEngine(isDemoMode, byokKey);
+
+    setJingle((prevJingle) => {
+      if (!liveAccess) {
+        if (prevJingle.engine === 'local' && !prevJingle.engineEditedByUser) {
+          return prevJingle;
+        }
+        return {
+          ...prevJingle,
+          engine: 'local',
+          engineEditedByUser: false,
+        };
+      }
+      if (!prevJingle.engineEditedByUser && prevJingle.engine !== defaultMusicEngine) {
+        return {
+          ...prevJingle,
+          engine: defaultMusicEngine,
+        };
+      }
+      return prevJingle;
+    });
+
+    setVideo((prevVideo) => {
+      const resetRendering = prevVideo.status === 'rendering';
+      if (!liveAccess) {
+        if (
+          !resetRendering &&
+          prevVideo.engine === 'local' &&
+          !prevVideo.engineEditedByUser
+        ) {
+          return prevVideo;
+        }
+        return {
+          ...prevVideo,
+          engine: 'local',
+          engineEditedByUser: false,
+          ...(resetRendering ? { status: 'awaiting-confirmation' as const } : {}),
+        };
+      }
+      if (!prevVideo.engineEditedByUser && prevVideo.engine !== defaultVideoEngine) {
+        return {
+          ...prevVideo,
+          engine: defaultVideoEngine,
+          ...(resetRendering ? { status: 'awaiting-confirmation' as const } : {}),
+        };
+      }
+      return resetRendering
+        ? { ...prevVideo, status: 'awaiting-confirmation' as const }
+        : prevVideo;
+    });
   }, [isLoggedIn, byokKey, isDemoMode]);
 
   const launchCampaign = useCallback(
     (overrideInput?: Partial<CampaignInput>) => {
       jingleGenSeqRef.current += 1;
+      jingleAbortRef.current?.abort();
+      jingleAbortRef.current = null;
       isJingleGeneratingRef.current = false;
       setIsGeneratingJingle(false);
       setJingleError(null);
       videoRenderSeqRef.current += 1;
+      videoAbortRef.current?.abort();
+      videoAbortRef.current = null;
       isVideoRenderingRef.current = false;
       strategyEnhanceSeqRef.current += 1;
       isEnhancingStrategyRef.current = false;
@@ -617,11 +752,30 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       setInputState(nextInput);
       setCampaignLaunchEpoch((prev) => prev + 1);
 
-      const nextJingle = buildBaselineJingle(resolvedBrand, resolvedOffer);
+      const defaultMusicEngine = getDefaultMusicEngine(
+        isDemoModeRef.current,
+        byokKeyRef.current
+      );
+      const defaultVideoEngine = getDefaultVideoEngine(
+        isDemoModeRef.current,
+        byokKeyRef.current
+      );
+      const nextJingle = buildBaselineJingle(
+        resolvedBrand,
+        resolvedOffer,
+        defaultMusicEngine
+      );
       setEditedCopyByAngle(generateCampaignCopyMap(resolvedBrand, resolvedOffer));
       setSlides(buildBaselineSlides(resolvedBrand, resolvedOffer));
       setJingle(nextJingle);
-      setVideo(buildBaselineVideoState(resolvedBrand, resolvedOffer, nextJingle.lyrics));
+      setVideo(
+        buildBaselineVideoState(
+          resolvedBrand,
+          resolvedOffer,
+          nextJingle.lyrics,
+          defaultVideoEngine
+        )
+      );
       setActiveTab('strategy');
     },
     [activeBrand, activeBrandId, brands, getBrandById, selectBrand]
@@ -767,13 +921,95 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     const epochAtStart = campaignLaunchEpochRef.current;
     const activeStyle = currentJingle.style;
     const prevUrl = currentJingle.previewUrl;
+    const demoAtStart = isDemoModeRef.current;
+    const keyAtStart = byokKeyRef.current;
+    const brandSnapshot = launchedBrandRef.current;
+    const offerSnapshot = launchedOfferRef.current;
+    const liveAccessAtStart = hasLiveApiAccess(demoAtStart, keyAtStart);
+    const requestedEngine: MusicEngineId = liveAccessAtStart
+      ? (currentJingle.engine ?? 'lyria-3-clip-preview')
+      : 'local';
+    const shouldCallLiveApi = liveAccessAtStart && requestedEngine !== 'local';
+
+    jingleAbortRef.current?.abort();
+    const controller = new AbortController();
+    jingleAbortRef.current = controller;
 
     const isStale = () =>
       !isProviderMountedRef.current ||
       jingleGenSeqRef.current !== reqSeq ||
-      campaignLaunchEpochRef.current !== epochAtStart;
+      campaignLaunchEpochRef.current !== epochAtStart ||
+      (shouldCallLiveApi &&
+        (isDemoModeRef.current !== demoAtStart ||
+          byokKeyRef.current !== keyAtStart ||
+          !isLoggedInRef.current));
 
     try {
+      let fallbackReason: string | null = null;
+
+      if (shouldCallLiveApi) {
+        const prompt = buildLyriaJinglePrompt({
+          brand: brandSnapshot,
+          offerSentence: offerSnapshot,
+          style: activeStyle,
+          lyrics: currentJingle.lyrics,
+        });
+
+        const apiResult = await generateLyriaJingleWithInteractions({
+          apiKey: keyAtStart,
+          isDemoMode: demoAtStart,
+          model: requestedEngine,
+          input: prompt,
+          signal: controller.signal,
+        });
+
+        if (isStale()) {
+          return;
+        }
+
+        if (apiResult.ok) {
+          const meta = await probeLiveAudioMetadata(
+            apiResult.blob,
+            JINGLE_DURATION_SEC
+          );
+
+          if (isStale()) {
+            return;
+          }
+
+          const previewUrl = URL.createObjectURL(apiResult.blob);
+          if (isStale()) {
+            safeRevokeBlobUrl(previewUrl);
+            return;
+          }
+
+          setJingle((prev) => ({
+            ...prev,
+            generatedStyle: activeStyle,
+            generatedEngine: requestedEngine,
+            wavBlob: apiResult.blob,
+            previewUrl,
+            durationSec: meta.durationSec,
+            sampleRate: meta.sampleRate,
+            audioMimeType: apiResult.mimeType,
+            audioExtension: apiResult.fileExtension,
+            generationSource: 'lyria-api',
+            fallbackReason: null,
+            source: 'tab3-generated',
+            version: (prev.version ?? 0) + 1,
+          }));
+
+          if (prevUrl && prevUrl !== previewUrl && prevUrl.startsWith('blob:')) {
+            window.setTimeout(() => {
+              safeRevokeBlobUrl(prevUrl);
+            }, 1000);
+          }
+          return;
+        }
+
+        fallbackReason = apiResult.reason;
+      }
+
       const result = await generateJingleAudio(activeStyle, JINGLE_DURATION_SEC);
 
       if (isStale()) {
@@ -784,10 +1020,15 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       setJingle((prev) => ({
         ...prev,
         generatedStyle: activeStyle,
+        generatedEngine: 'local',
         wavBlob: result.wavBlob,
         previewUrl: result.previewUrl,
         durationSec: result.durationSec,
         sampleRate: result.sampleRate,
+        audioMimeType: 'audio/wav',
+        audioExtension: 'wav',
+        generationSource: fallbackReason ? 'local-fallback' : 'local-synth',
+        fallbackReason,
         source: 'tab3-generated',
         version: (prev.version ?? 0) + 1,
       }));
@@ -804,6 +1045,9 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       const detail = err instanceof Error ? err.message : undefined;
       setJingleError({ code: 'synth_failed', detail });
     } finally {
+      if (jingleAbortRef.current === controller) {
+        jingleAbortRef.current = null;
+      }
       if (jingleGenSeqRef.current === reqSeq) {
         isJingleGeneratingRef.current = false;
         if (isProviderMountedRef.current) {
@@ -827,17 +1071,34 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     isVideoRenderingRef.current = true;
     const epochAtStart = campaignLaunchEpochRef.current;
     const brandSnapshot = launchedBrandRef.current;
+    const offerSnapshot = launchedOfferRef.current;
     const brandKeyAtStart = launchedBrandVisualKeyRef.current;
     const photosSnapshot = launchedPhotosRef.current;
     const jingleSnapshot = jingleRef.current;
     const framesSnapshot = currentVideo.storyboardFrames;
     const prevUrl = currentVideo.videoUrl;
+    const demoAtStart = isDemoModeRef.current;
+    const keyAtStart = byokKeyRef.current;
+    const liveAccessAtStart = hasLiveApiAccess(demoAtStart, keyAtStart);
+    const requestedEngine: VideoEngineId = liveAccessAtStart
+      ? (currentVideo.engine ?? 'gemini-omni-1.2-flash')
+      : 'local';
+    const shouldCallLiveApi = liveAccessAtStart && requestedEngine !== 'local';
+
+    videoAbortRef.current?.abort();
+    const controller = new AbortController();
+    videoAbortRef.current = controller;
 
     const isStale = () =>
       !isProviderMountedRef.current ||
       videoRenderSeqRef.current !== reqSeq ||
       campaignLaunchEpochRef.current !== epochAtStart ||
-      launchedBrandVisualKeyRef.current !== brandKeyAtStart;
+      launchedBrandVisualKeyRef.current !== brandKeyAtStart ||
+      !videoRef.current.isStoryboardConfirmed ||
+      (shouldCallLiveApi &&
+        (isDemoModeRef.current !== demoAtStart ||
+          byokKeyRef.current !== keyAtStart ||
+          !isLoggedInRef.current));
 
     setVideo((prev) => ({
       ...prev,
@@ -847,6 +1108,66 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     }));
 
     try {
+      let fallbackReason: string | null = null;
+
+      if (shouldCallLiveApi) {
+        const prompt = buildVideoStoryboardPrompt({
+          brand: brandSnapshot,
+          offerSentence: offerSnapshot,
+          jingleStyle: jingleSnapshot.style,
+          frames: framesSnapshot,
+        });
+
+        const apiResult = await generateVideoWithInteractions({
+          apiKey: keyAtStart,
+          isDemoMode: demoAtStart,
+          model: requestedEngine,
+          input: prompt,
+          signal: controller.signal,
+        });
+
+        if (isStale()) {
+          return;
+        }
+
+        if (apiResult.ok) {
+          const nextUrl = URL.createObjectURL(apiResult.blob);
+          if (isStale()) {
+            safeRevokeBlobUrl(nextUrl);
+            return;
+          }
+
+          setVideo((prev) => ({
+            ...prev,
+            status: 'ready',
+            generatedEngine: requestedEngine,
+            generationSource:
+              requestedEngine === 'gemini-omni-1.2-flash' ? 'omni-api' : 'veo-api',
+            fallbackReason: null,
+            videoBlob: apiResult.blob,
+            videoUrl: nextUrl,
+            mimeType: apiResult.mimeType,
+            fileExtension: apiResult.fileExtension,
+            durationSec: 6.0,
+            width: 720,
+            height: 1280,
+            audioSourceUsed: 'native-ai',
+            jingleVersionUsed: null,
+            errorMessage: null,
+            errorDetail: null,
+          }));
+
+          if (prevUrl && prevUrl !== nextUrl && prevUrl.startsWith('blob:')) {
+            window.setTimeout(() => {
+              safeRevokeBlobUrl(prevUrl);
+            }, 1000);
+          }
+          return;
+        }
+
+        fallbackReason = apiResult.reason;
+      }
+
       const { audioBuffer, audioSourceUsed } =
         await resolveVideoAudioBuffer(jingleSnapshot);
 
@@ -876,6 +1197,9 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       setVideo((prev) => ({
         ...prev,
         status: 'ready',
+        generatedEngine: 'local',
+        generationSource: fallbackReason ? 'local-fallback' : 'local-muxer',
+        fallbackReason,
         videoBlob: exported.blob,
         videoUrl: nextUrl,
         mimeType: exported.mimeType,
@@ -907,6 +1231,9 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         errorMessage: detail || 'Render failed',
       }));
     } finally {
+      if (videoAbortRef.current === controller) {
+        videoAbortRef.current = null;
+      }
       if (videoRenderSeqRef.current === reqSeq) {
         isVideoRenderingRef.current = false;
       }

@@ -1,6 +1,7 @@
 import {
   AlertCircle,
   CheckSquare,
+  Cpu,
   Download,
   Film,
   Loader2,
@@ -11,11 +12,52 @@ import {
 } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
 import { useCampaign } from '../../state/CampaignContext';
+import { useWorkbench } from '../../state/WorkbenchContext';
+import type { VideoEngineId } from '../../types/campaign';
+import { hasLiveApiAccess } from '../../utils/interactionsApi';
 import {
   TOTAL_VIDEO_DURATION_SEC,
   VIDEO_HEIGHT,
   VIDEO_WIDTH,
 } from '../../utils/videoExport';
+
+interface VideoEngineOption {
+  id: VideoEngineId;
+  testId: string;
+  labelKey: string;
+  descKey: string;
+  badgeKey?: string;
+  tag: string;
+  requiresLiveApi: boolean;
+}
+
+const VIDEO_ENGINE_OPTIONS: VideoEngineOption[] = [
+  {
+    id: 'gemini-omni-1.2-flash',
+    testId: 'video-engine-gemini-omni-1-2-flash',
+    labelKey: 'tab4.engineOmni',
+    descKey: 'tab4.engineOmniDesc',
+    badgeKey: 'tab4.engineOmniBadge',
+    tag: 'API',
+    requiresLiveApi: true,
+  },
+  {
+    id: 'veo-3.1-generate-preview',
+    testId: 'video-engine-veo-3-1-generate-preview',
+    labelKey: 'tab4.engineVeo',
+    descKey: 'tab4.engineVeoDesc',
+    tag: 'API',
+    requiresLiveApi: true,
+  },
+  {
+    id: 'local',
+    testId: 'video-engine-local',
+    labelKey: 'tab4.engineLocal',
+    descKey: 'tab4.engineLocalDesc',
+    tag: 'RM0',
+    requiresLiveApi: false,
+  },
+];
 
 function slugifyFilename(name: string): string {
   return (
@@ -28,6 +70,7 @@ function slugifyFilename(name: string): string {
 
 export function VideoTab() {
   const { locale, t } = useI18n();
+  const { byokKey, isDemoMode } = useWorkbench();
   const {
     launchedBrand,
     launchedPhotos,
@@ -37,7 +80,14 @@ export function VideoTab() {
     generateVideo,
   } = useCampaign();
 
+  const liveApiReady = hasLiveApiAccess(isDemoMode, byokKey);
+  const activeEngine: VideoEngineId = liveApiReady
+    ? (video.engine ?? 'gemini-omni-1.2-flash')
+    : 'local';
+
   const hasTab3Jingle = jingle.source === 'tab3-generated' && jingle.wavBlob !== null;
+  const usingNativeAiAudio =
+    video.status === 'ready' && video.audioSourceUsed === 'native-ai';
   const usingTab3Audio =
     video.status === 'ready' && video.audioSourceUsed !== null
       ? video.audioSourceUsed === 'tab3-jingle'
@@ -48,6 +98,16 @@ export function VideoTab() {
     (video.audioSourceUsed === 'fallback-preseeded' ||
       (video.audioSourceUsed === 'tab3-jingle' &&
         (jingle.version ?? 0) !== (video.jingleVersionUsed ?? 0)));
+
+  const handleEngineSelect = (engineId: VideoEngineId) => {
+    if (video.status === 'rendering') return;
+    if (engineId !== 'local' && !liveApiReady) return;
+    setVideo((prev) => ({
+      ...prev,
+      engine: engineId,
+      engineEditedByUser: true,
+    }));
+  };
 
   const handleFrameFieldChange = (
     frameIndex: number,
@@ -139,6 +199,24 @@ export function VideoTab() {
         })()
       : null;
 
+  const engineStatusVariant =
+    video.status === 'ready' && video.generationSource === 'omni-api'
+      ? 'live-omni'
+      : video.status === 'ready' && video.generationSource === 'veo-api'
+        ? 'live-veo'
+        : video.generationSource === 'local-fallback'
+          ? 'fallback'
+          : 'local';
+
+  const engineStatusText =
+    engineStatusVariant === 'live-omni'
+      ? t('tab4.statusLiveOmni')
+      : engineStatusVariant === 'live-veo'
+        ? t('tab4.statusLiveVeo')
+        : engineStatusVariant === 'fallback'
+          ? t('tab4.statusLocalFallback')
+          : t('tab4.statusLocalSelected');
+
   return (
     <div
       data-testid="video-tab"
@@ -159,37 +237,129 @@ export function VideoTab() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 min-w-0">
-          <span className="rounded-full border border-slate-700 bg-[#0B0F19] px-2.5 py-1 text-xs text-slate-300">
-            {t('tab4.durationCapBadge')}
+        <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+          <span className="inline-flex items-center rounded-xl border border-slate-700 bg-[#0B0F19] px-2.5 py-1 text-xs text-slate-300 max-w-full min-w-0">
+            <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
+              {t('tab4.durationCapBadge')}
+            </span>
           </span>
           <span
             data-testid="video-audio-source-badge"
-            className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-medium max-w-full ${
-              usingTab3Audio
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-medium max-w-full min-w-0 ${
+              usingNativeAiAudio || usingTab3Audio
                 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
                 : 'border-amber-500/40 bg-amber-500/10 text-amber-200'
             }`}
           >
             <Music className="h-3.5 w-3.5 shrink-0" />
-            <span className="whitespace-normal break-words leading-snug">
+            <span className="min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
               {t('tab4.audioSourceLabel')}:{' '}
-              {usingTab3Audio
-                ? t('tab4.audioSourceTab3')
-                : t('tab4.audioSourceFallback')}
+              {usingNativeAiAudio
+                ? t('tab4.audioSourceNativeAi')
+                : usingTab3Audio
+                  ? t('tab4.audioSourceTab3')
+                  : t('tab4.audioSourceFallback')}
+            </span>
+          </span>
+          <span
+            data-testid="video-engine-status-badge"
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-medium max-w-full min-w-0 ${
+              engineStatusVariant === 'live-omni' || engineStatusVariant === 'live-veo'
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                : engineStatusVariant === 'fallback'
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                  : 'border-slate-700 bg-[#0B0F19] text-slate-300'
+            }`}
+          >
+            <Cpu className="h-3.5 w-3.5 shrink-0" />
+            <span className="min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
+              {engineStatusText}
             </span>
           </span>
           {hasPendingTab3Update ? (
             <span
               data-testid="video-pending-tab3-notice"
-              className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-200"
+              className="inline-flex items-center rounded-xl border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-200 max-w-full min-w-0"
             >
-              {locale === 'ms'
-                ? 'Jingle Tab 3 baharu sedia — jana semula video untuk gunakan'
-                : 'New Tab 3 jingle ready — re-render video to apply'}
+              <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
+                {locale === 'ms'
+                  ? 'Jingle Tab 3 baharu sedia — jana semula video untuk gunakan'
+                  : 'New Tab 3 jingle ready — re-render video to apply'}
+              </span>
             </span>
           ) : null}
         </div>
+      </div>
+
+      {/* AI Video Engine Selector */}
+      <div data-testid="video-engine-selector" className="space-y-2 min-w-0">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-300 break-words">
+          {t('tab4.engineLabel')}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 min-w-0">
+          {VIDEO_ENGINE_OPTIONS.map((opt) => {
+            const isSelected = activeEngine === opt.id;
+            const isDisabled = isRendering || (opt.requiresLiveApi && !liveApiReady);
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                data-testid={opt.testId}
+                data-model={opt.id}
+                aria-pressed={isSelected}
+                data-active={isSelected ? 'true' : 'false'}
+                disabled={isDisabled}
+                onClick={() => handleEngineSelect(opt.id)}
+                className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed min-w-0 max-w-full ${
+                  isSelected
+                    ? 'border-sky-500 bg-sky-500/15 text-sky-100 ring-1 ring-sky-500/40'
+                    : 'border-slate-800 bg-[#0B0F19] text-slate-300 hover:border-slate-700 hover:text-slate-100'
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-1.5 w-full min-w-0">
+                  <span className="min-w-0 flex-1 text-xs sm:text-sm font-semibold whitespace-normal break-words [overflow-wrap:anywhere] leading-snug text-left">
+                    {t(opt.labelKey)}
+                    {opt.requiresLiveApi ? (
+                      <span
+                        aria-hidden="true"
+                        className="ml-1 font-mono text-[11px] font-normal text-slate-400"
+                      >
+                        ({opt.id})
+                      </span>
+                    ) : null}
+                  </span>
+                  <div className="flex flex-wrap items-center gap-1 shrink-0 max-w-full">
+                    {opt.badgeKey && liveApiReady ? (
+                      <span className="rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300 max-w-full whitespace-normal">
+                        {t(opt.badgeKey)}
+                      </span>
+                    ) : null}
+                    <span
+                      className={`rounded-md px-1.5 py-0.5 text-[10px] font-mono shrink-0 max-w-full whitespace-normal ${
+                        isSelected
+                          ? 'bg-sky-500/30 text-sky-200'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {opt.tag}
+                    </span>
+                  </div>
+                </div>
+                <span className="w-full min-w-0 text-[11px] text-slate-400 leading-snug whitespace-normal break-words [overflow-wrap:anywhere]">
+                  {t(opt.descKey)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {!liveApiReady ? (
+          <p
+            data-testid="video-engine-demo-note"
+            className="text-[11px] text-amber-200/90 break-words [overflow-wrap:anywhere] leading-snug"
+          >
+            {t('tab4.engineDemoNote')}
+          </p>
+        ) : null}
       </div>
 
       {/* Storyboard Section */}
@@ -319,14 +489,14 @@ export function VideoTab() {
             onClick={() => {
               void handleGenerateVideo();
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-400 disabled:opacity-45 disabled:cursor-not-allowed transition cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-400 disabled:opacity-45 disabled:cursor-not-allowed transition cursor-pointer max-w-full min-w-0"
           >
             {isRendering ? (
               <Loader2 className="h-4 w-4 animate-spin shrink-0" />
             ) : (
               <Sparkles className="h-4 w-4 shrink-0" />
             )}
-            <span>
+            <span className="whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
               {isRendering ? t('tab4.generatingBtn') : t('tab4.generateVideoBtn')}
             </span>
           </button>
@@ -336,10 +506,13 @@ export function VideoTab() {
             data-testid="video-download-btn"
             disabled={!canDownload}
             onClick={handleDownloadVideo}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-[#111827] px-4 py-2.5 text-sm font-semibold text-slate-200 hover:border-sky-500 hover:text-sky-200 disabled:opacity-45 disabled:cursor-not-allowed transition cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-[#111827] px-4 py-2.5 text-sm font-semibold text-slate-200 hover:border-sky-500 hover:text-sky-200 disabled:opacity-45 disabled:cursor-not-allowed transition cursor-pointer max-w-full min-w-0"
           >
             <Download className="h-4 w-4 shrink-0" />
-            <span>{t('tab4.downloadVideoBtn')}</span>
+            <span className="whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
+              {t('tab4.downloadVideoBtn')}
+              {video.fileExtension ? ` (.${video.fileExtension})` : ''}
+            </span>
           </button>
         </div>
       </div>

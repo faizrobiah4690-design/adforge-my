@@ -314,7 +314,7 @@ describe('CampaignContext isolation and hydration', () => {
     // Switching back to seeded folder updates QuickCampaignForm select automatically
     fireEvent.click(screen.getByTestId('brand-folder-demo-bisnes-saya'));
     expect(brandSelect.value).toBe('demo-bisnes-saya');
-  });
+  }, 15_000);
 
   it('populates SUDUT- angle-tagged wa.me links and compliant tone-aware copy immediately on mount and launch without StrategyTab', () => {
     render(

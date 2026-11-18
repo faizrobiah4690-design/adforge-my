@@ -104,6 +104,9 @@ export const TEST_IDS = {
 
   // A6: Tab 3 — Jingle Studio
   tabPanelJingle: 'tab-panel-jingle',
+  jingleEngineSelector: 'jingle-engine-selector',
+  jingleEngineStatusBadge: 'jingle-engine-status-badge',
+  jingleEngineDemoNote: 'jingle-engine-demo-note',
   jingleLyricsInput: 'jingle-lyrics-input',
   jingleGenerateBtn: 'jingle-generate-btn',
   jingleAudioPlayer: 'jingle-audio-player',
@@ -112,6 +115,9 @@ export const TEST_IDS = {
 
   // A7: Tab 4 — Staged Video Ad Studio
   tabPanelVideo: 'tab-panel-video',
+  videoEngineSelector: 'video-engine-selector',
+  videoEngineStatusBadge: 'video-engine-status-badge',
+  videoEngineDemoNote: 'video-engine-demo-note',
   videoConfirmCheckbox: 'video-confirm-checkbox',
   videoConfirmBtn: 'video-confirm-btn',
   videoGenerateBtn: 'video-generate-btn',
@@ -664,6 +670,15 @@ export function appLocators(page: Page) {
 
   const tab3 = {
     root: tab3Root,
+    engineSelector: tab3Root.getByTestId(TEST_IDS.jingleEngineSelector),
+    engineBtn: (engineId: 'lyria-3-clip-preview' | 'lyria-3.5' | 'local'): Locator =>
+      tab3Root.getByTestId(
+        engineId === 'lyria-3.5'
+          ? 'jingle-engine-lyria-3-5'
+          : `jingle-engine-${engineId}`
+      ),
+    engineStatusBadge: tab3Root.getByTestId(TEST_IDS.jingleEngineStatusBadge),
+    engineDemoNote: tab3Root.getByTestId(TEST_IDS.jingleEngineDemoNote),
     lyricsInput: tab3Root
       .getByTestId(TEST_IDS.jingleLyricsInput)
       .or(tab3Root.locator('textarea'))
@@ -700,6 +715,19 @@ export function appLocators(page: Page) {
 
   const tab4 = {
     root: tab4Root,
+    engineSelector: tab4Root.getByTestId(TEST_IDS.videoEngineSelector),
+    engineBtn: (
+      engineId: 'gemini-omni-1.2-flash' | 'veo-3.1-generate-preview' | 'local'
+    ): Locator => {
+      const idMap = {
+        'gemini-omni-1.2-flash': 'video-engine-gemini-omni-1-2-flash',
+        'veo-3.1-generate-preview': 'video-engine-veo-3-1-generate-preview',
+        local: 'video-engine-local',
+      } as const;
+      return tab4Root.getByTestId(idMap[engineId]);
+    },
+    engineStatusBadge: tab4Root.getByTestId(TEST_IDS.videoEngineStatusBadge),
+    engineDemoNote: tab4Root.getByTestId(TEST_IDS.videoEngineDemoNote),
     frameCard: (index1Based: number): Locator =>
       tab4Root.getByTestId(`video-storyboard-frame-${index1Based}`),
     frameInput: (index1Based: number): Locator => {

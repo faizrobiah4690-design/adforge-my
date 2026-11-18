@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  Cpu,
   Download,
   Loader2,
   Music,
@@ -9,8 +10,46 @@ import {
 } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext';
 import { useCampaign } from '../../state/CampaignContext';
-import type { JingleStyleId } from '../../types/campaign';
+import { useWorkbench } from '../../state/WorkbenchContext';
+import type { JingleStyleId, MusicEngineId } from '../../types/campaign';
 import { buildJingleLyrics } from '../../utils/audioExport';
+import { hasLiveApiAccess } from '../../utils/interactionsApi';
+
+interface EngineOption {
+  id: MusicEngineId;
+  testId: string;
+  labelKey: string;
+  descKey: string;
+  tag: string;
+  requiresLiveApi: boolean;
+}
+
+const ENGINE_OPTIONS: EngineOption[] = [
+  {
+    id: 'lyria-3-clip-preview',
+    testId: 'jingle-engine-lyria-3-clip-preview',
+    labelKey: 'tab3.engineLyriaClip',
+    descKey: 'tab3.engineLyriaClipDesc',
+    tag: 'API',
+    requiresLiveApi: true,
+  },
+  {
+    id: 'lyria-3.5',
+    testId: 'jingle-engine-lyria-3-5',
+    labelKey: 'tab3.engineLyria35',
+    descKey: 'tab3.engineLyria35Desc',
+    tag: 'API',
+    requiresLiveApi: true,
+  },
+  {
+    id: 'local',
+    testId: 'jingle-engine-local',
+    labelKey: 'tab3.engineLocal',
+    descKey: 'tab3.engineLocalDesc',
+    tag: 'RM0',
+    requiresLiveApi: false,
+  },
+];
 
 interface StyleOption {
   id: JingleStyleId;
@@ -55,6 +94,7 @@ function slugifyFilename(name: string): string {
 
 export function JingleTab() {
   const { locale, t } = useI18n();
+  const { byokKey, isDemoMode } = useWorkbench();
   const {
     launchedBrand,
     launchedOfferSentence,
@@ -66,6 +106,10 @@ export function JingleTab() {
     generateJingle,
   } = useCampaign();
 
+  const liveApiReady = hasLiveApiAccess(isDemoMode, byokKey);
+  const activeEngine: MusicEngineId = liveApiReady
+    ? (jingle.engine ?? 'lyria-3-clip-preview')
+    : 'local';
   const isGenerating = isGeneratingJingle;
   const errorState = jingleError;
 
@@ -79,6 +123,17 @@ export function JingleTab() {
         : locale === 'ms'
           ? `Gagal mensintesis audio jingle${errorState.detail ? `: ${errorState.detail}` : '.'}`
           : `Failed to synthesize jingle audio${errorState.detail ? `: ${errorState.detail}` : '.'}`;
+
+  const handleEngineSelect = (engineId: MusicEngineId) => {
+    if (isGenerating) return;
+    if (engineId !== 'local' && !liveApiReady) return;
+    clearJingleError();
+    setJingle((prev) => ({
+      ...prev,
+      engine: engineId,
+      engineEditedByUser: true,
+    }));
+  };
 
   const handleStyleSelect = (styleId: JingleStyleId) => {
     if (isGenerating) return;
@@ -115,18 +170,37 @@ export function JingleTab() {
   };
 
   const displayedStyle = jingle.generatedStyle ?? jingle.style;
+  const activeAudioExt = jingle.audioExtension ?? 'wav';
+  const audioFormatTag =
+    activeAudioExt === 'wav'
+      ? `${(jingle.sampleRate / 1000).toFixed(0)}kHz WAV`
+      : activeAudioExt.toUpperCase();
   const hasStaleStyle =
     jingle.source === 'tab3-generated' &&
     jingle.wavBlob !== null &&
     Boolean(jingle.generatedStyle) &&
     jingle.generatedStyle !== jingle.style;
 
-  const handleDownloadWav = () => {
+  const engineStatusVariant =
+    jingle.generationSource === 'lyria-api'
+      ? 'live'
+      : jingle.generationSource === 'local-fallback'
+        ? 'fallback'
+        : 'local';
+
+  const engineStatusText =
+    engineStatusVariant === 'live'
+      ? t('tab3.statusLiveLyria')
+      : engineStatusVariant === 'fallback'
+        ? t('tab3.statusLocalFallback')
+        : t('tab3.statusLocalSelected');
+
+  const handleDownloadAudio = () => {
     if (!jingle.wavBlob) return;
     const tempUrl = URL.createObjectURL(jingle.wavBlob);
     const link = document.createElement('a');
     link.href = tempUrl;
-    link.download = `jingle-${slugifyFilename(launchedBrand.name)}-${displayedStyle}.wav`;
+    link.download = `jingle-${slugifyFilename(launchedBrand.name)}-${displayedStyle}.${activeAudioExt}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -153,24 +227,43 @@ export function JingleTab() {
           <p className="text-xs text-slate-400 break-words">{t('tab3.subtitle')}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 min-w-0">
-          <span className="rounded-full border border-slate-700 bg-[#0B0F19] px-2.5 py-1 text-xs text-slate-300">
-            {t('tab3.durationBadge')}
+        <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
+          <span className="inline-flex items-center rounded-xl border border-slate-700 bg-[#0B0F19] px-2.5 py-1 text-xs text-slate-300 max-w-full min-w-0">
+            <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
+              {t('tab3.durationBadge')}
+            </span>
           </span>
           <span
-            className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+            className={`inline-flex items-center rounded-xl border px-2.5 py-1 text-xs font-medium max-w-full min-w-0 ${
               jingle.source === 'tab3-generated' && jingle.wavBlob
                 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
                 : 'border-slate-700 bg-[#0B0F19] text-slate-400'
             }`}
           >
-            {jingle.source === 'tab3-generated' && jingle.wavBlob
-              ? locale === 'ms'
-                ? 'Jingle Tersuai Aktif'
-                : 'Custom Jingle Ready'
-              : locale === 'ms'
-                ? 'Belum Dijana (Sandaran Sedia)'
-                : 'Not Generated (Fallback Ready)'}
+            <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
+              {jingle.source === 'tab3-generated' && jingle.wavBlob
+                ? locale === 'ms'
+                  ? 'Jingle Tersuai Aktif'
+                  : 'Custom Jingle Ready'
+                : locale === 'ms'
+                  ? 'Belum Dijana (Sandaran Sedia)'
+                  : 'Not Generated (Fallback Ready)'}
+            </span>
+          </span>
+          <span
+            data-testid="jingle-engine-status-badge"
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-medium max-w-full min-w-0 ${
+              engineStatusVariant === 'live'
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                : engineStatusVariant === 'fallback'
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                  : 'border-slate-700 bg-[#0B0F19] text-slate-300'
+            }`}
+          >
+            <Cpu className="h-3.5 w-3.5 shrink-0" />
+            <span className="min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
+              {engineStatusText}
+            </span>
           </span>
         </div>
       </div>
@@ -188,6 +281,70 @@ export function JingleTab() {
         <span className="text-slate-400 break-words [overflow-wrap:anywhere] max-w-full min-w-0">
           {launchedOfferSentence}
         </span>
+      </div>
+
+      {/* AI Music Engine Selector */}
+      <div data-testid="jingle-engine-selector" className="space-y-2 min-w-0">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-300 break-words">
+          {t('tab3.engineLabel')}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 min-w-0">
+          {ENGINE_OPTIONS.map((opt) => {
+            const isSelected = activeEngine === opt.id;
+            const isDisabled = isGenerating || (opt.requiresLiveApi && !liveApiReady);
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                data-testid={opt.testId}
+                data-model={opt.id}
+                aria-pressed={isSelected}
+                data-active={isSelected ? 'true' : 'false'}
+                disabled={isDisabled}
+                onClick={() => handleEngineSelect(opt.id)}
+                className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed min-w-0 max-w-full ${
+                  isSelected
+                    ? 'border-sky-500 bg-sky-500/15 text-sky-100 ring-1 ring-sky-500/40'
+                    : 'border-slate-800 bg-[#0B0F19] text-slate-300 hover:border-slate-700 hover:text-slate-100'
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-1.5 w-full min-w-0">
+                  <span className="min-w-0 flex-1 text-xs sm:text-sm font-semibold whitespace-normal break-words [overflow-wrap:anywhere] leading-snug text-left">
+                    {t(opt.labelKey)}
+                    {opt.requiresLiveApi ? (
+                      <span
+                        aria-hidden="true"
+                        className="ml-1 font-mono text-[11px] font-normal text-slate-400"
+                      >
+                        ({opt.id})
+                      </span>
+                    ) : null}
+                  </span>
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-mono shrink-0 max-w-full whitespace-normal ${
+                      isSelected
+                        ? 'bg-sky-500/30 text-sky-200'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {opt.tag}
+                  </span>
+                </div>
+                <span className="w-full min-w-0 text-[11px] text-slate-400 leading-snug whitespace-normal break-words [overflow-wrap:anywhere]">
+                  {t(opt.descKey)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {!liveApiReady ? (
+          <p
+            data-testid="jingle-engine-demo-note"
+            className="text-[11px] text-amber-200/90 break-words [overflow-wrap:anywhere] leading-snug"
+          >
+            {t('tab3.engineDemoNote')}
+          </p>
+        ) : null}
       </div>
 
       {/* Music Style Selector */}
@@ -313,11 +470,13 @@ export function JingleTab() {
           type="button"
           data-testid="jingle-download-btn"
           disabled={!jingle.wavBlob || isGenerating}
-          onClick={handleDownloadWav}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-[#0B0F19] px-4 py-2.5 text-sm font-semibold text-slate-200 hover:border-sky-500 hover:text-sky-200 disabled:opacity-45 disabled:cursor-not-allowed transition cursor-pointer"
+          onClick={handleDownloadAudio}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-[#0B0F19] px-4 py-2.5 text-sm font-semibold text-slate-200 hover:border-sky-500 hover:text-sky-200 disabled:opacity-45 disabled:cursor-not-allowed transition cursor-pointer max-w-full min-w-0"
         >
           <Download className="h-4 w-4 shrink-0" />
-          <span>{t('tab3.downloadWavBtn')}</span>
+          <span className="whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
+            {t('tab3.downloadAudioBtn')} (.{activeAudioExt})
+          </span>
         </button>
       </div>
 
@@ -325,9 +484,9 @@ export function JingleTab() {
       {jingle.previewUrl ? (
         <div className="rounded-xl border border-slate-800 bg-[#0B0F19] p-4 space-y-2.5 min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-200 min-w-0">
               <Volume2 className="h-4 w-4 text-sky-400 shrink-0" />
-              <span>{t('tab3.previewLabel')}</span>
+              <span className="break-words">{t('tab3.previewLabel')}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2 min-w-0">
               {hasStaleStyle ? (
@@ -340,9 +499,8 @@ export function JingleTab() {
                     : 'Style changed — regenerate to update'}
                 </span>
               ) : null}
-              <span className="text-[11px] font-mono text-slate-400">
-                {displayedStyle} • {jingle.durationSec.toFixed(1)}s •{' '}
-                {(jingle.sampleRate / 1000).toFixed(0)}kHz WAV
+              <span className="text-[11px] font-mono text-slate-400 break-words [overflow-wrap:anywhere]">
+                {displayedStyle} • {jingle.durationSec.toFixed(1)}s • {audioFormatTag}
               </span>
             </div>
           </div>

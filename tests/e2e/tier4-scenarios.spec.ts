@@ -75,18 +75,20 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
     const dlPng = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
     assertValidSlidePng(dlPng.buffer, '9:16');
 
-    // Tab 3: Verify BM chorus mentions brand, pick pop-ceria, generate & download WAV
+    // Tab 3: Verify BM chorus mentions brand, pick local simulation + pop-ceria, generate & download WAV
     await openTab(page, 'jingle');
     expect(await loc.tab3.lyricsInput.inputValue()).toContain('Demo Bisnes Saya');
+    await loc.tab3.engineBtn('local').click();
     await loc.tab3.styleBtn('pop-ceria').click();
     await loc.tab3.generateBtn.click();
     await verifyAudioElement(loc.tab3.audioPlayer);
     const dlWav = await captureDownload(page, () => loc.tab3.downloadBtn.click());
     assertValidAudioFileOrBuffer(dlWav.filePath, dlWav.buffer);
 
-    // Tab 4: Storyboard gated -> confirm -> generate 9:16 video -> download
+    // Tab 4: Storyboard gated -> select local simulation -> confirm -> generate 9:16 video -> download
     await openTab(page, 'video');
     expect(await loc.tab4.videoPlayer.count()).toBe(0);
+    await loc.tab4.engineBtn('local').click();
     await confirmStoryboard(page);
     await loc.tab4.generateBtn.click();
     await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });

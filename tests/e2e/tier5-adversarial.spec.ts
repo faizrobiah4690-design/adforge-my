@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { expect, test } from '@playwright/test';
 import {
   assertWhatsAppUrl,
@@ -30,12 +34,73 @@ import {
   assertValidVerticalVideoFile,
   captureDownload,
   createTestPngBuffer,
+  resolveMediaBinary,
   sha256Hex,
   verifyAudioElement,
   verifyVideoElement,
 } from './helpers/media';
 
-test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
+function createMockMp3Base64(): string {
+  const ffmpegBin = resolveMediaBinary('ffmpeg');
+  const buf = execFileSync(
+    ffmpegBin,
+    [
+      '-v',
+      'error',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=523:duration=2.5',
+      '-c:a',
+      'libmp3lame',
+      '-b:a',
+      '96k',
+      '-f',
+      'mp3',
+      'pipe:1',
+    ],
+    { maxBuffer: 10 * 1024 * 1024 },
+  );
+  return buf.toString('base64');
+}
+
+function createMockVerticalMp4Base64(): string {
+  const ffmpegBin = resolveMediaBinary('ffmpeg');
+  const tmpFile = path.join(os.tmpdir(), `adforge-m10-mock-${Date.now()}-${Math.random().toString(16).slice(2)}.mp4`);
+  try {
+    execFileSync(
+      ffmpegBin,
+      [
+        '-y',
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'color=c=0x0ea5e9:s=360x640:r=24:d=2.5',
+        '-f',
+        'lavfi',
+        '-i',
+        'sine=frequency=440:duration=2.5',
+        '-c:v',
+        'libx264',
+        '-pix_fmt',
+        'yuv420p',
+        '-c:a',
+        'aac',
+        '-movflags',
+        '+faststart',
+        tmpFile,
+      ],
+      { maxBuffer: 25 * 1024 * 1024 },
+    );
+    return fs.readFileSync(tmpFile).toString('base64');
+  } finally {
+    fs.rmSync(tmpFile, { force: true });
+  }
+}
+
+test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
   test('T5-01: JingleTab generatedStyle tracks synthesized audio independently from selected style until regenerated', async ({ page }) => {
     const errors = attachRuntimeErrorCollector(page);
     await gotoFreshApp(page);
@@ -1288,6 +1353,291 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await expect(loc.tab2.slideBtn(1)).toContainText('(No headline)');
 
     errors.assertClean();
+    errors.detach();
+  });
+
+  test('T5-19: Tab 3 Live Lyria (lyria-3-clip-preview & lyria-3.5) vs HTTP Fallback vs Demo Mode zero-external-origin', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    const net = attachNetworkOriginAuditor(page);
+    const mp3B64 = createMockMp3Base64();
+
+    await page.setViewportSize({ width: 1280, height: 850 });
+    await gotoFreshApp(page);
+    await completeOnboarding(page, { useDemoMode: true });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+    await openTab(page, 'jingle');
+
+    const loc = appLocators(page);
+
+    // 1. Demo Mode: local selected, live Lyria disabled, zero external requests, valid .wav
+    await expect(loc.tab3.engineBtn('local')).toHaveAttribute('aria-pressed', 'true');
+    await expect(loc.tab3.engineBtn('lyria-3-clip-preview')).toBeDisabled();
+    await expect(loc.tab3.engineBtn('lyria-3.5')).toBeDisabled();
+    await expect(loc.tab3.engineDemoNote).toBeVisible();
+
+    await loc.tab3.generateBtn.click();
+    await verifyAudioElement(loc.tab3.audioPlayer);
+    await expect(loc.tab3.engineStatusBadge).toContainText(/Simulasi Pelayar Tempatan \(RM0\)/i);
+    const demoDl = await captureDownload(page, () => loc.tab3.downloadBtn.click());
+    expect(demoDl.suggestedFilename).toMatch(/\.wav$/i);
+    assertValidAudioFileOrBuffer(demoDl.filePath, demoDl.buffer);
+    net.assertSameOriginAndHealthy();
+    net.detach();
+
+    // 2. Switch to BYOK mode via API settings modal -> lyria-3-clip-preview becomes default
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible();
+    await loc.onboarding.byokInput.fill('sk-live-m10-lyria-123456');
+    await loc.onboarding.byokSaveBtn.click();
+    await expect(loc.onboarding.settingsModal).toHaveCount(0);
+
+    await expect(loc.tab3.engineBtn('lyria-3-clip-preview')).toHaveAttribute('aria-pressed', 'true');
+    await expect(loc.tab3.engineBtn('lyria-3.5')).toBeEnabled();
+
+    const capturedRequests: Array<{ model: string; store: boolean; apiKey: string | null }> = [];
+    await page.route('**/v1beta/interactions', async (route) => {
+      const req = route.request();
+      const body = JSON.parse(req.postData() ?? '{}') as { model?: string; store?: boolean };
+      capturedRequests.push({
+        model: String(body.model ?? ''),
+        store: Boolean(body.store),
+        apiKey: req.headers()['x-goog-api-key'] ?? null,
+      });
+      if (capturedRequests.length === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            output_audio: {
+              data: mp3B64,
+              mime_type: 'audio/mpeg',
+            },
+          }),
+        });
+      } else {
+        await route.fulfill({
+          status: 429,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: 'Quota exceeded' } }),
+        });
+      }
+    });
+
+    // Live Lyria 3 Clip -> plays MP3, downloads .mp3, shows live status badge
+    await loc.tab3.generateBtn.click();
+    await verifyAudioElement(loc.tab3.audioPlayer);
+    await expect(loc.tab3.engineStatusBadge).toContainText(/Dijana oleh Live Lyria API/i);
+    expect(capturedRequests).toHaveLength(1);
+    expect(capturedRequests[0]).toEqual({
+      model: 'lyria-3-clip-preview',
+      store: false,
+      apiKey: 'sk-live-m10-lyria-123456',
+    });
+    const mp3Dl = await captureDownload(page, () => loc.tab3.downloadBtn.click());
+    expect(mp3Dl.suggestedFilename).toMatch(/\.mp3$/i);
+    assertValidAudioFileOrBuffer(mp3Dl.filePath, mp3Dl.buffer);
+
+    // Switch to Lyria 3.5 -> HTTP 429 falls back cleanly to local 5.5s WAV
+    await loc.tab3.engineBtn('lyria-3.5').click();
+    await loc.tab3.generateBtn.click();
+    await verifyAudioElement(loc.tab3.audioPlayer);
+    expect(capturedRequests).toHaveLength(2);
+    expect(capturedRequests[1].model).toBe('lyria-3.5');
+    await expect(loc.tab3.engineStatusBadge).toContainText(/Paid Tier/i);
+    const fallbackDl = await captureDownload(page, () => loc.tab3.downloadBtn.click());
+    expect(fallbackDl.suggestedFilename).toMatch(/\.wav$/i);
+    assertValidAudioFileOrBuffer(fallbackDl.filePath, fallbackDl.buffer);
+
+    errors.assertClean([/status of 429/i]);
+    errors.detach();
+  });
+
+  test('T5-20: Tab 4 Storyboard Gate + Live Gemini Omni 1.2 Flash / Veo 3.1 + HTTP Fallback + Demo Mode zero-external-origin', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    const mp4B64 = createMockVerticalMp4Base64();
+
+    await page.setViewportSize({ width: 1280, height: 850 });
+    await gotoFreshApp(page);
+    await completeOnboarding(page, {
+      useDemoMode: false,
+      apiKey: 'sk-live-m10-omni-123456',
+    });
+
+    const videoCalls: Array<{
+      model: string;
+      store: boolean;
+      apiKey: string | null;
+      response_format?: Record<string, unknown>;
+    }> = [];
+
+    await page.route('**/v1beta/interactions', async (route) => {
+      const req = route.request();
+      const body = JSON.parse(req.postData() ?? '{}') as {
+        model?: string;
+        store?: boolean;
+        response_format?: Record<string, unknown>;
+      };
+      videoCalls.push({
+        model: String(body.model ?? ''),
+        store: Boolean(body.store),
+        apiKey: req.headers()['x-goog-api-key'] ?? null,
+        response_format: body.response_format,
+      });
+
+      if (videoCalls.length === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            output_video: {
+              data: mp4B64,
+              mime_type: 'video/mp4',
+            },
+          }),
+        });
+      } else {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: 'Upstream unavailable' } }),
+        });
+      }
+    });
+
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+    await openTab(page, 'video');
+
+    const loc = appLocators(page);
+    await expect(loc.tab4.engineBtn('gemini-omni-1.2-flash')).toHaveAttribute('aria-pressed', 'true');
+    await expect(loc.tab4.generateBtn).toBeDisabled();
+    expect(videoCalls).toHaveLength(0);
+
+    // Confirm storyboard -> Gemini Omni 1.2 Flash live 9:16 MP4
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 25_000 });
+    await expect(loc.tab4.engineStatusBadge).toContainText(/Live Gemini Omni 1\.2 Flash/i);
+    await expect(loc.tab4.audioSourceBadge).toContainText(/Audio Asli AI/i);
+
+    expect(videoCalls).toHaveLength(1);
+    expect(videoCalls[0]).toEqual({
+      model: 'gemini-omni-1.2-flash',
+      store: false,
+      apiKey: 'sk-live-m10-omni-123456',
+      response_format: {
+        type: 'video',
+        duration: '6s',
+        resolution: '720p',
+        aspect_ratio: '9:16',
+      },
+    });
+
+    const mp4Dl = await captureDownload(page, () => loc.tab4.downloadBtn.click());
+    expect(mp4Dl.suggestedFilename).toMatch(/\.mp4$/i);
+    assertValidVerticalVideoFile(mp4Dl.filePath);
+
+    // Switch to Veo 3.1 -> HTTP 500 falls back automatically to local <=6s 9:16 WebM
+    await loc.tab4.engineBtn('veo-3.1-generate-preview').click();
+    await loc.tab4.generateBtn.click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+    expect(videoCalls).toHaveLength(2);
+    expect(videoCalls[1].model).toBe('veo-3.1-generate-preview');
+    await expect(loc.tab4.engineStatusBadge).toContainText(/Simulasi Pelayar Tempatan/i);
+    await expect(loc.tab4.audioSourceBadge).toContainText(RX.fallbackAudioBadge);
+    const webmDl = await captureDownload(page, () => loc.tab4.downloadBtn.click());
+    assertValidVerticalVideoFile(webmDl.filePath);
+
+    // Switch to Demo Mode -> zero external requests on Tab 4 render
+    const net = attachNetworkOriginAuditor(page);
+    await loc.headerApiSettings.click();
+    await expect(loc.onboarding.settingsModal).toBeVisible();
+    await loc.onboarding.demoBtn.click();
+    await expect(loc.onboarding.settingsModal).toHaveCount(0);
+
+    await expect(loc.tab4.engineBtn('local')).toHaveAttribute('aria-pressed', 'true');
+    await expect(loc.tab4.engineBtn('gemini-omni-1.2-flash')).toBeDisabled();
+    await loc.tab4.generateBtn.click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+    expect(videoCalls).toHaveLength(2);
+    net.assertSameOriginAndHealthy();
+    net.detach();
+
+    errors.assertClean([/status of 500/i]);
+    errors.detach();
+  });
+
+  test('T5-21: 320px-1440px x ms/en zero-clipping & zero-overflow on Tab 3 & Tab 4 with M10 engine selectors, fallback badges, and 64-char unbroken brand', async ({ page }) => {
+    const errors = attachRuntimeErrorCollector(page);
+    const unbrokenBrand =
+      'SyarikatPemasaranDigitalMalaysiaTerunggulSepanjangZaman2026MYXXX';
+    expect(unbrokenBrand.length).toBe(64);
+
+    await page.setViewportSize({ width: 1280, height: 850 });
+    await gotoFreshApp(page);
+    await completeOnboarding(page, {
+      useDemoMode: false,
+      apiKey: 'sk-live-m10-layout-123456',
+    });
+
+    await page.route('**/v1beta/interactions', async (route) => {
+      await route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'Rate limited' } }),
+      });
+    });
+
+    await createBrandFolder(page, {
+      name: unbrokenBrand,
+      colorHex: '#0EA5E9',
+      tone: 'casual',
+      whatsapp: '012-345 6789',
+    });
+    await launchCampaign(page, {
+      brandName: unbrokenBrand,
+      offerSentence: DEFAULT_OFFER,
+    });
+
+    const loc = appLocators(page);
+
+    // Render Tab 3 (triggers fallback badge — longest string) & switch style for stale notice
+    await openTab(page, 'jingle');
+    await loc.tab3.generateBtn.click();
+    await verifyAudioElement(loc.tab3.audioPlayer);
+    await loc.tab3.styleBtn('santai-akustik').click();
+
+    // Render Tab 4 (triggers fallback badge)
+    await openTab(page, 'video');
+    await confirmStoryboard(page);
+    await loc.tab4.generateBtn.click();
+    await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
+
+    const viewports = [
+      { width: 320, height: 700 },
+      { width: 360, height: 800 },
+      { width: 390, height: 844 },
+      { width: 640, height: 900 },
+      { width: 768, height: 1024 },
+      { width: 980, height: 900 },
+      { width: 1440, height: 900 },
+    ] as const;
+
+    for (const vp of viewports) {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      for (const locale of ['ms', 'en'] as const) {
+        await toggleLanguage(page, locale);
+
+        await openTab(page, 'jingle');
+        await assertNoHorizontalOverflow(page, `T5-21 ${vp.width} ${locale} tab3`);
+        await assertNoElementClipping(page, `T5-21 ${vp.width} ${locale} tab3`);
+
+        await openTab(page, 'video');
+        await assertNoHorizontalOverflow(page, `T5-21 ${vp.width} ${locale} tab4`);
+        await assertNoElementClipping(page, `T5-21 ${vp.width} ${locale} tab4`);
+      }
+    }
+
+    errors.assertClean([/status of 429/i]);
     errors.detach();
   });
 });

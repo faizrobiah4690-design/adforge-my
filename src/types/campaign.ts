@@ -7,6 +7,10 @@ export type ChannelId = 'facebook' | 'instagram' | 'tiktok' | 'google_rsa';
 export type WorkspaceTabId = 'strategy' | 'carousel' | 'jingle' | 'video';
 export type AspectRatioMode = '9:16' | '4:5';
 export type JingleStyleId = 'pop-ceria' | 'santai-akustik' | 'korporat-segar';
+export type MusicEngineId = 'lyria-3-clip-preview' | 'lyria-3.5' | 'local';
+export type VideoEngineId = 'gemini-omni-1.2-flash' | 'veo-3.1-generate-preview' | 'local';
+export type JingleGenerationSource = 'lyria-api' | 'local-fallback' | 'local-synth';
+export type VideoGenerationSource = 'omni-api' | 'veo-api' | 'local-fallback' | 'local-muxer';
 export type WorkbenchScreen = 'onboarding' | 'workbench';
 
 export interface BrandProfile {
@@ -72,12 +76,19 @@ export interface CarouselSlide {
 export interface JingleState {
   style: JingleStyleId;
   generatedStyle?: JingleStyleId | null;
+  engine?: MusicEngineId;
+  engineEditedByUser?: boolean;
+  generatedEngine?: MusicEngineId | null;
   lyrics: string;
   lyricsEditedByUser: boolean;
   durationSec: number;          // 5.5 (<= 6.0)
   sampleRate: number;           // 48000
   wavBlob: Blob | null;
   previewUrl: string | null;
+  audioMimeType?: string | null;
+  audioExtension?: 'mp3' | 'wav' | 'ogg' | 'm4a' | null;
+  generationSource?: JingleGenerationSource | null;
+  fallbackReason?: string | null;
   source: 'tab3-generated' | 'fallback-preseeded';
   version?: number;
 }
@@ -101,6 +112,11 @@ export interface StoryboardFrame {
 export interface VideoStudioState {
   storyboardFrames: StoryboardFrame[];
   isStoryboardConfirmed: boolean;
+  engine?: VideoEngineId;
+  engineEditedByUser?: boolean;
+  generatedEngine?: VideoEngineId | null;
+  generationSource?: VideoGenerationSource | null;
+  fallbackReason?: string | null;
   status: 'awaiting-confirmation' | 'rendering' | 'ready' | 'error';
   videoBlob: Blob | null;
   videoUrl: string | null;
@@ -109,7 +125,7 @@ export interface VideoStudioState {
   durationSec: number | null;   // <= 6.0
   width: number;                // 540 (9:16)
   height: number;               // 960 (9:16)
-  audioSourceUsed: 'tab3-jingle' | 'fallback-preseeded' | null;
+  audioSourceUsed: 'tab3-jingle' | 'fallback-preseeded' | 'native-ai' | null;
   jingleVersionUsed?: number | null;
   errorMessage: string | null;
   errorDetail?: string | null;
