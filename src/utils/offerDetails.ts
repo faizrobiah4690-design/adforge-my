@@ -25,6 +25,56 @@ export function stripDuplicateTawaran(text: string): string {
   return text.replace(/\b(tawaran)(?:\s+\1)+\b/gi, '$1').replace(/\s{2,}/g, ' ').trim();
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function containsTokenCaseInsensitive(
+  haystack: string,
+  needle: string | null | undefined
+): boolean {
+  const cleanNeedle = needle?.replace(/\s+/g, ' ').trim();
+  if (!cleanNeedle) return false;
+  const cleanHaystack = haystack.replace(/\s+/g, ' ').trim();
+  if (!cleanHaystack) return false;
+  const pattern = new RegExp(
+    `(?:^|[\\s(,.;:!?—–\\-•|/+"'])${escapeRegExp(cleanNeedle)}(?:$|[\\s),.;:!?—–\\-•|/+"'])`,
+    'i'
+  );
+  return pattern.test(cleanHaystack);
+}
+
+export function appendCollabIfAbsent(
+  base: string,
+  collabTag: string | null | undefined,
+  format: 'space' | 'parens' = 'space'
+): string {
+  const cleanBase = base.trim();
+  const cleanCollab = collabTag?.trim();
+  if (!cleanCollab) return cleanBase;
+  if (containsTokenCaseInsensitive(cleanBase, cleanCollab)) {
+    return cleanBase;
+  }
+  return format === 'parens'
+    ? `${cleanBase} (${cleanCollab})`.trim()
+    : `${cleanBase} ${cleanCollab}`.trim();
+}
+
+export function appendTokenIfAbsent(
+  base: string,
+  token: string | null | undefined,
+  separator = ' '
+): string {
+  const cleanBase = base.trim();
+  const cleanToken = token?.trim();
+  if (!cleanToken) return cleanBase;
+  if (!cleanBase) return cleanToken;
+  if (containsTokenCaseInsensitive(cleanBase, cleanToken)) {
+    return cleanBase;
+  }
+  return `${cleanBase}${separator}${cleanToken}`.trim();
+}
+
 export function extractOfferFocus(offerSentence: string): string {
   const lower = offerSentence.toLowerCase();
   if (/diskaun|promo|jimat|potongan|sale|rebate/.test(lower)) return 'Penjimatan Istimewa';
@@ -36,21 +86,21 @@ export function extractOfferFocus(offerSentence: string): string {
 }
 
 const STOPWORD_RX =
-  /^(?:promosi|promo|diskaun|potongan|sale|rebate|harga|untuk|sempena|pelanggan|terawal|whatsapp|wasap|ws|sekarang|hari|ini|sahaja|cepat|stok|slot|kuota|terhad|tawaran|istimewa|khas|edisi|terbaru|baharu|grab|order|tempah|minggu|gaji|payday|di|dan|yang|dengan|ke|dari|anda|kami|jom|unit|kini|jimat)$/i;
+  /^(?:promosi|promo|diskaun|potongan|sale|rebate|harga|untuk|sempena|pelanggan|terawal|whatsapp|wasap|ws|sekarang|hari|ini|sahaja|cepat|stok|slot|kuota|terhad|tawaran|istimewa|khas|edisi|terbaru|baharu|hebat|grab|order|tempah|minggu|gaji|payday|di|dan|yang|dengan|ke|dari|anda|kami|jom|unit|kini|jimat)$/i;
 
 const COLLAB_TRAILING_STOP_RX =
-  /\b(?:untuk|sempena|edisi|diskaun|harga|rm\s*\d+|di|minggu|gaji|stok|slot|terhad|whatsapp|sekarang)\b.*$/i;
+  /\b(?:untuk|sempena|edisi|promosi|promo|diskaun|harga|rm\s*\d+|di|minggu|gaji|stok|slot|terhad|hebat|istimewa|terbaru|baharu|pakej|kombo|percuma|beli|whatsapp|sekarang)\b.*$/i;
 
 export function extractOfferDetails(brandName: string, offerSentence: string): OfferDetails {
   const cleanBrand = brandName.trim() || 'Bisnes Saya';
   const cleanOffer = cleanOfferText(offerSentence);
   const combined = `${cleanBrand} ${cleanOffer}`;
 
-  // 1. Collaboration tag e.g. "X HelloKitty"
+  // 1. Collaboration tag e.g. "X HelloKitty" (requires whitespace after x/× so "Xiaomi" / "Xpress" are never misparsed)
+  // Match brandName and offerSentence separately so a collab in brandName never bleeds into offer words.
   let collabTag: string | null = null;
-  const collabMatch = combined.match(
-    /(?:^|[\s(])[x×]\s*([A-Za-z0-9][A-Za-z0-9&+-]*(?:\s+[A-Za-z0-9&+-]+){0,2})/i
-  );
+  const collabRx = /(?:^|[\s(])[x×]\s+([A-Za-z0-9][A-Za-z0-9&+-]*(?:\s+[A-Za-z0-9&+-]+){0,2})/i;
+  const collabMatch = cleanBrand.match(collabRx) ?? cleanOffer.match(collabRx);
   if (collabMatch?.[1]) {
     const cleanedCollab = collabMatch[1]
       .replace(COLLAB_TRAILING_STOP_RX, '')
@@ -87,11 +137,13 @@ export function extractOfferDetails(brandName: string, offerSentence: string): O
     ? bundleMatch[0].trim().slice(0, 44).trim()
     : null;
 
-  // 5. Occasion
-  const occasionMatch = combined.match(
-    /\b(?:minggu\s+gaji|hari\s+gaji|payday|raya|aidilfitri|ramadan|merdeka|hujung\s+minggu|edisi\s+(?:khas|terhad|baharu)|11\.11|12\.12)\b/i
+  // 5. Occasion (prioritize specific seasonal/payday occasions before generic edition labels)
+  const seasonalOccasionMatch = combined.match(
+    /\b(?:minggu\s+gaji|hari\s+gaji|payday|raya|aidilfitri|ramadan|merdeka|11\.11|12\.12|hujung\s+minggu)\b/i
   );
-  const occasion = occasionMatch?.[0] ? occasionMatch[0].trim() : null;
+  const genericEditionMatch = combined.match(/\b(?:edisi\s+(?:khas|terhad|baharu))\b/i);
+  const occasion =
+    seasonalOccasionMatch?.[0]?.trim() ?? genericEditionMatch?.[0]?.trim() ?? null;
 
   // 6. Scarcity cue
   const scarcityMatch = combined.match(

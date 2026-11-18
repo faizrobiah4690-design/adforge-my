@@ -1,7 +1,10 @@
 import { FALLBACK_AUDIO_URL, SAMPLE_OFFER_CHIP } from '../data/seedVault';
 import type { JingleState, JingleStyleId } from '../types/campaign';
 import {
+  appendCollabIfAbsent,
+  containsTokenCaseInsensitive,
   extractOfferDetails,
+  extractOfferFocus,
   getFrameworkForVariation,
   stripDuplicateTawaran,
 } from './offerDetails';
@@ -89,16 +92,21 @@ export function buildJingleLyrics(
   const valueBadge = [details.discountPercent, details.priceTag, details.bundleOrFreebie]
     .filter(Boolean)
     .join(' • ');
-  const topicHook = details.collabTag
-    ? `${details.productTopic} (${details.collabTag})`
-    : details.productTopic;
+  const topicHook = containsTokenCaseInsensitive(safeBrand, details.collabTag)
+    ? details.productTopic
+    : appendCollabIfAbsent(details.productTopic, details.collabTag, 'parens');
+  const nonDupTopic =
+    containsTokenCaseInsensitive(topicHook, safeBrand) ||
+    containsTokenCaseInsensitive(safeBrand, topicHook)
+      ? extractOfferFocus(conciseOffer)
+      : topicHook;
   const occasionCue = details.occasion ?? 'hari ini';
 
   let lines: string[];
   switch (framework) {
     case 'pas':
       lines = [
-        `Penat cari ${topicHook}? Pilih ${safeBrand},`,
+        `Penat cari ${nonDupTopic}? Pilih ${safeBrand},`,
         `Mudah, telus dan kemas untuk rutin anda,`,
         `${conciseOffer}`,
         `WhatsApp ${safeBrand} sekarang, jangan tunggu lagi!`,
@@ -107,7 +115,7 @@ export function buildJingleLyrics(
     case 'bab':
       lines = [
         `Ubah rutin lama ke gaya baharu bersama ${safeBrand},`,
-        `Lebih lancar dengan ${topicHook} yang mesra bajet,`,
+        `Lebih lancar dengan ${nonDupTopic} yang mesra bajet,`,
         valueBadge ? `${valueBadge} — ${occasionCue}!` : `${conciseOffer}`,
         `Tempah di WhatsApp ${safeBrand} hari ini juga!`,
       ];
@@ -115,7 +123,7 @@ export function buildJingleLyrics(
     case 'pov_ugc':
       lines = [
         `POV cuba sendiri ${safeBrand}, memang puas hati!`,
-        `Ramai puji ${topicHook}${details.collabTag ? ` ${details.collabTag}` : ''},`,
+        `Ramai puji ${topicHook},`,
         valueBadge ? `Berbaloi sungguh dengan ${valueBadge},` : `${conciseOffer}`,
         `Klik WhatsApp ${safeBrand}, tanya stok sebelum habis!`,
       ];
@@ -125,7 +133,7 @@ export function buildJingleLyrics(
         `Pembeli bijak kira nilai di ${safeBrand},`,
         valueBadge
           ? `Nikmati ${valueBadge} tanpa caj tersembunyi,`
-          : `Harga jelas untuk ${topicHook} pilihan anda,`,
+          : `Harga jelas untuk ${nonDupTopic} pilihan anda,`,
         `${conciseOffer}`,
         `Banding & WhatsApp ${safeBrand} sekarang!`,
       ];
@@ -133,7 +141,7 @@ export function buildJingleLyrics(
     case 'fomo_drop':
       lines = [
         `Rebut ${occasionCue} di ${safeBrand} sekarang!`,
-        `${topicHook} kuota terawal hampir penuh,`,
+        `${nonDupTopic} kuota terawal hampir penuh,`,
         valueBadge ? `Hanya ${valueBadge} untuk yang pantas bertindak,` : `${conciseOffer}`,
         `Tekan WhatsApp ${safeBrand} sebelum stok ditutup!`,
       ];

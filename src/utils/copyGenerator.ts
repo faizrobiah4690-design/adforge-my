@@ -14,7 +14,9 @@ import { buildJingleLyrics } from './audioExport';
 import { checkCopyCompliance, rewriteSafeCopy } from './compliance';
 import {
   VARIATION_FRAMEWORKS,
+  appendCollabIfAbsent,
   cleanOfferText,
+  containsTokenCaseInsensitive,
   extractOfferDetails,
   extractOfferFocus,
   getFrameworkForVariation,
@@ -80,10 +82,21 @@ export function enforceRsaLength(
 }
 
 function formatOfferSubject(details: OfferDetails): string {
-  if (details.collabTag && !details.productTopic.toLowerCase().includes(details.collabTag.toLowerCase())) {
-    return `${details.productTopic} (${details.collabTag})`.trim();
+  return appendCollabIfAbsent(details.productTopic, details.collabTag, 'parens');
+}
+
+function getDistinctSubject(details: OfferDetails, cleanOffer: string): string {
+  const rawSubject = formatOfferSubject(details);
+  if (
+    containsTokenCaseInsensitive(rawSubject, details.brandName) ||
+    containsTokenCaseInsensitive(details.brandName, rawSubject) ||
+    (details.collabTag &&
+      containsTokenCaseInsensitive(details.brandName, details.collabTag) &&
+      containsTokenCaseInsensitive(rawSubject, details.collabTag))
+  ) {
+    return extractOfferFocus(cleanOffer);
   }
-  return details.productTopic;
+  return rawSubject;
 }
 
 function formatOfferHighlight(details: OfferDetails): string {
@@ -93,7 +106,16 @@ function formatOfferHighlight(details: OfferDetails): string {
     details.bundleOrFreebie,
     details.occasion,
   ].filter(Boolean);
-  return parts.length > 0 ? parts.join(' • ') : details.productTopic;
+  if (parts.length > 0) {
+    return parts.join(' • ');
+  }
+  if (
+    containsTokenCaseInsensitive(details.productTopic, details.brandName) ||
+    containsTokenCaseInsensitive(details.brandName, details.productTopic)
+  ) {
+    return details.scarcityCue ?? 'pakej pilihan telus';
+  }
+  return details.productTopic;
 }
 
 function getVerticalPainAndDesire(vertical: OfferDetails['vertical']): {
@@ -157,7 +179,7 @@ export function buildCustomerPsychology(
   const details = extractOfferDetails(brandName, cleanOffer);
   const framework = getFrameworkForVariation(variationIndex);
   const focus = extractOfferFocus(cleanOffer);
-  const subject = formatOfferSubject(details);
+  const subject = getDistinctSubject(details, cleanOffer);
   const highlight = formatOfferHighlight(details);
   const verticalCopy = getVerticalPainAndDesire(details.vertical);
   const shortOffer =
@@ -201,11 +223,14 @@ export function buildCustomerPsychology(
           };
       break;
 
-    case 'pov_ugc':
+    case 'pov_ugc': {
+      const povSubject = containsTokenCaseInsensitive(brandName, details.collabTag)
+        ? subject
+        : appendCollabIfAbsent(subject, details.collabTag, 'parens');
       profile = isCasual
         ? {
             targetPersona: `Pembeli media sosial yang gemar ulasan jujur, video unboxing, dan pengalaman sebenar sebelum mendapatkan ${subject} di ${brandName}.`,
-            coreTrigger: `POV pelanggan sebenar yang berkongsi mengapa ${subject}${details.collabTag ? ` (${details.collabTag})` : ''} menjadi pilihan utama (${shortOffer}).`,
+            coreTrigger: `POV pelanggan sebenar yang berkongsi mengapa ${povSubject} menjadi pilihan utama (${shortOffer}).`,
             frictionObjections: `Risau iklan terlalu melambung atau produk sebenar tidak sepadan dengan jangkaan visual.`,
             trustAnchors: `Perkongsian jujur pelanggan ${brandName}, paparan foto sebenar tanpa suntingan berlebihan, serta semakan stok telus.`,
           }
@@ -216,6 +241,7 @@ export function buildCustomerPsychology(
             trustAnchors: `Rekod maklum balas pelanggan ${brandName}, ${verticalCopy.trustVertical}, dan saluran WhatsApp rasmi.`,
           };
       break;
+    }
 
     case 'smart_buyer':
       profile = isCasual
@@ -233,10 +259,13 @@ export function buildCustomerPsychology(
           };
       break;
 
-    case 'fomo_drop':
+    case 'fomo_drop': {
+      const fomoOccasion = containsTokenCaseInsensitive(brandName, details.collabTag)
+        ? (details.occasion ?? 'peluang terawal')
+        : appendCollabIfAbsent(details.occasion ?? 'peluang terawal', details.collabTag);
       profile = isCasual
         ? {
-            targetPersona: `Peminat edisi terhad dan pembeli pantas yang memburu ${details.occasion ?? 'peluang terawal'}${details.collabTag ? ` ${details.collabTag}` : ''} di ${brandName}.`,
+            targetPersona: `Peminat edisi terhad dan pembeli pantas yang memburu ${fomoOccasion} di ${brandName}.`,
             coreTrigger: `Gelombang ${details.occasion ?? 'jualan terawal'} dengan ${details.scarcityCue ?? 'kuota terhad'} (${shortOffer}) mendorong tempahan segera.`,
             frictionObjections: `Takut terlepas unit terawal atau terlambat sahkan tempahan sebelum kuota ${details.occasion ?? 'minggu ini'} ditutup.`,
             trustAnchors: `Kemaskini stok masa nyata di WhatsApp ${brandName}, proses tempahan pantas, dan keutamaan pelanggan terawal.`,
@@ -248,6 +277,7 @@ export function buildCustomerPsychology(
             trustAnchors: `Pengurusan tempahan terawal ${brandName}, ${verticalCopy.trustVertical}, dan respons pantas pasukan rasmi.`,
           };
       break;
+    }
   }
 
   return {
@@ -284,7 +314,7 @@ export function generateCampaignCopyForAngle(
   const details = extractOfferDetails(brandName, cleanOffer);
   const framework = getFrameworkForVariation(variationIndex);
   const focus = extractOfferFocus(cleanOffer);
-  const subject = formatOfferSubject(details);
+  const subject = getDistinctSubject(details, cleanOffer);
   const highlight = formatOfferHighlight(details);
   const verticalCopy = getVerticalPainAndDesire(details.vertical);
   const isCasual = brand.tone === 'casual';
@@ -631,7 +661,7 @@ export function generateCampaignCopyForAngle(
           },
           tiktok: {
             hook: isCasual
-              ? `POV: Kenapa aku menyesal tak grab ${brandName}${details.collabTag ? ` ${details.collabTag}` : ''} dari awal lagi!`
+              ? `POV: Kenapa aku menyesal tak grab ${appendCollabIfAbsent(brandName, details.collabTag)} dari awal lagi!`
               : `Ulasan ringkas 6 saat: Apa yang membuatkan ${brandName} menonjol minggu ini.`,
             script: isCasual
               ? `0-2s: Buka kotak / close-up ${subject}. 2-4s: Tunjuk detail sebenar (${cleanOffer}). 4-6s: Tekan link WhatsApp sebelum habis (${waUrl}).`
@@ -701,7 +731,7 @@ export function generateCampaignCopyForAngle(
       return {
         facebook: {
           primaryText: isCasual
-            ? `Bukan cakap kosong — tengok sendiri kenapa feed ramai penuh dengan unboxing ${brandName}${details.collabTag ? ` ${details.collabTag}` : ''}! ${cleanOffer} Nak join gelombang pengguna puas hati? WhatsApp kami: ${waUrl}`
+            ? `Bukan cakap kosong — tengok sendiri kenapa feed ramai penuh dengan unboxing ${appendCollabIfAbsent(brandName, details.collabTag)}! ${cleanOffer} Nak join gelombang pengguna puas hati? WhatsApp kami: ${waUrl}`
             : `Perkongsian komuniti pengguna mengenai pengalaman mereka bersama ${brandName} untuk ${subject}. ${cleanOffer} Hubungi WhatsApp rasmi untuk pertanyaan: ${waUrl}`,
           headline: `${brandName} — Pilihan Komuniti & Pencipta Konten`,
           description: `Ulasan pengguna sebenar seluruh Malaysia • WhatsApp kami`,
@@ -879,7 +909,9 @@ export function generateCampaignCopyForAngle(
     }
 
     // 5. FOMO_DROP (Special Edition / Early-Bird Payday Drop)
-    const dropTag = details.collabTag ? `${occasionLabel} ${details.collabTag}` : occasionLabel;
+    const dropTag = containsTokenCaseInsensitive(brandName, details.collabTag)
+      ? occasionLabel
+      : appendCollabIfAbsent(occasionLabel, details.collabTag);
     if (angle === 'urgency') {
       return {
         facebook: {
@@ -1063,13 +1095,17 @@ export function buildCarouselSlides(
   const cleanOffer = cleanOfferText(offerSentence);
   const details = extractOfferDetails(brandName, cleanOffer);
   const framework = getFrameworkForVariation(variationIndex);
-  const subject = formatOfferSubject(details);
+  const subject = getDistinctSubject(details, cleanOffer);
   const highlight = formatOfferHighlight(details);
   const isCasual = brand.tone === 'casual';
-  const shortOffer = cleanOffer.length > 62 ? `${sliceSafeUtf16(cleanOffer, 59).trimEnd()}...` : cleanOffer;
+  const shortOffer = cleanOffer.length > 56 ? `${sliceSafeUtf16(cleanOffer, 53).trimEnd()}...` : cleanOffer;
   const visionNote = productVisionSummary?.trim()
-    ? sliceSafeUtf16(productVisionSummary.trim(), 70)
+    ? sliceSafeUtf16(productVisionSummary.trim(), 62)
     : null;
+  const collabMention = containsTokenCaseInsensitive(brandName, details.collabTag)
+    ? brandName
+    : (details.collabTag ?? brandName);
+  const dropTitleBrand = appendCollabIfAbsent(brandName, details.collabTag);
 
   const s = (text: string) => ensureSafeField(text, brandName);
 
@@ -1083,7 +1119,11 @@ export function buildCarouselSlides(
           photoIndex: 0,
           badgeText: s(brandName),
           headline: s(isCasual ? `Penat Cari ${subject}?` : `Solusi ${subject} — ${brandName}`),
-          subheadline: s(visionNote ?? `${brandName} mudahkan urusan anda dengan harga telus.`),
+          subheadline: s(
+            visionNote
+              ? `Solusi: ${visionNote}`
+              : `${brandName} mudahkan urusan anda dengan harga telus.`
+          ),
           ctaText: 'Slide 1 / 4',
           editedByUser: false,
         },
@@ -1093,7 +1133,7 @@ export function buildCarouselSlides(
           role: 'offer',
           photoIndex: 1,
           badgeText: s(details.discountPercent ? `JIMAT ${details.discountPercent}` : 'SOLUSI UTAMA'),
-          headline: s(shortOffer),
+          headline: s(`Solusi Tepat: ${shortOffer}`),
           subheadline: s(`Eksklusif di ${brandName} (${highlight})`),
           ctaText: s(details.scarcityCue ?? 'Kuota Terawal'),
           editedByUser: false,
@@ -1104,7 +1144,7 @@ export function buildCarouselSlides(
           role: 'proof',
           photoIndex: 0,
           badgeText: 'KEPERCAYAAN',
-          headline: s(isCasual ? `Pilihan Ramai Untuk ${details.productTopic}` : 'Rekod Kepuasan Pelanggan'),
+          headline: s(isCasual ? `Pilihan Ramai Untuk ${subject}` : 'Rekod Kepuasan Pelanggan'),
           subheadline: s(isCasual ? 'Layanan mesra, respons pantas & jelas.' : 'Piawaian konsisten & telus.'),
           ctaText: 'Dipercayai Ramai',
           editedByUser: false,
@@ -1131,7 +1171,11 @@ export function buildCarouselSlides(
           photoIndex: 0,
           badgeText: s(`${brandName} • GAYA BAHARU`),
           headline: s(`Tinggalkan Rutin Lama Yang Leceh`),
-          subheadline: s(visionNote ?? `Naik taraf pengalaman harian bersama ${subject}.`),
+          subheadline: s(
+            visionNote
+              ? `Gaya baharu: ${visionNote}`
+              : `Naik taraf pengalaman harian bersama ${subject}.`
+          ),
           ctaText: 'Slide 1 / 4',
           editedByUser: false,
         },
@@ -1142,7 +1186,7 @@ export function buildCarouselSlides(
           photoIndex: 1,
           badgeText: 'JAMBATAN SOLUSI',
           headline: s(`Rutin Lebih Kemas: ${highlight}`),
-          subheadline: s(shortOffer),
+          subheadline: s(`Peralihan mudah — ${shortOffer}`),
           ctaText: s(details.occasion ?? 'Mula Hari Ini'),
           editedByUser: false,
         },
@@ -1179,7 +1223,11 @@ export function buildCarouselSlides(
           photoIndex: 0,
           badgeText: s(`POV • ${brandName}`),
           headline: s(`Unboxing & Review Jujur ${subject}`),
-          subheadline: s(visionNote ?? `Kenapa ramai cakap pasal ${details.collabTag ?? brandName}?`),
+          subheadline: s(
+            visionNote
+              ? `Foto sebenar: ${visionNote}`
+              : `Kenapa ramai cakap pasal ${collabMention}?`
+          ),
           ctaText: 'Slide 1 / 4',
           editedByUser: false,
         },
@@ -1189,7 +1237,11 @@ export function buildCarouselSlides(
           role: 'offer',
           photoIndex: 1,
           badgeText: 'APA YANG DAPAT',
-          headline: s(details.bundleOrFreebie ? `${details.bundleOrFreebie} (${highlight})` : shortOffer),
+          headline: s(
+            details.bundleOrFreebie
+              ? `Apa Dalam Set: ${details.bundleOrFreebie} (${highlight})`
+              : `Apa Yang Anda Dapat: ${highlight}`
+          ),
           subheadline: s(`Foto sebenar produk & servis di ${brandName}`),
           ctaText: 'Lihat Perincian',
           editedByUser: false,
@@ -1227,7 +1279,11 @@ export function buildCarouselSlides(
           photoIndex: 0,
           badgeText: s(`KIRAAN NILAI • ${brandName}`),
           headline: s(`Pembeli Bijak Kira Nilai ${subject}`),
-          subheadline: s(visionNote ?? `Bandingkan setiap sen sebelum buat keputusan.`),
+          subheadline: s(
+            visionNote
+              ? `Nilai fizikal: ${visionNote}`
+              : `Bandingkan setiap sen sebelum buat keputusan.`
+          ),
           ctaText: 'Slide 1 / 4',
           editedByUser: false,
         },
@@ -1238,7 +1294,7 @@ export function buildCarouselSlides(
           photoIndex: 1,
           badgeText: s(details.discountPercent ?? details.priceTag ?? 'PECAHAN KOS'),
           headline: s(`Nilai Jelas: ${highlight}`),
-          subheadline: s(shortOffer),
+          subheadline: s(`Pecahan telus — ${shortOffer}`),
           ctaText: 'Tiada Caj Tersorok',
           editedByUser: false,
         },
@@ -1260,7 +1316,7 @@ export function buildCarouselSlides(
           photoIndex: 1,
           badgeText: 'KUNCI HARGA',
           headline: s(`Minta Sebut Harga ${brandName}`),
-          subheadline: `WhatsApp rasmi: +${brand.whatsappNumber}`,
+          subheadline: `Semak harga di +${brand.whatsappNumber}`,
           ctaText: 'Semak Harga',
           editedByUser: false,
         },
@@ -1274,8 +1330,12 @@ export function buildCarouselSlides(
           role: 'hook',
           photoIndex: 0,
           badgeText: s(details.occasion ? `DROP ${details.occasion.toUpperCase()}` : 'EDISI KHAS'),
-          headline: s(`${brandName} ${details.collabTag ?? ''}: Batch Awal Dibuka!`.trim()),
-          subheadline: s(visionNote ?? `${details.scarcityCue ?? 'Kuota terhad'} untuk pelanggan pantas.`),
+          headline: s(`${dropTitleBrand}: Batch Awal Dibuka!`),
+          subheadline: s(
+            visionNote
+              ? `Batch terawal: ${visionNote}`
+              : `${details.scarcityCue ?? 'Kuota terhad'} untuk pelanggan pantas.`
+          ),
           ctaText: 'Slide 1 / 4',
           editedByUser: false,
         },
@@ -1285,7 +1345,7 @@ export function buildCarouselSlides(
           role: 'offer',
           photoIndex: 1,
           badgeText: s(details.scarcityCue ?? 'TERHAD'),
-          headline: s(shortOffer),
+          headline: s(`Rebut Awal (${details.occasion ?? 'Edisi Terhad'}): ${highlight}`),
           subheadline: s(`Keutamaan batch ${details.occasion ?? 'terawal'} di ${brandName}`),
           ctaText: 'Masuk Senarai Awal',
           editedByUser: false,
@@ -1308,7 +1368,7 @@ export function buildCarouselSlides(
           photoIndex: 1,
           badgeText: 'LOCKED SLOT',
           headline: s(`Sahkan Giliran di ${brandName}`),
-          subheadline: `WhatsApp rasmi: +${brand.whatsappNumber}`,
+          subheadline: `Tempah awal di +${brand.whatsappNumber}`,
           ctaText: 'Grab Sekarang',
           editedByUser: false,
         },
@@ -1327,7 +1387,7 @@ export function buildStoryboardFrames(
   const cleanOffer = cleanOfferText(offerSentence);
   const details = extractOfferDetails(brandName, cleanOffer);
   const framework = getFrameworkForVariation(variationIndex);
-  const subject = formatOfferSubject(details);
+  const subject = getDistinctSubject(details, cleanOffer);
   const highlight = formatOfferHighlight(details);
   const lines = lyrics
     .split('\n')
@@ -1337,7 +1397,7 @@ export function buildStoryboardFrames(
   const s = (text: string) => ensureSafeField(text, brandName);
 
   const visionBit = productVisionSummary?.trim()
-    ? sliceSafeUtf16(productVisionSummary.trim(), 44)
+    ? sliceSafeUtf16(productVisionSummary.trim(), 40)
     : null;
 
   let headlines: [string, string, string, string];
@@ -1345,41 +1405,45 @@ export function buildStoryboardFrames(
     case 'pas':
       headlines = [
         `${brandName}: Solusi ${subject}`,
-        visionBit ?? `Mudah & Kemas Untuk Rutin Anda`,
-        shortOffer,
-        `WhatsApp +${brand.whatsappNumber}`,
+        visionBit ? `Solusi: ${visionBit}` : `Mudah & Kemas Untuk Rutin Anda`,
+        `Pilihan Jelas: ${shortOffer}`,
+        `WhatsApp +${brand.whatsappNumber} Sekarang`,
       ];
       break;
     case 'bab':
       headlines = [
         `${brandName}: Rutin Baru Lebih Selesa`,
-        visionBit ?? `Tinggalkan Cara Lama Yang Leceh`,
-        `${highlight} — ${details.occasion ?? 'Hari Ini'}`,
-        `WhatsApp +${brand.whatsappNumber}`,
+        visionBit ? `Rutin Baru: ${visionBit}` : `Tinggalkan Cara Lama Yang Leceh`,
+        `Gaya Baharu: ${highlight}`,
+        `Tukar Rutin: WhatsApp +${brand.whatsappNumber}`,
       ];
       break;
     case 'pov_ugc':
       headlines = [
         `POV Unboxing ${brandName}`,
-        visionBit ?? `Review Jujur ${subject}`,
-        details.bundleOrFreebie ?? highlight,
-        `WhatsApp +${brand.whatsappNumber}`,
+        visionBit ? `Foto Nyata: ${visionBit}` : `Review Jujur ${subject}`,
+        details.bundleOrFreebie
+          ? `Dalam Kotak: ${details.bundleOrFreebie}`
+          : `Ulasan Nyata: ${highlight}`,
+        `Cuba Sekarang — WA +${brand.whatsappNumber}`,
       ];
       break;
     case 'smart_buyer':
       headlines = [
         `Kiraan Bijak ${brandName}`,
         `Banding Nilai: ${highlight}`,
-        shortOffer,
-        `WhatsApp +${brand.whatsappNumber}`,
+        `Kiraan Jimat: ${highlight}`,
+        `Kunci Nilai: WA +${brand.whatsappNumber}`,
       ];
       break;
     case 'fomo_drop':
       headlines = [
         `Drop ${details.occasion ?? 'Khas'} ${brandName}`,
-        details.scarcityCue ?? `Kuota Terawal Bergerak Laju`,
-        `${highlight} — ${shortOffer}`,
-        `WhatsApp +${brand.whatsappNumber}`,
+        details.scarcityCue
+          ? `Pantas: ${details.scarcityCue}`
+          : `Kuota Terawal Bergerak Laju`,
+        `Drop Terawal: ${shortOffer}`,
+        `Slot Terawal: WA +${brand.whatsappNumber}`,
       ];
       break;
   }
@@ -1959,7 +2023,7 @@ export async function generateMultimodalCampaignWithGemini(params: {
           overlayHeadline = `${brandName}: ${overlayHeadline}`;
         }
         if (idx === 3 && !overlayHeadline.includes(`+${params.brand.whatsappNumber}`)) {
-          overlayHeadline = `WhatsApp +${params.brand.whatsappNumber}`;
+          overlayHeadline = baseFrame.overlayHeadline;
         }
         const lyricLine = sanitizeChannelText(
           candidate?.lyricLine,

@@ -314,6 +314,10 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     logoDataUrl: activeBrand.logoDataUrl,
   });
   const copyEditedByUserRef = useRef<Partial<Record<AngleId, boolean>>>({});
+  const editedCopyByAngleRef = useRef<EditedCopyByAngle>(editedCopyByAngle);
+  editedCopyByAngleRef.current = editedCopyByAngle;
+  const slidesRef = useRef<CarouselSlide[]>(slides);
+  slidesRef.current = slides;
   const jingleRef = useRef<JingleState>(jingle);
   jingleRef.current = jingle;
   const videoRef = useRef<VideoStudioState>(video);
@@ -424,45 +428,53 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       : inputRef.current.offerSentence;
     const activeVarIdx = variationIndexRef.current;
 
+    let nextPsych = buildCustomerPsychology(activeBrand, currentOffer, activeVarIdx);
+    let nextCopyMap = editedCopyByAngleRef.current;
+    let nextSlides = slidesRef.current;
+    let effectiveLyrics = jingleRef.current.lyrics;
+    let nextFrames = videoRef.current.storyboardFrames;
+
     if (nameChanged || toneChanged || phoneChanged) {
       campaignVisionSeqRef.current += 1;
       campaignVisionAbortRef.current?.abort();
       campaignVisionAbortRef.current = null;
       setCampaignGenStatus((prevStatus) => (prevStatus === 'generating' ? 'ready' : prevStatus));
 
-      setCustomerPsychology(buildCustomerPsychology(activeBrand, currentOffer, activeVarIdx));
+      setCustomerPsychology(nextPsych);
 
-      setEditedCopyByAngle((prevMap) => {
-        const nextMap: EditedCopyByAngle = {};
-        for (const angle of ANGLES_LIST) {
-          const existing = prevMap[angle];
-          if (!existing || (!copyEditedByUserRef.current[angle] && (nameChanged || toneChanged))) {
-            nextMap[angle] = generateCampaignCopyForAngle(
-              activeBrand,
-              currentOffer,
-              angle,
-              activeVarIdx
-            );
-          } else if (phoneChanged) {
-            nextMap[angle] = syncChannelCopyWhatsapp(existing, activeBrand.whatsappNumber);
-          } else {
-            nextMap[angle] = existing;
-          }
+      const prevMap = editedCopyByAngleRef.current;
+      const computedCopyMap: EditedCopyByAngle = {};
+      for (const angle of ANGLES_LIST) {
+        const existing = prevMap[angle];
+        if (!existing || (!copyEditedByUserRef.current[angle] && (nameChanged || toneChanged))) {
+          computedCopyMap[angle] = generateCampaignCopyForAngle(
+            activeBrand,
+            currentOffer,
+            angle,
+            activeVarIdx
+          );
+        } else if (phoneChanged) {
+          computedCopyMap[angle] = syncChannelCopyWhatsapp(existing, activeBrand.whatsappNumber);
+        } else {
+          computedCopyMap[angle] = existing;
         }
-        return nextMap;
-      });
-    }
+      }
+      nextCopyMap = computedCopyMap;
+      editedCopyByAngleRef.current = computedCopyMap;
+      setEditedCopyByAngle(computedCopyMap);
 
-    if (nameChanged || toneChanged || phoneChanged) {
       const baselineSlides = buildBaselineSlides(activeBrand, currentOffer, activeVarIdx);
-      setSlides((prevSlides) =>
-        prevSlides.map((slide, idx) =>
-          slide.editedByUser ? slide : (baselineSlides[idx] ?? slide)
-        )
+      nextSlides = slidesRef.current.map((slide, idx) =>
+        slide.editedByUser ? slide : (baselineSlides[idx] ?? slide)
       );
+      slidesRef.current = nextSlides;
+      setSlides(nextSlides);
 
       if (nameChanged || phoneChanged) {
         const nextLyrics = buildBaselineLyrics(activeBrand, currentOffer, activeVarIdx);
+        effectiveLyrics = jingleRef.current.lyricsEditedByUser
+          ? jingleRef.current.lyrics
+          : nextLyrics;
         if (!jingleRef.current.lyricsEditedByUser) {
           setJingle((prevJingle) =>
             prevJingle.lyricsEditedByUser ? prevJingle : { ...prevJingle, lyrics: nextLyrics }
@@ -477,7 +489,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       videoAbortRef.current = null;
       isVideoRenderingRef.current = false;
       const nextLyrics = buildBaselineLyrics(activeBrand, currentOffer, activeVarIdx);
-      const effectiveLyrics = jingleRef.current.lyricsEditedByUser
+      effectiveLyrics = jingleRef.current.lyricsEditedByUser
         ? jingleRef.current.lyrics
         : nextLyrics;
       const baselineFrames =
@@ -485,8 +497,14 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
           ? buildBaselineStoryboard(activeBrand, currentOffer, effectiveLyrics, activeVarIdx)
           : null;
 
+      if (baselineFrames) {
+        nextFrames = videoRef.current.storyboardFrames.map((frame, idx) =>
+          frame.editedByUser ? frame : (baselineFrames[idx] ?? frame)
+        );
+      }
+
       setVideo((prevVideo) => {
-        const nextFrames = baselineFrames
+        const computedFrames = baselineFrames
           ? prevVideo.storyboardFrames.map((frame, idx) =>
               frame.editedByUser ? frame : (baselineFrames[idx] ?? frame)
             )
@@ -495,7 +513,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
           safeRevokeBlobUrl(prevVideo.videoUrl);
           return {
             ...prevVideo,
-            storyboardFrames: nextFrames,
+            storyboardFrames: computedFrames,
             isStoryboardConfirmed: false,
             status: 'awaiting-confirmation',
             videoBlob: null,
@@ -511,7 +529,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         }
         const framesUpdated =
           baselineFrames !== null &&
-          nextFrames.some(
+          computedFrames.some(
             (frame, idx) =>
               frame.overlayHeadline !== prevVideo.storyboardFrames[idx]?.overlayHeadline ||
               frame.lyricLine !== prevVideo.storyboardFrames[idx]?.lyricLine
@@ -520,12 +538,52 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         if (framesUpdated || (prevVideo.isStoryboardConfirmed && visualBrandingChanged)) {
           return {
             ...prevVideo,
-            storyboardFrames: nextFrames,
+            storyboardFrames: computedFrames,
             isStoryboardConfirmed: false,
           };
         }
         return prevVideo;
       });
+    }
+
+    if (nameChanged || toneChanged) {
+      if (launchedSnapshotRef.current !== null) {
+        const offlineSource: CampaignGenerationSource = isDemoModeRef.current
+          ? 'offline-smart-demo'
+          : 'offline-smart-fallback';
+        const snapshotCopyByAngle: Record<AngleId, ChannelCopy> = {
+          urgency:
+            nextCopyMap.urgency ??
+            generateCampaignCopyForAngle(activeBrand, currentOffer, 'urgency', activeVarIdx),
+          value:
+            nextCopyMap.value ??
+            generateCampaignCopyForAngle(activeBrand, currentOffer, 'value', activeVarIdx),
+          social_proof:
+            nextCopyMap.social_proof ??
+            generateCampaignCopyForAngle(activeBrand, currentOffer, 'social_proof', activeVarIdx),
+        };
+        const refreshedSnapshot: CampaignVariationSnapshot = {
+          variationIndex: activeVarIdx,
+          frameworkId: getFrameworkForVariation(activeVarIdx),
+          psychology: nextPsych,
+          copyByAngle: snapshotCopyByAngle,
+          slides: nextSlides,
+          jingleLyrics: effectiveLyrics,
+          storyboardFrames: nextFrames,
+          source: offlineSource,
+          productVisionSummary: null,
+        };
+        const nextCache = { [activeVarIdx]: refreshedSnapshot };
+        generatedVariationsRef.current = nextCache;
+        setGeneratedVariations(nextCache);
+        productVisionSummaryRef.current = null;
+        setProductVisionSummary(null);
+        campaignGenSourceRef.current = offlineSource;
+        setCampaignGenSource(offlineSource);
+      } else {
+        generatedVariationsRef.current = {};
+        setGeneratedVariations({});
+      }
     }
   }, [activeBrand]);
 
@@ -1076,12 +1134,18 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         }
         setEditedCopyByAngle(syncedCopy);
 
+        const baselineSlidesForWa = buildBaselineSlides(brand, offerSentence, targetIndex);
         setSlides(
-          cached.slides.map((slide) => ({
+          cached.slides.map((slide, idx) => ({
             ...slide,
             editedByUser: false,
             ...(slide.role === 'cta'
-              ? { subheadline: `Nombor rasmi: +${brand.whatsappNumber}` }
+              ? {
+                  subheadline: /\+\d+/.test(slide.subheadline)
+                    ? slide.subheadline.replace(/\+\d+/g, `+${brand.whatsappNumber}`)
+                    : (baselineSlidesForWa[idx]?.subheadline ??
+                      `Nombor rasmi: +${brand.whatsappNumber}`),
+                }
               : {}),
           }))
         );
@@ -1092,6 +1156,12 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
           lyricsEditedByUser: false,
         }));
 
+        const baselineFramesForWa = buildBaselineStoryboard(
+          brand,
+          offerSentence,
+          cached.jingleLyrics,
+          targetIndex
+        );
         setVideo((prevVideo) => {
           safeRevokeBlobUrl(prevVideo.videoUrl);
           return {
@@ -1099,7 +1169,14 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
             storyboardFrames: cached.storyboardFrames.map((f, idx) => ({
               ...f,
               editedByUser: false,
-              ...(idx === 3 ? { overlayHeadline: `WhatsApp +${brand.whatsappNumber}` } : {}),
+              ...(idx === 3
+                ? {
+                    overlayHeadline: /\+\d+/.test(f.overlayHeadline)
+                      ? f.overlayHeadline.replace(/\+\d+/g, `+${brand.whatsappNumber}`)
+                      : (baselineFramesForWa[3]?.overlayHeadline ??
+                        `WhatsApp +${brand.whatsappNumber}`),
+                  }
+                : {}),
             })),
             isStoryboardConfirmed: false,
             status: 'awaiting-confirmation',

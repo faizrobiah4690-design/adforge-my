@@ -93,7 +93,7 @@ export function WorkspaceShell() {
               <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
                 <span
                   data-testid="active-variation-label"
-                  className="text-xs sm:text-sm font-semibold text-slate-100 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug min-w-0"
+                  className="text-xs sm:text-sm font-semibold text-slate-100 whitespace-normal [overflow-wrap:anywhere] leading-snug min-w-0"
                 >
                   {t('variation.activeLabel')} #{variationIndex} — {t(activeFwPill.labelKey)}
                 </span>
@@ -113,7 +113,7 @@ export function WorkspaceShell() {
                   ) : (
                     <Cpu className="h-3.5 w-3.5 shrink-0" />
                   )}
-                  <span className="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
+                  <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] leading-snug">
                     {t(statusBadgeKey)}
                   </span>
                 </span>
@@ -121,7 +121,7 @@ export function WorkspaceShell() {
                 {productVisionSummary ? (
                   <span
                     data-testid="product-vision-summary-badge"
-                    className="inline-flex items-center rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-2.5 py-1 text-[11px] text-indigo-200 max-w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug"
+                    className="inline-block rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-2.5 py-1 text-[11px] text-indigo-200 max-w-full min-w-0 whitespace-normal [overflow-wrap:anywhere] leading-snug"
                   >
                     {t('variation.visionPrefix')} {productVisionSummary}
                   </span>
@@ -135,19 +135,19 @@ export function WorkspaceShell() {
                 onClick={() => {
                   void generateNewVariation();
                 }}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sky-500/50 bg-sky-500/15 px-3 py-1.5 text-xs sm:text-sm font-semibold text-sky-200 hover:bg-sky-500/25 disabled:opacity-55 disabled:cursor-not-allowed transition cursor-pointer max-w-full min-w-0 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sky-500/50 bg-sky-500/15 px-3 py-1.5 text-xs sm:text-sm font-semibold text-sky-200 hover:bg-sky-500/25 disabled:opacity-55 disabled:cursor-not-allowed transition cursor-pointer max-w-full min-w-0 whitespace-normal [overflow-wrap:anywhere] leading-snug"
               >
                 {isGenerating ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
                 ) : null}
-                <span>
+                <span className="min-w-0 [overflow-wrap:anywhere]">
                   {isGenerating ? t('variation.generatingBtn') : t('variation.newBtn')}
                 </span>
               </button>
             </div>
 
             {isGenerating ? (
-              <p className="text-[11px] text-sky-300 whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
+              <p className="text-[11px] text-sky-300 whitespace-normal [overflow-wrap:anywhere] leading-snug">
                 {t('variation.generatingBanner')}
               </p>
             ) : null}
@@ -165,7 +165,7 @@ export function WorkspaceShell() {
                     onClick={() => {
                       void selectVariation(fw.slot);
                     }}
-                    className={`rounded-xl border px-2.5 py-1.5 text-[11px] sm:text-xs font-medium text-left transition cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed min-w-0 max-w-full whitespace-normal break-words [overflow-wrap:anywhere] leading-snug ${
+                    className={`rounded-xl border px-2.5 py-1.5 text-[11px] sm:text-xs font-medium text-left transition cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere] leading-snug ${
                       isSelected
                         ? 'border-sky-500 bg-sky-500/15 text-sky-100 ring-1 ring-sky-500/40'
                         : 'border-slate-800 bg-[#0B0F19] text-slate-300 hover:border-slate-700 hover:text-slate-100'
@@ -201,7 +201,7 @@ export function WorkspaceShell() {
                   }`}
                 >
                   <TabIcon tabId={tab.id} />
-                  <span className="leading-tight text-center break-words">{t(tab.labelKey)}</span>
+                  <span className="min-w-0 leading-tight text-center [overflow-wrap:anywhere]">{t(tab.labelKey)}</span>
                 </button>
               );
             })}

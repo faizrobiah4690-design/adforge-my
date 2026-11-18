@@ -62,10 +62,25 @@ describe('M11 Offer Extraction, "Tawaran Tawaran" Fix & 5-Framework Variation En
     expect(details.discountPercent).toBe('20%');
     expect(details.priceTag).toBe('RM899');
     expect(details.bundleOrFreebie).toMatch(/Percuma Casing/i);
-    expect(details.occasion).toMatch(/Edisi Terhad|Minggu Gaji/i);
+    expect(details.occasion).toBe('Minggu Gaji');
     expect(details.scarcityCue).toMatch(/stok & slot terhad/i);
     expect(details.vertical).toBe('beauty');
     expect(details.productTopic.length).toBeGreaterThan(0);
+
+    // Specific seasonal/payday occasion must win over generic "Edisi Khas" prefix even without bundle
+    const edisiMingguGaji = extractOfferDetails(
+      'Ulike X HelloKitty',
+      'Edisi Khas diskaun 20% RM899 sempena Minggu Gaji, stok & slot terhad'
+    );
+    expect(edisiMingguGaji.collabTag).toBe('X HelloKitty');
+    expect(edisiMingguGaji.occasion).toBe('Minggu Gaji');
+
+    // Words starting with X/x (no whitespace after X) must NEVER be misparsed as collabTag
+    const xiaomiDetails = extractOfferDetails(
+      'Xiaomi Malaysia',
+      'Telefon pintar Xpress diskaun 15% RM1299'
+    );
+    expect(xiaomiDetails.collabTag).toBeNull();
 
     const fnbDetails = extractOfferDetails(
       'Kopi Kampung',
@@ -210,6 +225,187 @@ describe('M11 Offer Extraction, "Tawaran Tawaran" Fix & 5-Framework Variation En
     expect(slideSet.size).toBe(5);
     expect(lyricsSet.size).toBe(5);
     expect(frameSet.size).toBe(5);
+  });
+
+  it('guarantees strict 5/5 distinctness on EVERY individual Slide (0..3) & Storyboard Frame (0..3) and zero duplicated tokens even without bundleOrFreebie', () => {
+    const noBundleOffer =
+      'Edisi Khas diskaun 20% RM899 sempena Minggu Gaji, stok & slot terhad';
+    const minimalOffer = 'Promosi hebat minggu ini';
+
+    for (const [offer, visionSummary] of [
+      [noBundleOffer, null],
+      [noBundleOffer, 'Peranti IPL merah jambu Ulike X HelloKitty bersama sarung pelindung.'],
+      [minimalOffer, null],
+    ] as const) {
+      const slideHeadlineSets = [
+        new Set<string>(),
+        new Set<string>(),
+        new Set<string>(),
+        new Set<string>(),
+      ];
+      const slideSubSets = [
+        new Set<string>(),
+        new Set<string>(),
+        new Set<string>(),
+        new Set<string>(),
+      ];
+      const frameHeadlineSets = [
+        new Set<string>(),
+        new Set<string>(),
+        new Set<string>(),
+        new Set<string>(),
+      ];
+
+      for (let v = 1; v <= 5; v += 1) {
+        const psych = buildCustomerPsychology(ULIKE_BRAND, offer, v);
+        const copyMap = generateCampaignCopyMap(ULIKE_BRAND, offer, v);
+        const slides = buildCarouselSlides(ULIKE_BRAND, offer, v, visionSummary);
+        const lyrics = buildJingleLyrics(ULIKE_BRAND.name, offer, v);
+        const frames = buildStoryboardFrames(ULIKE_BRAND, offer, lyrics, v, visionSummary);
+
+        expect(slides).toHaveLength(4);
+        expect(frames).toHaveLength(4);
+        expect(frames[0].overlayHeadline).toContain(ULIKE_BRAND.name);
+        expect(frames[3].overlayHeadline).toContain(`+${ULIKE_BRAND.whatsappNumber}`);
+
+        slides.forEach((s, idx) => {
+          slideHeadlineSets[idx].add(s.headline);
+          slideSubSets[idx].add(s.subheadline);
+          expect(checkCopyCompliance(s.headline)).toHaveLength(0);
+          expect(checkCopyCompliance(s.subheadline)).toHaveLength(0);
+        });
+
+        frames.forEach((f, idx) => {
+          frameHeadlineSets[idx].add(f.overlayHeadline);
+          expect(checkCopyCompliance(f.overlayHeadline)).toHaveLength(0);
+          expect(checkCopyCompliance(f.lyricLine)).toHaveLength(0);
+        });
+
+        const allFields = [
+          psych.targetPersona,
+          psych.coreTrigger,
+          psych.frictionObjections,
+          psych.trustAnchors,
+          ...Object.values(copyMap).flatMap((c) => [
+            c.facebook.primaryText,
+            c.facebook.headline,
+            c.facebook.description,
+            c.instagram.caption,
+            c.tiktok.hook,
+            c.tiktok.script,
+            c.tiktok.caption,
+            ...c.google_rsa.headlines,
+            ...c.google_rsa.descriptions,
+          ]),
+          ...slides.flatMap((s) => [s.badgeText, s.headline, s.subheadline, s.ctaText]),
+          lyrics,
+          ...frames.flatMap((f) => [f.overlayHeadline, f.lyricLine]),
+        ];
+
+        for (const field of allFields) {
+          expect(field).not.toMatch(/X HelloKitty.*X HelloKitty/i);
+          expect(field).not.toMatch(/Ulike X HelloKitty.*Ulike X HelloKitty/i);
+          expect(field).not.toMatch(/Edisi Khas.*Edisi Khas/i);
+        }
+      }
+
+      for (let slot = 0; slot < 4; slot += 1) {
+        expect(slideHeadlineSets[slot].size, `Slide ${slot + 1} headlines for "${offer}"`).toBe(5);
+        expect(slideSubSets[slot].size, `Slide ${slot + 1} subheadlines for "${offer}"`).toBe(5);
+        expect(frameHeadlineSets[slot].size, `Frame ${slot + 1} headlines for "${offer}"`).toBe(5);
+      }
+    }
+  });
+
+  it('invalidates stale cached variations when active brand name or tone is edited mid-campaign', () => {
+    function CacheInvalidationProbe() {
+      const { activeBrandId, updateBrand } = useWorkbench();
+      const {
+        launchCampaign,
+        selectVariation,
+        variationIndex,
+        editedCopyByAngle,
+        slides,
+        jingle,
+        video,
+      } = useCampaign();
+
+      return (
+        <div>
+          <span data-testid="ci-var">{variationIndex}</span>
+          <span data-testid="ci-fb-headline">{editedCopyByAngle.urgency?.facebook.headline ?? ''}</span>
+          <span data-testid="ci-slide-3-head">{slides[3]?.headline ?? ''}</span>
+          <span data-testid="ci-lyrics">{jingle.lyrics}</span>
+          <span data-testid="ci-frame-0">{video.storyboardFrames[0]?.overlayHeadline ?? ''}</span>
+          <button
+            type="button"
+            data-testid="ci-launch"
+            onClick={() => launchCampaign({ offerSentence: ULIKE_OFFER })}
+          >
+            launch
+          </button>
+          <button
+            type="button"
+            data-testid="ci-v2"
+            onClick={() => {
+              void selectVariation(2);
+            }}
+          >
+            v2
+          </button>
+          <button
+            type="button"
+            data-testid="ci-v1"
+            onClick={() => {
+              void selectVariation(1);
+            }}
+          >
+            v1
+          </button>
+          <button
+            type="button"
+            data-testid="ci-rename-tone"
+            onClick={() =>
+              updateBrand(activeBrandId, { name: 'Jenama Kemas Baru', tone: 'professional' })
+            }
+          >
+            rename
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <I18nProvider>
+        <WorkbenchProvider>
+          <CampaignProvider>
+            <CacheInvalidationProbe />
+          </CampaignProvider>
+        </WorkbenchProvider>
+      </I18nProvider>
+    );
+
+    fireEvent.click(screen.getByTestId('ci-launch'));
+    expect(screen.getByTestId('ci-var')).toHaveTextContent('1');
+    expect(screen.getByTestId('ci-frame-0')).toHaveTextContent('Demo Bisnes Saya');
+
+    // Visit #2 so #1 and #2 are both cached under old brand name/tone
+    fireEvent.click(screen.getByTestId('ci-v2'));
+    expect(screen.getByTestId('ci-var')).toHaveTextContent('2');
+    expect(screen.getByTestId('ci-frame-0')).toHaveTextContent('Demo Bisnes Saya');
+
+    // Rename brand & change tone while on #2 -> #2 updates immediately and #1 cache is invalidated
+    fireEvent.click(screen.getByTestId('ci-rename-tone'));
+    expect(screen.getByTestId('ci-frame-0')).toHaveTextContent('Jenama Kemas Baru');
+    expect(screen.getByTestId('ci-fb-headline')).toHaveTextContent('Jenama Kemas Baru');
+
+    // Switch back to #1 -> MUST regenerate with new brand name & professional tone (not stale "Demo Bisnes Saya")
+    fireEvent.click(screen.getByTestId('ci-v1'));
+    expect(screen.getByTestId('ci-var')).toHaveTextContent('1');
+    expect(screen.getByTestId('ci-frame-0')).toHaveTextContent('Jenama Kemas Baru');
+    expect(screen.getByTestId('ci-slide-3-head')).toHaveTextContent('Jenama Kemas Baru');
+    expect(screen.getByTestId('ci-lyrics')).toContainHTML('Jenama Kemas Baru');
+    expect(screen.getByTestId('ci-fb-headline')).toHaveTextContent('Promosi Masa Terhad');
   });
 
   it('sends photo1 + photo2 inlineData to gemini-2.5-flash, falls back 2.5-flash -> 2.0-flash -> offline, and enforces Demo Mode zero-fetch guard', async () => {

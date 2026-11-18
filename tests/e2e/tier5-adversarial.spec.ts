@@ -1716,7 +1716,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
     });
 
     const ulikeOffer =
-      'Edisi Terhad diskaun 20% harga RM899 Beli 1 Percuma Casing sempena Minggu Gaji, stok & slot terhad — WhatsApp sekarang.';
+      'Edisi Khas diskaun 20% RM899 sempena Minggu Gaji, stok & slot terhad';
     await launchCampaign(page, {
       brandName: 'Ulike X HelloKitty',
       offerSentence: ulikeOffer,
@@ -1734,9 +1734,14 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
     expect(`${psychV1}\n${fbV1}\n${ttV1}`).not.toMatch(/\btawaran\s+tawaran\b/i);
     expect(`${psychV1}\n${fbV1}`).toMatch(/HelloKitty|20%|RM899|Minggu Gaji/i);
 
-    // Cycle Variasi #1 -> #2 -> #3 -> #4 -> #5 across Tabs 1-4
+    // Cycle Variasi #1 -> #2 -> #3 -> #4 -> #5 across Tabs 1-4 and assert strict 5/5 distinctness per slide/frame & zero token duplication
     const fbPrimarySamples = new Set<string>([fbV1]);
     const psychSamples = new Set<string>([psychV1]);
+    const lyricsSamples = new Set<string>();
+    const slideHeadSamples = [new Set<string>(), new Set<string>(), new Set<string>(), new Set<string>()];
+    const slideSubSamples = [new Set<string>(), new Set<string>(), new Set<string>(), new Set<string>()];
+    const frameHeadSamples = [new Set<string>(), new Set<string>(), new Set<string>(), new Set<string>()];
+    const collectedTexts: string[] = [psychV1, fbV1, ttV1];
 
     for (let step = 2; step <= 5; step += 1) {
       await page.getByTestId('generate-new-variation-btn').click();
@@ -1746,32 +1751,50 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
       expect(`${psychText}\n${fbText}`).not.toMatch(/\btawaran\s+tawaran\b/i);
       fbPrimarySamples.add(fbText);
       psychSamples.add(psychText);
+      collectedTexts.push(fbText, psychText);
     }
     expect(fbPrimarySamples.size).toBe(5);
     expect(psychSamples.size).toBe(5);
 
-    // Compare Tab 2, Tab 3, Tab 4 between Variasi #1 and Variasi #4 (Smart Buyer)
-    await page.getByTestId('variation-pill-1').click();
-    await openTab(page, 'carousel');
-    const slide1V1 = await loc.tab2.headlineInput.inputValue();
-    await openTab(page, 'jingle');
-    const lyricsV1 = await loc.tab3.lyricsInput.inputValue();
-    await openTab(page, 'video');
-    const frame1V1 = await page.getByTestId('video-frame-input-1').inputValue();
+    for (let slot = 1; slot <= 5; slot += 1) {
+      await page.getByTestId(`variation-pill-${slot}`).click();
+      await expect(page.getByTestId('active-variation-label')).toContainText(`#${slot}`);
 
-    await page.getByTestId('variation-pill-4').click();
-    await expect(page.getByTestId('active-variation-label')).toContainText('#4');
-    await openTab(page, 'carousel');
-    const slide1V4 = await loc.tab2.headlineInput.inputValue();
-    await openTab(page, 'jingle');
-    const lyricsV4 = await loc.tab3.lyricsInput.inputValue();
-    await openTab(page, 'video');
-    const frame1V4 = await page.getByTestId('video-frame-input-1').inputValue();
+      await openTab(page, 'carousel');
+      for (let sIdx = 0; sIdx < 4; sIdx += 1) {
+        await loc.tab2.slideBtn(sIdx + 1).click();
+        const headVal = await loc.tab2.headlineInput.inputValue();
+        const subVal = await loc.tab2.subheadlineInput.inputValue();
+        slideHeadSamples[sIdx].add(headVal);
+        slideSubSamples[sIdx].add(subVal);
+        collectedTexts.push(headVal, subVal);
+      }
 
-    expect(slide1V4).not.toBe(slide1V1);
-    expect(lyricsV4).not.toBe(lyricsV1);
-    expect(frame1V4).not.toBe(frame1V1);
-    await expect(loc.tab4.generateBtn).toBeDisabled();
+      await openTab(page, 'jingle');
+      const lyricsVal = await loc.tab3.lyricsInput.inputValue();
+      lyricsSamples.add(lyricsVal);
+      collectedTexts.push(lyricsVal);
+
+      await openTab(page, 'video');
+      await expect(loc.tab4.generateBtn).toBeDisabled();
+      for (let fIdx = 0; fIdx < 4; fIdx += 1) {
+        const frameVal = await page.getByTestId(`video-frame-input-${fIdx + 1}`).inputValue();
+        frameHeadSamples[fIdx].add(frameVal);
+        collectedTexts.push(frameVal);
+      }
+    }
+
+    expect(lyricsSamples.size).toBe(5);
+    for (let idx = 0; idx < 4; idx += 1) {
+      expect(slideHeadSamples[idx].size, `Tab 2 Slide ${idx + 1} headlines`).toBe(5);
+      expect(slideSubSamples[idx].size, `Tab 2 Slide ${idx + 1} subheadlines`).toBe(5);
+      expect(frameHeadSamples[idx].size, `Tab 4 Frame ${idx + 1} headlines`).toBe(5);
+    }
+    for (const txt of collectedTexts) {
+      expect(txt).not.toMatch(/X HelloKitty.*X HelloKitty/i);
+      expect(txt).not.toMatch(/Ulike X HelloKitty.*Ulike X HelloKitty/i);
+      expect(txt).not.toMatch(/Edisi Khas.*Edisi Khas/i);
+    }
 
     // Responsive check at 390x844 and 1440x900
     for (const vp of [
@@ -1857,8 +1880,8 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
                   {
                     text: JSON.stringify({
                       visualSummary: isV2
-                        ? 'Set peranti IPL merah jambu HelloKitty bersama cermin mata pelindung.'
-                        : 'Peranti IPL Ulike X HelloKitty berwarna merah jambu edisi koleksi.',
+                        ? 'Set peranti IPL merah jambu HelloKitty — UlikeXHelloKitty2026LimitedCollectorEditionSapphireCoolingIPLDeviceBundleWithProtectiveCaseMY'
+                        : 'Peranti IPL Ulike X HelloKitty berwarna merah jambu edisi koleksi — UlikeXHelloKitty2026LimitedCollectorEditionSapphireCoolingIPLDeviceBundleMY.',
                       psychology: {
                         targetPersona: isV2
                           ? 'Pengguna gaya hidup moden yang mahu rutin penjagaan rumah tanpa ke salon.'
@@ -1968,6 +1991,37 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (21 Tests)', () => {
 
     await openTab(page, 'jingle');
     expect(await loc.tab3.lyricsInput.inputValue()).toContain('Gaya baharu bersama Ulike X HelloKitty');
+
+    // Verify 320x700 & 390x844 (ms & en) zero-clipping & [overflow-wrap:anywhere] on product-vision-summary-badge with 80+ char unbroken token
+    await openTab(page, 'strategy');
+    for (const vp of [
+      { width: 320, height: 700 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(vp);
+      for (const locale of ['ms', 'en'] as const) {
+        await toggleLanguage(page, locale);
+        await assertNoHorizontalOverflow(page, `T5-23 ${vp.width} ${locale}`);
+        await assertNoElementClipping(page, `T5-23 ${vp.width} ${locale}`);
+
+        const badgeMetrics = await page.getByTestId('product-vision-summary-badge').evaluate((el) => {
+          const style = getComputedStyle(el);
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const textRect = range.getBoundingClientRect();
+          return {
+            scrollWidth: el.scrollWidth,
+            clientWidth: el.clientWidth,
+            overflowWrap: style.overflowWrap,
+            textRight: textRect.right,
+            innerWidth: window.innerWidth,
+          };
+        });
+        expect(badgeMetrics.overflowWrap).toBe('anywhere');
+        expect(badgeMetrics.scrollWidth).toBeLessThanOrEqual(badgeMetrics.clientWidth + 2);
+        expect(badgeMetrics.textRight).toBeLessThanOrEqual(badgeMetrics.innerWidth);
+      }
+    }
 
     errors.assertClean([/status of 503/i]);
     errors.detach();

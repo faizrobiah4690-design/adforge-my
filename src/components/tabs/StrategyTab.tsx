@@ -339,10 +339,10 @@ export function StrategyTab() {
       >
         <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
           <div className="min-w-0">
-            <h3 className="text-base sm:text-lg font-semibold text-slate-100 break-words [overflow-wrap:anywhere]">
+            <h3 className="text-base sm:text-lg font-semibold text-slate-100 [overflow-wrap:anywhere]">
               {t('tab1.psychologyTitle')} — {launchedBrand.name}
             </h3>
-            <p className="text-xs text-slate-400 break-words [overflow-wrap:anywhere] mt-0.5">
+            <p className="text-xs text-slate-400 [overflow-wrap:anywhere] mt-0.5">
               {launchedOfferSentence}
             </p>
           </div>
@@ -375,28 +375,28 @@ export function StrategyTab() {
             <div className="text-xs font-semibold uppercase tracking-wide text-sky-400">
               {t('tab1.personaLabel')}
             </div>
-            <p className="text-sm text-slate-200 break-words">{psychology.targetPersona}</p>
+            <p className="text-sm text-slate-200 [overflow-wrap:anywhere]">{psychology.targetPersona}</p>
           </div>
 
           <div className="rounded-lg border border-slate-800/90 bg-[#111827] p-3 space-y-1 min-w-0">
             <div className="text-xs font-semibold uppercase tracking-wide text-emerald-400">
               {t('tab1.triggerLabel')}
             </div>
-            <p className="text-sm text-slate-200 break-words">{psychology.coreTrigger}</p>
+            <p className="text-sm text-slate-200 [overflow-wrap:anywhere]">{psychology.coreTrigger}</p>
           </div>
 
           <div className="rounded-lg border border-slate-800/90 bg-[#111827] p-3 space-y-1 min-w-0">
             <div className="text-xs font-semibold uppercase tracking-wide text-amber-400">
               {t('tab1.frictionLabel')}
             </div>
-            <p className="text-sm text-slate-200 break-words">{psychology.frictionObjections}</p>
+            <p className="text-sm text-slate-200 [overflow-wrap:anywhere]">{psychology.frictionObjections}</p>
           </div>
 
           <div className="rounded-lg border border-slate-800/90 bg-[#111827] p-3 space-y-1 min-w-0">
             <div className="text-xs font-semibold uppercase tracking-wide text-indigo-400">
               {t('tab1.trustLabel')}
             </div>
-            <p className="text-sm text-slate-200 break-words">{psychology.trustAnchors}</p>
+            <p className="text-sm text-slate-200 [overflow-wrap:anywhere]">{psychology.trustAnchors}</p>
           </div>
         </div>
       </section>
@@ -436,12 +436,12 @@ export function StrategyTab() {
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-1.5 min-w-0">
-                  <span className="text-sm font-semibold break-words">{t(titleKey)}</span>
+                  <span className="text-sm font-semibold min-w-0 [overflow-wrap:anywhere]">{t(titleKey)}</span>
                   <span className="rounded bg-slate-800/90 px-1.5 py-0.5 text-[10px] font-mono text-sky-300">
                     {ANGLE_WHATSAPP_TAGS[angle].replace(/\[Kod:\s*|\]/g, '')}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 break-words">{t(descKey)}</p>
+                <p className="text-xs text-slate-400 [overflow-wrap:anywhere]">{t(descKey)}</p>
               </button>
             );
           })}
@@ -496,10 +496,10 @@ export function StrategyTab() {
                   <span>•</span>
                   <span className="font-mono">{angleTag}</span>
                 </div>
-                <p className="font-medium text-slate-100 break-words">
+                <p className="font-medium text-slate-100 [overflow-wrap:anywhere]">
                   {angleCopy.facebook.headline}
                 </p>
-                <p className="text-slate-400 break-words">{angleCopy.facebook.description}</p>
+                <p className="text-slate-400 [overflow-wrap:anywhere]">{angleCopy.facebook.description}</p>
               </div>
 
               <label className="block space-y-1 min-w-0">
@@ -602,7 +602,7 @@ export function StrategyTab() {
 
               <div className="rounded-lg border border-slate-800/80 bg-[#111827] px-3 py-2 text-xs text-slate-300 space-y-0.5 min-w-0">
                 <div className="text-[11px] text-pink-300 font-mono">{angleTag}</div>
-                <p className="text-slate-300 break-words">{angleCopy.instagram.hashtags}</p>
+                <p className="text-slate-300 [overflow-wrap:anywhere]">{angleCopy.instagram.hashtags}</p>
               </div>
 
               <label className="block space-y-1 min-w-0">
@@ -688,7 +688,7 @@ export function StrategyTab() {
 
               <div className="rounded-lg border border-slate-800/80 bg-[#111827] px-3 py-2 text-xs text-slate-300 space-y-0.5 min-w-0">
                 <div className="text-[11px] text-teal-300 font-mono">{angleTag}</div>
-                <p className="text-slate-200 break-words">{angleCopy.tiktok.hook}</p>
+                <p className="text-slate-200 [overflow-wrap:anywhere]">{angleCopy.tiktok.hook}</p>
               </div>
 
               <label className="block space-y-1 min-w-0">
@@ -869,7 +869,7 @@ export function StrategyTab() {
                   {angleCopy.google_rsa.negativeKeywords.map((kw, idx) => (
                     <span
                       key={`neg-${idx}-${kw}`}
-                      className="rounded-md border border-slate-700 bg-[#111827] px-2 py-0.5 text-xs text-slate-300 break-words"
+                      className="rounded-md border border-slate-700 bg-[#111827] px-2 py-0.5 text-xs text-slate-300 max-w-full min-w-0 [overflow-wrap:anywhere]"
                     >
                       -{kw}
                     </span>
@@ -1109,7 +1109,7 @@ export function StrategyTab() {
 
         <div data-testid="compliance-findings" className="space-y-2 min-w-0">
           {complianceFindings.length === 0 ? (
-            <p className="text-xs text-emerald-300 break-words">
+            <p className="text-xs text-emerald-300 [overflow-wrap:anywhere]">
               {t('tab1.compliancePass')}
             </p>
           ) : (
@@ -1119,20 +1119,20 @@ export function StrategyTab() {
                 className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 space-y-1 min-w-0"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
-                  <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[11px] font-semibold text-rose-200 break-words">
+                  <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[11px] font-semibold text-rose-200 max-w-full min-w-0 [overflow-wrap:anywhere]">
                     {finding.category === 'meta_personal_attributes'
                       ? extra.metaCategory
                       : extra.policyCategory}
                   </span>
-                  <span className="text-[11px] font-mono text-amber-200 break-words">
+                  <span className="text-[11px] font-mono text-amber-200 max-w-full min-w-0 [overflow-wrap:anywhere]">
                     {extra.matchedLabel}: &ldquo;{finding.matchedText}&rdquo;
                   </span>
                 </div>
-                <p className="text-xs text-slate-200 break-words">
+                <p className="text-xs text-slate-200 [overflow-wrap:anywhere]">
                   <strong className="text-rose-200">{extra.ruleLabel}:</strong>{' '}
                   {t(finding.ruleKey)}
                 </p>
-                <p className="text-xs text-emerald-200 break-words">
+                <p className="text-xs text-emerald-200 [overflow-wrap:anywhere]">
                   <strong className="text-emerald-300">{extra.suggestionLabel}:</strong>{' '}
                   {t(finding.suggestionKey)}
                 </p>
