@@ -3,12 +3,14 @@ import { expect, type BrowserContext, type Page, type Request, type Response } f
 export async function assertNoHorizontalOverflow(page: Page, label = 'viewport'): Promise<void> {
   const result = await page.evaluate(() => {
     const innerWidth = window.innerWidth;
+    const clientWidth = document.documentElement.clientWidth;
     const scrollWidth = document.documentElement.scrollWidth;
+    const maxWidth = Math.min(innerWidth, clientWidth);
     const offenders: Array<{ tag: string; testid: string | null; right: number }> = [];
-    if (scrollWidth > innerWidth) {
+    if (scrollWidth > maxWidth) {
       for (const el of Array.from(document.querySelectorAll<HTMLElement>('*'))) {
         const rect = el.getBoundingClientRect();
-        if (rect.width > 0 && rect.right > innerWidth + 1) {
+        if (rect.width > 0 && rect.right > maxWidth + 1) {
           offenders.push({
             tag: el.tagName.toLowerCase(),
             testid: el.getAttribute('data-testid'),
@@ -18,13 +20,127 @@ export async function assertNoHorizontalOverflow(page: Page, label = 'viewport')
         }
       }
     }
-    return { innerWidth, scrollWidth, offenders };
+    return { innerWidth, clientWidth, scrollWidth, maxWidth, offenders };
   });
 
   expect(
     result.scrollWidth,
-    `Horizontal overflow detected (${label}): scrollWidth=${result.scrollWidth} > innerWidth=${result.innerWidth}; offenders=${JSON.stringify(result.offenders)}`,
-  ).toBeLessThanOrEqual(result.innerWidth);
+    `Horizontal overflow detected (${label}): scrollWidth=${result.scrollWidth} > clientWidth=${result.clientWidth} / innerWidth=${result.innerWidth}; offenders=${JSON.stringify(result.offenders)}`,
+  ).toBeLessThanOrEqual(result.maxWidth);
+}
+
+export async function assertNoElementClipping(page: Page, label = 'viewport'): Promise<void> {
+  const result = await page.evaluate(() => {
+    const clientWidth = document.documentElement.clientWidth;
+    const issues: Array<{
+      kind: string;
+      tag: string;
+      testid: string | null;
+      text: string;
+      detail: string;
+    }> = [];
+
+    const isVisuallyHidden = (el: HTMLElement): boolean => {
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+        return true;
+      }
+      if (el.classList.contains('sr-only')) return true;
+      const r = el.getBoundingClientRect();
+      return r.width <= 1 && r.height <= 1;
+    };
+
+    const selector =
+      'button, a, [role="tab"], h1, h2, h3, h4, input, textarea, select, [data-testid$="-badge"]';
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+      if (el.closest('[aria-hidden="true"]') || el.closest('[inert]')) continue;
+      if (el.closest('[data-carousel-stage="true"]')) continue;
+      if (isVisuallyHidden(el)) continue;
+
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+
+      const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      const testid = el.getAttribute('data-testid');
+
+      // 1. Viewport bounds check
+      if (rect.left < -1 || rect.right > clientWidth + 1) {
+        issues.push({
+          kind: 'viewport-clip',
+          tag: el.tagName.toLowerCase(),
+          testid,
+          text,
+          detail: `left=${Math.round(rect.left)}, right=${Math.round(rect.right)}, clientWidth=${clientWidth}`,
+        });
+      }
+
+      // 2. Text / inner content horizontal clipping check on interactive/badge/heading elements
+      const tag = el.tagName.toLowerCase();
+      if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
+        const style = window.getComputedStyle(el);
+        if (style.overflowX === 'hidden' || style.overflowX === 'clip') {
+          if (el.scrollWidth > el.clientWidth + 2) {
+            issues.push({
+              kind: 'self-text-clip',
+              tag,
+              testid,
+              text,
+              detail: `scrollWidth=${el.scrollWidth} > clientWidth=${el.clientWidth}`,
+            });
+          }
+        }
+        for (const child of Array.from(el.querySelectorAll<HTMLElement>('span, div, p'))) {
+          if (isVisuallyHidden(child)) continue;
+          const cs = window.getComputedStyle(child);
+          if (
+            (cs.overflowX === 'hidden' || cs.overflowX === 'clip') &&
+            child.scrollWidth > child.clientWidth + 2
+          ) {
+            issues.push({
+              kind: 'child-text-clip',
+              tag: child.tagName.toLowerCase(),
+              testid,
+              text: (child.textContent ?? '').trim().slice(0, 60),
+              detail: `scrollWidth=${child.scrollWidth} > clientWidth=${child.clientWidth}`,
+            });
+          }
+        }
+      }
+
+      // 3. Ancestor overflow-hidden clipping check
+      let parent = el.parentElement;
+      while (parent && parent !== document.documentElement) {
+        const ps = window.getComputedStyle(parent);
+        if (
+          (ps.overflowX === 'hidden' || ps.overflowX === 'clip') &&
+          ps.overflowY !== 'auto' &&
+          ps.overflowY !== 'scroll'
+        ) {
+          const pRect = parent.getBoundingClientRect();
+          if (rect.left < pRect.left - 2 || rect.right > pRect.right + 2) {
+            issues.push({
+              kind: 'ancestor-clip',
+              tag,
+              testid,
+              text,
+              detail: `child(${Math.round(rect.left)}..${Math.round(rect.right)}) outside parent(${Math.round(pRect.left)}..${Math.round(pRect.right)})`,
+            });
+            break;
+          }
+        }
+        parent = parent.parentElement;
+      }
+
+      if (issues.length >= 10) break;
+    }
+
+    return { clientWidth, issues };
+  });
+
+  expect(
+    result.issues,
+    `Element clipping detected (${label} @ ${result.clientWidth}px): ${JSON.stringify(result.issues)}`,
+  ).toEqual([]);
 }
 
 function clusterPositions(values: number[], tolerancePx = 4): number[] {
@@ -46,22 +162,25 @@ export async function assertTabGridLayout(
   const container = page.locator(containerSelector).or(page.getByRole('tablist')).first();
   await expect(container).toBeVisible();
 
-  const boxes = await container.evaluate((el) => {
+  const { clientWidth, boxes } = await container.evaluate((el) => {
     const tabs = Array.from(el.querySelectorAll(':scope > [role="tab"], :scope > button'));
     const targets = tabs.length > 0 ? tabs : Array.from(el.children);
-    return targets.map((child, index) => {
-      const r = child.getBoundingClientRect();
-      return {
-        index,
-        text: (child.textContent ?? '').trim(),
-        x: r.x,
-        y: r.y,
-        width: r.width,
-        height: r.height,
-        right: r.right,
-        bottom: r.bottom,
-      };
-    });
+    return {
+      clientWidth: document.documentElement.clientWidth,
+      boxes: targets.map((child, index) => {
+        const r = child.getBoundingClientRect();
+        return {
+          index,
+          text: (child.textContent ?? '').trim(),
+          x: r.x,
+          y: r.y,
+          width: r.width,
+          height: r.height,
+          right: r.right,
+          bottom: r.bottom,
+        };
+      }),
+    };
   });
 
   expect(boxes, `Expected exactly 4 tab elements inside ${containerSelector}`).toHaveLength(4);
@@ -93,7 +212,7 @@ export async function assertTabGridLayout(
       expect(boxes.filter((b) => Math.abs(b.x - colX) <= 4)).toHaveLength(2);
     }
     for (const b of boxes) {
-      expect(b.right, `Mobile tab "${b.text}" must stay inside 390px`).toBeLessThanOrEqual(390);
+      expect(b.right, `Mobile tab "${b.text}" must stay inside ${clientWidth}px`).toBeLessThanOrEqual(clientWidth + 1);
     }
   } else {
     expect(xCols, `Expected 4 distinct X columns at desktop, got ${JSON.stringify(xCols)}`).toHaveLength(4);

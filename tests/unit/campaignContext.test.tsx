@@ -33,11 +33,11 @@ function CampaignProbe() {
       <span data-testid="active-brand-id">{activeBrandId}</span>
       <span data-testid="input-brand-id">{input.brandId}</span>
       <span data-testid="offer-val">{input.offerSentence}</span>
-      <span data-testid="fb-headline">{editedCopyByAngle.confidence?.facebook.headline ?? ''}</span>
-      <span data-testid="fb-wa">{editedCopyByAngle.confidence?.facebook.whatsappUrl ?? ''}</span>
-      <span data-testid="hygiene-wa">{editedCopyByAngle.hygiene?.facebook.whatsappUrl ?? ''}</span>
-      <span data-testid="payday-wa">{editedCopyByAngle.payday?.facebook.whatsappUrl ?? ''}</span>
-      <span data-testid="fb-primary">{editedCopyByAngle.confidence?.facebook.primaryText ?? ''}</span>
+      <span data-testid="fb-headline">{editedCopyByAngle.urgency?.facebook.headline ?? ''}</span>
+      <span data-testid="fb-wa">{editedCopyByAngle.urgency?.facebook.whatsappUrl ?? ''}</span>
+      <span data-testid="value-wa">{editedCopyByAngle.value?.facebook.whatsappUrl ?? ''}</span>
+      <span data-testid="social-wa">{editedCopyByAngle.social_proof?.facebook.whatsappUrl ?? ''}</span>
+      <span data-testid="fb-primary">{editedCopyByAngle.urgency?.facebook.primaryText ?? ''}</span>
       <span data-testid="slide-0-headline">{slides[0]?.headline ?? ''}</span>
       <span data-testid="jingle-lyrics">{jingle.lyrics}</span>
       <span data-testid="video-confirmed">{String(video.isStoryboardConfirmed)}</span>
@@ -48,7 +48,7 @@ function CampaignProbe() {
         onClick={() =>
           setInput((prev) => ({
             ...prev,
-            offerSentence: 'Diskaun Scaling RM99 Khas Minggu Gaji',
+            offerSentence: 'Diskaun Kombo RM29 Khas Minggu Gaji',
           }))
         }
       >
@@ -66,7 +66,7 @@ function CampaignProbe() {
         data-testid="same-tick-functional"
         onClick={() => {
           const folderB = createBrand({
-            name: 'Klinik Pergigian Damai',
+            name: 'Kafe Kopi Damai',
             whatsappNumber: '60191112222',
             tone: 'professional',
           });
@@ -85,7 +85,7 @@ function CampaignProbe() {
         data-testid="same-tick-direct"
         onClick={() => {
           const folderD = createBrand({
-            name: 'Klinik Senyum Sejahtera',
+            name: 'Butik Anggun Sejahtera',
             whatsappNumber: '60183334444',
           });
           setInput({
@@ -120,7 +120,7 @@ function CampaignProbe() {
         type="button"
         data-testid="edit-copy"
         onClick={() =>
-          updateChannelCopy('confidence', 'facebook', {
+          updateChannelCopy('urgency', 'facebook', {
             headline: 'Headline Suntingan Khas',
           })
         }
@@ -198,12 +198,12 @@ describe('CampaignContext isolation and hydration', () => {
 
     expect(screen.getByTestId('launched')).toHaveTextContent('true');
     expect(screen.getByTestId('offer-val')).toHaveTextContent(
-      'Diskaun Scaling RM99 Khas Minggu Gaji'
+      'Diskaun Kombo RM29 Khas Minggu Gaji'
     );
     expect(screen.getByTestId('fb-wa').textContent).toContain('https://wa.me/60123456789');
-    expect(screen.getByTestId('jingle-lyrics').textContent).toContain('Klinik Gigi Impian');
+    expect(screen.getByTestId('jingle-lyrics').textContent).toContain('Demo Bisnes Saya');
     expect(screen.getByTestId('jingle-lyrics').textContent).toContain(
-      'Diskaun Scaling RM99 Khas Minggu Gaji'
+      'Diskaun Kombo RM29 Khas Minggu Gaji'
     );
 
     fireEvent.click(screen.getByTestId('edit-copy'));
@@ -216,7 +216,7 @@ describe('CampaignContext isolation and hydration', () => {
     expect(screen.getByTestId('locale')).toHaveTextContent('en');
     expect(screen.getByTestId('cta-label')).toHaveTextContent('Build Campaign');
     expect(screen.getByTestId('offer-val')).toHaveTextContent(
-      'Diskaun Scaling RM99 Khas Minggu Gaji'
+      'Diskaun Kombo RM29 Khas Minggu Gaji'
     );
     expect(screen.getByTestId('fb-headline')).toHaveTextContent('Headline Suntingan Khas');
     expect(screen.getByTestId('slide-0-headline')).toHaveTextContent('Slaid Pertama Disunting');
@@ -243,18 +243,18 @@ describe('CampaignContext isolation and hydration', () => {
     );
 
     fireEvent.click(screen.getByTestId('same-tick-functional'));
-    expect(screen.getByTestId('input-brand-id')).toHaveTextContent('klinik-pergigian-damai');
-    expect(screen.getByTestId('active-brand-id')).toHaveTextContent('klinik-pergigian-damai');
+    expect(screen.getByTestId('input-brand-id')).toHaveTextContent('kafe-kopi-damai');
+    expect(screen.getByTestId('active-brand-id')).toHaveTextContent('kafe-kopi-damai');
     expect(screen.getByTestId('offer-val')).toHaveTextContent('Same Tick Offer Functional');
     expect(screen.getByTestId('fb-wa').textContent).toContain('https://wa.me/60191112222');
-    expect(screen.getByTestId('fb-headline')).toHaveTextContent('Klinik Pergigian Damai');
+    expect(screen.getByTestId('fb-headline')).toHaveTextContent('Kafe Kopi Damai');
 
     fireEvent.click(screen.getByTestId('same-tick-direct'));
-    expect(screen.getByTestId('input-brand-id')).toHaveTextContent('klinik-senyum-sejahtera');
-    expect(screen.getByTestId('active-brand-id')).toHaveTextContent('klinik-senyum-sejahtera');
+    expect(screen.getByTestId('input-brand-id')).toHaveTextContent('butik-anggun-sejahtera');
+    expect(screen.getByTestId('active-brand-id')).toHaveTextContent('butik-anggun-sejahtera');
     expect(screen.getByTestId('offer-val')).toHaveTextContent('Same Tick Offer Direct');
     expect(screen.getByTestId('fb-wa').textContent).toContain('https://wa.me/60183334444');
-    expect(screen.getByTestId('fb-headline')).toHaveTextContent('Klinik Senyum Sejahtera');
+    expect(screen.getByTestId('fb-headline')).toHaveTextContent('Butik Anggun Sejahtera');
   });
 
   it('resolves newly created brand in the same event tick during createBrand + launchCampaign', () => {
@@ -291,7 +291,7 @@ describe('CampaignContext isolation and hydration', () => {
     );
 
     fireEvent.change(screen.getByTestId('new-brand-name-input'), {
-      target: { value: 'Klinik Senyum Baru' },
+      target: { value: 'Kopi & Kek Baru' },
     });
     fireEvent.click(screen.getByTestId('create-brand-btn'));
     fireEvent.change(screen.getByTestId('brand-whatsapp-input'), {
@@ -299,7 +299,7 @@ describe('CampaignContext isolation and hydration', () => {
     });
 
     const brandSelect = screen.getByTestId('campaign-brand-select') as HTMLSelectElement;
-    expect(brandSelect.value).toBe('klinik-senyum-baru');
+    expect(brandSelect.value).toBe('kopi-kek-baru');
 
     fireEvent.change(screen.getByTestId('offer-input'), {
       target: { value: 'Tawaran Folder B Test' },
@@ -307,13 +307,13 @@ describe('CampaignContext isolation and hydration', () => {
     fireEvent.click(screen.getByTestId('launch-campaign-btn'));
 
     const strategyTab = screen.getByTestId('strategy-tab');
-    expect(strategyTab.textContent).toContain('Klinik Senyum Baru');
+    expect(strategyTab.textContent).toContain('Kopi & Kek Baru');
     expect(strategyTab.textContent).toContain('https://wa.me/60198887777');
     expect(strategyTab.textContent).not.toContain('https://wa.me/60123456789');
 
     // Switching back to seeded folder updates QuickCampaignForm select automatically
-    fireEvent.click(screen.getByTestId('brand-folder-klinik-gigi-impian'));
-    expect(brandSelect.value).toBe('klinik-gigi-impian');
+    fireEvent.click(screen.getByTestId('brand-folder-demo-bisnes-saya'));
+    expect(brandSelect.value).toBe('demo-bisnes-saya');
   });
 
   it('populates SUDUT- angle-tagged wa.me links and compliant tone-aware copy immediately on mount and launch without StrategyTab', () => {
@@ -329,28 +329,28 @@ describe('CampaignContext isolation and hydration', () => {
 
     // Immediately on mount (pre-launch), baseline copy already uses canonical SUDUT- tags
     expect(decodeURIComponent(screen.getByTestId('fb-wa').textContent ?? '')).toContain(
-      'SUDUT-1-KEYAKINAN'
+      'SUDUT-1-SEGERA'
     );
-    expect(decodeURIComponent(screen.getByTestId('hygiene-wa').textContent ?? '')).toContain(
-      'SUDUT-2-PENCEGAHAN'
+    expect(decodeURIComponent(screen.getByTestId('value-wa').textContent ?? '')).toContain(
+      'SUDUT-2-NILAI'
     );
-    expect(decodeURIComponent(screen.getByTestId('payday-wa').textContent ?? '')).toContain(
-      'SUDUT-3-MINGGUGAJI'
+    expect(decodeURIComponent(screen.getByTestId('social-wa').textContent ?? '')).toContain(
+      'SUDUT-3-BUKTISOSIAL'
     );
 
     // Launching with a professional brand immediately applies SUDUT- tags and professional tone without StrategyTab
     fireEvent.click(screen.getByTestId('same-tick-create-launch'));
     expect(decodeURIComponent(screen.getByTestId('fb-wa').textContent ?? '')).toContain(
-      'SUDUT-1-KEYAKINAN'
+      'SUDUT-1-SEGERA'
     );
-    expect(decodeURIComponent(screen.getByTestId('hygiene-wa').textContent ?? '')).toContain(
-      'SUDUT-2-PENCEGAHAN'
+    expect(decodeURIComponent(screen.getByTestId('value-wa').textContent ?? '')).toContain(
+      'SUDUT-2-NILAI'
     );
-    expect(decodeURIComponent(screen.getByTestId('payday-wa').textContent ?? '')).toContain(
-      'SUDUT-3-MINGGUGAJI'
+    expect(decodeURIComponent(screen.getByTestId('social-wa').textContent ?? '')).toContain(
+      'SUDUT-3-BUKTISOSIAL'
     );
-    expect(screen.getByTestId('fb-headline')).toHaveTextContent('Keyakinan Klinikal');
-    expect(screen.getByTestId('fb-primary').textContent).toContain('KKLIU');
+    expect(screen.getByTestId('fb-headline')).toHaveTextContent('Promosi Masa Terhad');
+    expect(screen.getByTestId('fb-primary').textContent).toContain('WhatsApp rasmi');
   });
 
   it('reactively updates unedited Tabs 1-4 state on mid-campaign Brand Vault edits while preserving user-edited slides and lyrics', () => {
@@ -370,10 +370,10 @@ describe('CampaignContext isolation and hydration', () => {
       return (
         <div>
           <span data-testid="mc-fb-headline">
-            {editedCopyByAngle.confidence?.facebook.headline ?? ''}
+            {editedCopyByAngle.urgency?.facebook.headline ?? ''}
           </span>
           <span data-testid="mc-fb-primary">
-            {editedCopyByAngle.confidence?.facebook.primaryText ?? ''}
+            {editedCopyByAngle.urgency?.facebook.primaryText ?? ''}
           </span>
           <span data-testid="mc-slide-0-headline">{slides[0]?.headline ?? ''}</span>
           <span data-testid="mc-slide-3-headline">{slides[3]?.headline ?? ''}</span>
@@ -412,7 +412,7 @@ describe('CampaignContext isolation and hydration', () => {
             data-testid="mc-edit-brand"
             onClick={() =>
               updateBrand(activeBrandId, {
-                name: 'Klinik Baharu Pro',
+                name: 'Bisnes Baharu Pro',
                 whatsappNumber: '019-999 8888',
                 tone: 'professional',
               })
@@ -437,7 +437,7 @@ describe('CampaignContext isolation and hydration', () => {
             data-testid="mc-edit-brand-2"
             onClick={() =>
               updateBrand(activeBrandId, {
-                name: 'Klinik Pro Dua',
+                name: 'Bisnes Pro Dua',
               })
             }
           >
@@ -480,14 +480,14 @@ describe('CampaignContext isolation and hydration', () => {
 
     fireEvent.click(screen.getByTestId('mc-edit-brand'));
 
-    expect(screen.getByTestId('mc-fb-headline')).toHaveTextContent('Klinik Baharu Pro');
-    expect(screen.getByTestId('mc-fb-headline')).toHaveTextContent('Keyakinan Klinikal');
+    expect(screen.getByTestId('mc-fb-headline')).toHaveTextContent('Bisnes Baharu Pro');
+    expect(screen.getByTestId('mc-fb-headline')).toHaveTextContent('Promosi Masa Terhad');
     expect(screen.getByTestId('mc-fb-primary')).toHaveTextContent('https://wa.me/60199998888');
     expect(screen.getByTestId('mc-slide-0-headline')).toHaveTextContent('Slaid 1 Suntingan Kekal');
-    expect(screen.getByTestId('mc-slide-3-headline')).toHaveTextContent('Klinik Baharu Pro');
+    expect(screen.getByTestId('mc-slide-3-headline')).toHaveTextContent('Bisnes Baharu Pro');
     expect(screen.getByTestId('mc-slide-3-sub')).toHaveTextContent('+60199998888');
     expect(screen.getByTestId('mc-lyrics')).toHaveTextContent('Lirik Kekal Disunting');
-    expect(screen.getByTestId('mc-frame-0')).toHaveTextContent('Klinik Baharu Pro');
+    expect(screen.getByTestId('mc-frame-0')).toHaveTextContent('Bisnes Baharu Pro');
     expect(screen.getByTestId('mc-frame-3')).toHaveTextContent('+60199998888');
     expect(screen.getByTestId('mc-video-status')).toHaveTextContent('awaiting-confirmation');
     expect(screen.getByTestId('mc-video-confirmed')).toHaveTextContent('false');
@@ -495,7 +495,7 @@ describe('CampaignContext isolation and hydration', () => {
     // Unedited lyrics update reactively when brand name changes
     fireEvent.click(screen.getByTestId('mc-reset-lyrics-flag'));
     fireEvent.click(screen.getByTestId('mc-edit-brand-2'));
-    expect(screen.getByTestId('mc-lyrics')).toHaveTextContent('Klinik Pro Dua');
+    expect(screen.getByTestId('mc-lyrics')).toHaveTextContent('Bisnes Pro Dua');
   });
 
   it('preserves launched offer across unlaunched draft edits, isolates Brand B creation/edits, syncs Brand A on return, and invalidates ready video on themeColor/logoDataUrl change', () => {
@@ -515,7 +515,7 @@ describe('CampaignContext isolation and hydration', () => {
             <span data-testid="adv-slide-0-badge">{slides[0]?.badgeText ?? ''}</span>
             <span data-testid="adv-slide-1-head">{slides[1]?.headline ?? ''}</span>
             <span data-testid="adv-fb-primary">
-              {editedCopyByAngle.confidence?.facebook.primaryText ?? ''}
+              {editedCopyByAngle.urgency?.facebook.primaryText ?? ''}
             </span>
             <span data-testid="adv-lyrics">{jingle.lyrics}</span>
             <span data-testid="adv-video-status">{video.status}</span>
@@ -542,7 +542,7 @@ describe('CampaignContext isolation and hydration', () => {
               type="button"
               data-testid="adv-edit-a-name"
               onClick={() =>
-                updateBrand('klinik-gigi-impian', { name: 'Klinik Gigi Impian V2' })
+                updateBrand('demo-bisnes-saya', { name: 'Demo Bisnes Saya V2' })
               }
             >
               editAName
@@ -561,7 +561,7 @@ describe('CampaignContext isolation and hydration', () => {
               type="button"
               data-testid="adv-edit-a-while-b"
               onClick={() =>
-                updateBrand('klinik-gigi-impian', { name: 'Klinik Gigi Impian V3' })
+                updateBrand('demo-bisnes-saya', { name: 'Demo Bisnes Saya V3' })
               }
             >
               editAWhileB
@@ -569,7 +569,7 @@ describe('CampaignContext isolation and hydration', () => {
             <button
               type="button"
               data-testid="adv-return-a"
-              onClick={() => selectBrand('klinik-gigi-impian')}
+              onClick={() => selectBrand('demo-bisnes-saya')}
             >
               returnA
             </button>
@@ -591,7 +591,7 @@ describe('CampaignContext isolation and hydration', () => {
             <button
               type="button"
               data-testid="adv-change-theme"
-              onClick={() => updateBrand('klinik-gigi-impian', { themeColor: '#EF4444' })}
+              onClick={() => updateBrand('demo-bisnes-saya', { themeColor: '#EF4444' })}
             >
               changeTheme
             </button>
@@ -599,7 +599,7 @@ describe('CampaignContext isolation and hydration', () => {
               type="button"
               data-testid="adv-change-logo"
               onClick={() =>
-                updateBrand('klinik-gigi-impian', {
+                updateBrand('demo-bisnes-saya', {
                   logoDataUrl: 'data:image/png;base64,AAAA',
                 })
               }
@@ -627,7 +627,7 @@ describe('CampaignContext isolation and hydration', () => {
       fireEvent.click(screen.getByTestId('adv-draft-offer'));
       fireEvent.click(screen.getByTestId('adv-edit-a-name'));
 
-      expect(screen.getByTestId('adv-slide-0-badge')).toHaveTextContent('Klinik Gigi Impian V2');
+      expect(screen.getByTestId('adv-slide-0-badge')).toHaveTextContent('Demo Bisnes Saya V2');
       expect(screen.getByTestId('adv-slide-1-head')).toHaveTextContent('Tawaran Rasmi A');
       expect(screen.getByTestId('adv-slide-1-head')).not.toHaveTextContent('Draf Belum Lancar');
       expect(screen.getByTestId('adv-fb-primary')).toHaveTextContent('Tawaran Rasmi A');
@@ -636,16 +636,16 @@ describe('CampaignContext isolation and hydration', () => {
       // 2. Create & edit Brand B without launching -> Campaign A untouched
       fireEvent.click(screen.getByTestId('adv-create-edit-b'));
       expect(screen.getByTestId('adv-active-brand')).toHaveTextContent('brand-b');
-      expect(screen.getByTestId('adv-slide-0-badge')).toHaveTextContent('Klinik Gigi Impian V2');
+      expect(screen.getByTestId('adv-slide-0-badge')).toHaveTextContent('Demo Bisnes Saya V2');
       expect(screen.getByTestId('adv-fb-primary')).not.toContainHTML('Brand B Edited');
 
       // 3. Edit Brand A while Brand B is active, then switch back to Brand A -> syncs Brand A V3!
       fireEvent.click(screen.getByTestId('adv-edit-a-while-b'));
-      expect(screen.getByTestId('adv-slide-0-badge')).toHaveTextContent('Klinik Gigi Impian V2');
+      expect(screen.getByTestId('adv-slide-0-badge')).toHaveTextContent('Demo Bisnes Saya V2');
 
       fireEvent.click(screen.getByTestId('adv-return-a'));
-      expect(screen.getByTestId('adv-active-brand')).toHaveTextContent('klinik-gigi-impian');
-      expect(screen.getByTestId('adv-slide-0-badge')).toHaveTextContent('Klinik Gigi Impian V3');
+      expect(screen.getByTestId('adv-active-brand')).toHaveTextContent('demo-bisnes-saya');
+      expect(screen.getByTestId('adv-slide-0-badge')).toHaveTextContent('Demo Bisnes Saya V3');
       expect(screen.getByTestId('adv-slide-1-head')).toHaveTextContent('Tawaran Rasmi A');
 
       // 4. themeColor change invalidates ready video & revokes blob URL
@@ -676,14 +676,14 @@ describe('CampaignContext isolation and hydration', () => {
         <div>
           <span data-testid="probe-launched-brand">{launchedBrand.name}</span>
           <span data-testid="probe-launched-offer">{launchedOfferSentence}</span>
-          <span data-testid="probe-conf-wa">
-            {editedCopyByAngle.confidence?.facebook.whatsappUrl ?? ''}
+          <span data-testid="probe-urg-wa">
+            {editedCopyByAngle.urgency?.facebook.whatsappUrl ?? ''}
           </span>
-          <span data-testid="probe-hyg-wa">
-            {editedCopyByAngle.hygiene?.facebook.whatsappUrl ?? ''}
+          <span data-testid="probe-val-wa">
+            {editedCopyByAngle.value?.facebook.whatsappUrl ?? ''}
           </span>
-          <span data-testid="probe-pay-wa">
-            {editedCopyByAngle.payday?.facebook.whatsappUrl ?? ''}
+          <span data-testid="probe-soc-wa">
+            {editedCopyByAngle.social_proof?.facebook.whatsappUrl ?? ''}
           </span>
         </div>
       );
@@ -702,18 +702,18 @@ describe('CampaignContext isolation and hydration', () => {
       </I18nProvider>
     );
 
-    // 1. Launch Campaign A (Klinik Gigi Impian)
+    // 1. Launch Campaign A (Demo Bisnes Saya)
     fireEvent.change(screen.getByTestId('offer-input'), {
       target: { value: 'Tawaran Rasmi Kempen A' },
     });
     fireEvent.click(screen.getByTestId('launch-campaign-btn'));
 
-    expect(screen.getByTestId('probe-launched-brand')).toHaveTextContent('Klinik Gigi Impian');
+    expect(screen.getByTestId('probe-launched-brand')).toHaveTextContent('Demo Bisnes Saya');
     expect(screen.getByTestId('probe-launched-offer')).toHaveTextContent('Tawaran Rasmi Kempen A');
-    expect(screen.getByTestId('probe-conf-wa').textContent).toContain('https://wa.me/60123456789?text=');
-    expect(screen.getByTestId('probe-hyg-wa').textContent).toContain('https://wa.me/60123456789?text=');
-    expect(screen.getByTestId('probe-pay-wa').textContent).toContain('https://wa.me/60123456789?text=');
-    expect(screen.getByTestId('strategy-psychology-panel').textContent).toContain('Klinik Gigi Impian');
+    expect(screen.getByTestId('probe-urg-wa').textContent).toContain('https://wa.me/60123456789?text=');
+    expect(screen.getByTestId('probe-val-wa').textContent).toContain('https://wa.me/60123456789?text=');
+    expect(screen.getByTestId('probe-soc-wa').textContent).toContain('https://wa.me/60123456789?text=');
+    expect(screen.getByTestId('strategy-psychology-panel').textContent).toContain('Demo Bisnes Saya');
     expect(screen.getByTestId('strategy-psychology-panel').textContent).toContain('Tawaran Rasmi Kempen A');
     expect(screen.getByTestId('whatsapp-cta-facebook').getAttribute('href')).toContain(
       'https://wa.me/60123456789?text='
@@ -721,7 +721,7 @@ describe('CampaignContext isolation and hydration', () => {
 
     // 2. Create & select Brand B + type unlaunched offer draft WITHOUT clicking launch-campaign-btn
     fireEvent.change(screen.getByTestId('new-brand-name-input'), {
-      target: { value: 'Klinik Pergigian Beta' },
+      target: { value: 'Servis Pantas Beta' },
     });
     fireEvent.click(screen.getByTestId('create-brand-btn'));
     fireEvent.change(screen.getByTestId('brand-whatsapp-input'), {
@@ -732,37 +732,37 @@ describe('CampaignContext isolation and hydration', () => {
     });
 
     // Context copy map & Tab 1 UI must stay strictly on Campaign A
-    expect(screen.getByTestId('probe-launched-brand')).toHaveTextContent('Klinik Gigi Impian');
+    expect(screen.getByTestId('probe-launched-brand')).toHaveTextContent('Demo Bisnes Saya');
     expect(screen.getByTestId('probe-launched-offer')).toHaveTextContent('Tawaran Rasmi Kempen A');
-    expect(screen.getByTestId('probe-conf-wa').textContent).toContain('https://wa.me/60123456789?text=');
-    expect(screen.getByTestId('probe-hyg-wa').textContent).toContain('https://wa.me/60123456789?text=');
-    expect(screen.getByTestId('probe-pay-wa').textContent).toContain('https://wa.me/60123456789?text=');
-    expect(screen.getByTestId('probe-conf-wa').textContent).not.toContain('60191112222');
+    expect(screen.getByTestId('probe-urg-wa').textContent).toContain('https://wa.me/60123456789?text=');
+    expect(screen.getByTestId('probe-val-wa').textContent).toContain('https://wa.me/60123456789?text=');
+    expect(screen.getByTestId('probe-soc-wa').textContent).toContain('https://wa.me/60123456789?text=');
+    expect(screen.getByTestId('probe-urg-wa').textContent).not.toContain('60191112222');
 
     const strategyPanel = screen.getByTestId('strategy-psychology-panel');
-    expect(strategyPanel.textContent).toContain('Klinik Gigi Impian');
+    expect(strategyPanel.textContent).toContain('Demo Bisnes Saya');
     expect(strategyPanel.textContent).toContain('Tawaran Rasmi Kempen A');
-    expect(strategyPanel.textContent).not.toContain('Klinik Pergigian Beta');
+    expect(strategyPanel.textContent).not.toContain('Servis Pantas Beta');
     expect(strategyPanel.textContent).not.toContain('Draf Tawaran Brand B Belum Lancar');
     expect(screen.getByTestId('whatsapp-cta-facebook').getAttribute('href')).toContain(
       'https://wa.me/60123456789?text='
     );
 
-    // 3. Switch back to Klinik Gigi Impian -> confirm zero pollution
-    fireEvent.click(screen.getByTestId('brand-folder-klinik-gigi-impian'));
-    expect(screen.getByTestId('probe-conf-wa').textContent).toContain('https://wa.me/60123456789?text=');
-    expect(screen.getByTestId('probe-hyg-wa').textContent).toContain('https://wa.me/60123456789?text=');
-    expect(screen.getByTestId('probe-pay-wa').textContent).toContain('https://wa.me/60123456789?text=');
+    // 3. Switch back to Demo Bisnes Saya -> confirm zero pollution
+    fireEvent.click(screen.getByTestId('brand-folder-demo-bisnes-saya'));
+    expect(screen.getByTestId('probe-urg-wa').textContent).toContain('https://wa.me/60123456789?text=');
+    expect(screen.getByTestId('probe-val-wa').textContent).toContain('https://wa.me/60123456789?text=');
+    expect(screen.getByTestId('probe-soc-wa').textContent).toContain('https://wa.me/60123456789?text=');
 
     // 4. Now select Brand B and explicitly click Bina Kempen -> Tab 1 transitions to Brand B
-    fireEvent.click(screen.getByTestId('brand-folder-klinik-pergigian-beta'));
+    fireEvent.click(screen.getByTestId('brand-folder-servis-pantas-beta'));
     fireEvent.click(screen.getByTestId('launch-campaign-btn'));
-    expect(screen.getByTestId('probe-launched-brand')).toHaveTextContent('Klinik Pergigian Beta');
+    expect(screen.getByTestId('probe-launched-brand')).toHaveTextContent('Servis Pantas Beta');
     expect(screen.getByTestId('probe-launched-offer')).toHaveTextContent(
       'Draf Tawaran Brand B Belum Lancar'
     );
     expect(screen.getByTestId('strategy-psychology-panel').textContent).toContain(
-      'Klinik Pergigian Beta'
+      'Servis Pantas Beta'
     );
     expect(screen.getByTestId('whatsapp-cta-facebook').getAttribute('href')).toContain(
       'https://wa.me/60191112222?text='
@@ -811,7 +811,7 @@ describe('CampaignContext isolation and hydration', () => {
           <button
             type="button"
             data-testid="ac-edit-name"
-            onClick={() => updateBrand(activeBrandId, { name: 'Klinik Mutasi Sahkan' })}
+            onClick={() => updateBrand(activeBrandId, { name: 'Bisnes Mutasi Sahkan' })}
           >
             editName
           </button>
@@ -877,7 +877,7 @@ describe('CampaignContext isolation and hydration', () => {
 
     // 2. Brand name change updates Frame 1 & resets confirmation
     fireEvent.click(screen.getByTestId('ac-edit-name'));
-    expect(screen.getByTestId('ac-frame-0')).toHaveTextContent('Klinik Mutasi Sahkan');
+    expect(screen.getByTestId('ac-frame-0')).toHaveTextContent('Bisnes Mutasi Sahkan');
     expect(screen.getByTestId('ac-confirmed')).toHaveTextContent('false');
 
     // 3. Re-confirm -> WhatsApp change updates Frame 4 & resets confirmation

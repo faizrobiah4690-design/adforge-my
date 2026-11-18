@@ -180,7 +180,7 @@ export function CarouselTab() {
                     {ROLE_LABELS[locale][slide.role]}
                   </span>
                 </div>
-                <div className="mt-0.5 truncate text-[11px] text-slate-400">
+                <div className="mt-0.5 whitespace-normal break-words text-[11px] leading-snug text-slate-400">
                   {slide.headline || (locale === 'ms' ? '(Tiada tajuk)' : '(No headline)')}
                 </div>
               </button>
@@ -254,7 +254,7 @@ export function CarouselTab() {
                         style={{ borderColor: themeColor }}
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-bold text-slate-50">
+                        <div className="whitespace-normal break-words [overflow-wrap:anywhere] text-xs font-bold text-slate-50 leading-tight">
                           {launchedBrand.name}
                         </div>
                         <div className="text-[11px] font-medium text-slate-300">
@@ -267,7 +267,7 @@ export function CarouselTab() {
                     {activeSlide.badgeText.trim() ? (
                       <div className="min-w-0">
                         <span
-                          className="inline-block max-w-full truncate rounded-full px-2.5 py-0.5 text-[11px] font-bold"
+                          className="inline-block max-w-full rounded-xl px-2.5 py-0.5 text-[11px] font-bold whitespace-normal break-words [overflow-wrap:anywhere]"
                           style={{
                             backgroundColor: themeColor,
                             color: contrastTextColor,
@@ -313,7 +313,7 @@ export function CarouselTab() {
                       {activeSlide.ctaText.trim() ? (
                         <div className="pt-1 min-w-0">
                           <span
-                            className="inline-block max-w-full truncate rounded-full px-3 py-1 text-[11px] font-bold"
+                            className="inline-block max-w-full rounded-xl px-3 py-1 text-[11px] font-bold whitespace-normal break-words [overflow-wrap:anywhere]"
                             style={{
                               backgroundColor: themeColor,
                               color: contrastTextColor,
@@ -418,7 +418,7 @@ export function CarouselTab() {
                           —
                         </div>
                       )}
-                      <span className="truncate text-xs font-medium">
+                      <span className="break-words whitespace-normal leading-tight text-xs font-medium">
                         {photo.label || (photoIdx === 0 ? t('form.photo1Label') : t('form.photo2Label'))}
                       </span>
                     </button>
@@ -438,7 +438,7 @@ export function CarouselTab() {
                     className="h-2.5 w-2.5 rounded-full shrink-0"
                     style={{ backgroundColor: themeColor }}
                   />
-                  <span className="truncate">{launchedBrand.name}</span>
+                  <span className="break-words whitespace-normal leading-tight">{launchedBrand.name}</span>
                 </span>
               </div>
 

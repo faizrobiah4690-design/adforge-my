@@ -9,10 +9,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
-const LOGO_PATH = path.join(PROJECT_ROOT, 'public', 'assets', 'brands', 'klinik-gigi-impian-logo.png');
-const PHOTO_SCALING_PATH = path.join(PROJECT_ROOT, 'public', 'assets', 'photos', 'clinic-scaling-1.png');
-const PHOTO_SMILE_PATH = path.join(PROJECT_ROOT, 'public', 'assets', 'photos', 'clinic-smile-2.png');
-const PHOTO_CHAIR_PATH = path.join(PROJECT_ROOT, 'public', 'assets', 'photos', 'clinic-chair-3.png');
+const LOGO_PATH = path.join(PROJECT_ROOT, 'public', 'assets', 'brands', 'demo-brand-logo.png');
+const PHOTO_SHOWCASE_PATH = path.join(PROJECT_ROOT, 'public', 'assets', 'photos', 'business-showcase-1.png');
+const PHOTO_PRODUCT_PATH = path.join(PROJECT_ROOT, 'public', 'assets', 'photos', 'business-product-2.png');
+const PHOTO_SERVICE_PATH = path.join(PROJECT_ROOT, 'public', 'assets', 'photos', 'business-service-3.png');
 const GUIDE_VIDEO_PATH = path.join(PROJECT_ROOT, 'public', 'assets', 'guide', 'byok-guide.webm');
 const FALLBACK_WAV_PATH = path.join(PROJECT_ROOT, 'public', 'assets', 'audio', 'fallback-jingle.wav');
 
@@ -143,9 +143,9 @@ function logoHtml() {
         <stop offset="55%" stop-color="#0284C7" />
         <stop offset="100%" stop-color="#0F172A" />
       </linearGradient>
-      <linearGradient id="toothGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <linearGradient id="cubeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="#FFFFFF" />
-        <stop offset="100%" stop-color="#E0F2FE" />
+        <stop offset="100%" stop-color="#BAE6FD" />
       </linearGradient>
       <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
         <stop offset="0%" stop-color="#38BDF8" />
@@ -156,54 +156,42 @@ function logoHtml() {
     <rect x="28" y="28" width="456" height="456" rx="108" fill="url(#bgGrad)" />
     <rect x="36" y="36" width="440" height="440" rx="100" fill="none" stroke="#BAE6FD" stroke-opacity="0.35" stroke-width="3" />
 
-    <circle cx="256" cy="212" r="134" fill="#38BDF8" fill-opacity="0.16" />
+    <circle cx="256" cy="210" r="134" fill="#38BDF8" fill-opacity="0.16" />
 
-    <path d="M188 148
-             C160 148, 142 174, 146 212
-             C150 250, 168 308, 186 332
-             C197 346, 212 342, 220 318
-             L234 274
-             C240 256, 272 256, 278 274
-             L292 318
-             C300 342, 315 346, 326 332
-             C344 308, 362 250, 366 212
-             C370 174, 352 148, 324 148
-             C302 148, 282 162, 256 162
-             C230 162, 210 148, 188 148 Z"
-          fill="url(#toothGrad)" />
+    <!-- Neutral geometric SME emblem (cube + growth spark) -->
+    <polygon points="256,118 352,172 256,226 160,172" fill="url(#cubeGrad)" />
+    <polygon points="160,186 248,236 248,334 160,284" fill="#E0F2FE" fill-opacity="0.92" />
+    <polygon points="352,186 264,236 264,334 352,284" fill="url(#accentGrad)" fill-opacity="0.92" />
 
-    <path d="M198 220 Q256 266 314 220" fill="none" stroke="url(#accentGrad)" stroke-width="11" stroke-linecap="round" />
+    <path d="M362 114 L370 138 L394 146 L370 154 L362 178 L354 154 L330 146 L354 138 Z" fill="#FDE047" />
+    <circle cx="150" cy="134" r="8" fill="#7DD3FC" />
 
-    <path d="M358 118 L366 142 L390 150 L366 158 L358 182 L350 158 L326 150 L350 142 Z" fill="#FDE047" />
-    <circle cx="152" cy="134" r="8" fill="#7DD3FC" />
-
-    <text x="256" y="400" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-weight="800" font-size="31" letter-spacing="2">KLINIK GIGI</text>
-    <text x="256" y="436" text-anchor="middle" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-weight="700" font-size="25" letter-spacing="5">IMPIAN</text>
+    <text x="256" y="398" text-anchor="middle" fill="#FFFFFF" font-family="Segoe UI, Arial, sans-serif" font-weight="800" font-size="34" letter-spacing="4">DEMO</text>
+    <text x="256" y="436" text-anchor="middle" fill="#7DD3FC" font-family="Segoe UI, Arial, sans-serif" font-weight="700" font-size="25" letter-spacing="5">BISNES</text>
   </svg>
 </body>
 </html>`;
 }
 
-function clinicScalingHtml() {
+function businessShowcaseHtml() {
   return `<!doctype html>
 <html>
 <head><meta charset="utf-8" /></head>
 <body style="margin:0;padding:0;width:1080px;height:1350px;overflow:hidden;background:#07131E;">
   <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
     <defs>
-      <radialGradient id="topGlow" cx="52%" cy="22%" r="65%">
-        <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.55" />
+      <radialGradient id="topGlow" cx="52%" cy="24%" r="65%">
+        <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.58" />
         <stop offset="48%" stop-color="#0E7490" stop-opacity="0.28" />
         <stop offset="100%" stop-color="#07131E" stop-opacity="1" />
       </radialGradient>
       <linearGradient id="glassPane" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#E0F2FE" stop-opacity="0.20" />
-        <stop offset="100%" stop-color="#0EA5E9" stop-opacity="0.04" />
+        <stop offset="0%" stop-color="#E0F2FE" stop-opacity="0.22" />
+        <stop offset="100%" stop-color="#0EA5E9" stop-opacity="0.05" />
       </linearGradient>
-      <linearGradient id="enamel" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#F8FAFC" />
-        <stop offset="65%" stop-color="#E0F2FE" />
-        <stop offset="100%" stop-color="#BAE6FD" />
+      <linearGradient id="stageCard" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#F8FAFC" stop-opacity="0.92" />
+        <stop offset="100%" stop-color="#BAE6FD" stop-opacity="0.88" />
       </linearGradient>
       <filter id="softBlur" x="-30%" y="-30%" width="160%" height="160%">
         <feGaussianBlur stdDeviation="28" />
@@ -214,35 +202,26 @@ function clinicScalingHtml() {
     <rect width="1080" height="1350" fill="url(#topGlow)" />
 
     <rect x="190" y="96" width="700" height="22" rx="11" fill="#E0F2FE" fill-opacity="0.85" />
-    <rect x="250" y="114" width="580" height="65" rx="32" fill="#38BDF8" fill-opacity="0.26" filter="url(#softBlur)" />
+    <rect x="250" y="114" width="580" height="65" rx="32" fill="#38BDF8" fill-opacity="0.28" filter="url(#softBlur)" />
 
-    <circle cx="220" cy="430" r="140" fill="#2DD4BF" fill-opacity="0.18" filter="url(#softBlur)" />
-    <circle cx="880" cy="520" r="170" fill="#38BDF8" fill-opacity="0.22" filter="url(#softBlur)" />
+    <circle cx="220" cy="430" r="150" fill="#2DD4BF" fill-opacity="0.20" filter="url(#softBlur)" />
+    <circle cx="860" cy="520" r="180" fill="#38BDF8" fill-opacity="0.24" filter="url(#softBlur)" />
     <circle cx="540" cy="700" r="240" fill="#0284C7" fill-opacity="0.20" filter="url(#softBlur)" />
 
-    <polygon points="110,250 970,180 970,1180 110,1240" fill="url(#glassPane)" stroke="#7DD3FC" stroke-opacity="0.16" stroke-width="2" />
+    <polygon points="110,240 970,180 970,1180 110,1240" fill="url(#glassPane)" stroke="#7DD3FC" stroke-opacity="0.18" stroke-width="2" />
 
-    <path d="M350 470
-             C275 470, 225 538, 238 638
-             C252 745, 298 898, 344 962
-             C374 1002, 412 992, 434 926
-             L470 812
-             C488 762, 592 762, 610 812
-             L646 926
-             C668 992, 706 1002, 736 962
-             C782 898, 828 745, 842 638
-             C855 538, 805 470, 730 470
-             C668 470, 614 508, 540 508
-             C466 508, 412 470, 350 470 Z"
-          fill="url(#enamel)" fill-opacity="0.92" />
+    <!-- Abstract showcase display arch & pedestal -->
+    <rect x="260" y="340" width="560" height="680" rx="280" fill="#0F172A" fill-opacity="0.65" stroke="#38BDF8" stroke-opacity="0.35" stroke-width="4" />
+    <polygon points="540,420 710,515 540,610 370,515" fill="url(#stageCard)" />
+    <polygon points="370,535 528,625 528,820 370,730" fill="#E0F2FE" fill-opacity="0.85" />
+    <polygon points="710,535 552,625 552,820 710,730" fill="#38BDF8" fill-opacity="0.82" />
+    <ellipse cx="540" cy="895" rx="250" ry="52" fill="#0284C7" fill-opacity="0.42" stroke="#7DD3FC" stroke-opacity="0.5" stroke-width="3" />
 
-    <path d="M180 860 C380 780, 690 930, 920 800" fill="none" stroke="#67E8F9" stroke-width="8" stroke-opacity="0.48" />
-    <path d="M150 915 C410 825, 710 985, 950 855" fill="none" stroke="#2DD4BF" stroke-width="5" stroke-opacity="0.35" />
+    <path d="M180 860 C380 780, 690 930, 920 800" fill="none" stroke="#67E8F9" stroke-width="8" stroke-opacity="0.42" />
+    <path d="M150 915 C410 825, 710 985, 950 855" fill="none" stroke="#2DD4BF" stroke-width="5" stroke-opacity="0.32" />
 
-    <circle cx="760" cy="400" r="26" fill="#E0F2FE" fill-opacity="0.45" />
-    <circle cx="815" cy="360" r="14" fill="#A5F3FC" fill-opacity="0.55" />
+    <circle cx="770" cy="390" r="24" fill="#E0F2FE" fill-opacity="0.45" />
     <circle cx="300" cy="410" r="18" fill="#5EEAD4" fill-opacity="0.42" />
-    <circle cx="670" cy="1060" r="22" fill="#BAE6FD" fill-opacity="0.32" />
 
     <rect x="0" y="1090" width="1080" height="260" fill="#040A12" fill-opacity="0.72" />
   </svg>
@@ -250,22 +229,26 @@ function clinicScalingHtml() {
 </html>`;
 }
 
-function clinicSmileHtml() {
+function businessProductHtml() {
   return `<!doctype html>
 <html>
 <head><meta charset="utf-8" /></head>
 <body style="margin:0;padding:0;width:1080px;height:1350px;overflow:hidden;background:#091526;">
   <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
     <defs>
-      <radialGradient id="smileAura" cx="50%" cy="46%" r="62%">
-        <stop offset="0%" stop-color="#7DD3FC" stop-opacity="0.48" />
+      <radialGradient id="productAura" cx="50%" cy="46%" r="62%">
+        <stop offset="0%" stop-color="#34D399" stop-opacity="0.42" />
         <stop offset="45%" stop-color="#1D4ED8" stop-opacity="0.28" />
         <stop offset="100%" stop-color="#091526" stop-opacity="1" />
       </radialGradient>
-      <linearGradient id="pearlArc" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" stop-color="#E0F2FE" />
-        <stop offset="50%" stop-color="#FFFFFF" />
-        <stop offset="100%" stop-color="#BAE6FD" />
+      <linearGradient id="pedestalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#F8FAFC" />
+        <stop offset="55%" stop-color="#CBD5E1" />
+        <stop offset="100%" stop-color="#64748B" />
+      </linearGradient>
+      <linearGradient id="boxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#38BDF8" />
+        <stop offset="100%" stop-color="#10B981" />
       </linearGradient>
       <filter id="bokehBlur" x="-30%" y="-30%" width="160%" height="160%">
         <feGaussianBlur stdDeviation="32" />
@@ -273,24 +256,25 @@ function clinicSmileHtml() {
     </defs>
 
     <rect width="1080" height="1350" fill="#091526" />
-    <rect width="1080" height="1350" fill="url(#smileAura)" />
+    <rect width="1080" height="1350" fill="url(#productAura)" />
 
     <circle cx="290" cy="360" r="175" fill="#FDE68A" fill-opacity="0.16" filter="url(#bokehBlur)" />
     <circle cx="805" cy="400" r="195" fill="#38BDF8" fill-opacity="0.24" filter="url(#bokehBlur)" />
-    <circle cx="540" cy="840" r="260" fill="#60A5FA" fill-opacity="0.18" filter="url(#bokehBlur)" />
+    <circle cx="540" cy="840" r="260" fill="#10B981" fill-opacity="0.18" filter="url(#bokehBlur)" />
 
-    <circle cx="540" cy="605" r="345" fill="none" stroke="#BAE6FD" stroke-opacity="0.22" stroke-width="3" />
-    <circle cx="540" cy="605" r="265" fill="none" stroke="#7DD3FC" stroke-opacity="0.28" stroke-width="2" />
+    <circle cx="540" cy="595" r="345" fill="none" stroke="#BAE6FD" stroke-opacity="0.22" stroke-width="3" />
+    <circle cx="540" cy="595" r="265" fill="none" stroke="#34D399" stroke-opacity="0.28" stroke-width="2" />
 
-    <path d="M235 615 Q540 895 845 615 Q540 775 235 615 Z" fill="url(#pearlArc)" fill-opacity="0.94" />
-    <path d="M285 685 Q540 890 795 685" fill="none" stroke="#38BDF8" stroke-width="10" stroke-linecap="round" stroke-opacity="0.7" />
+    <!-- Modern product package & studio pedestal -->
+    <rect x="315" y="810" width="450" height="125" rx="28" fill="url(#pedestalGrad)" fill-opacity="0.92" />
+    <rect x="395" y="455" width="290" height="355" rx="34" fill="url(#boxGrad)" fill-opacity="0.94" stroke="#E0F2FE" stroke-opacity="0.65" stroke-width="4" />
+    <rect x="445" y="515" width="190" height="120" rx="18" fill="#0F172A" fill-opacity="0.55" />
+    <rect x="445" y="665" width="190" height="20" rx="10" fill="#F8FAFC" fill-opacity="0.7" />
+    <rect x="445" y="705" width="130" height="16" rx="8" fill="#E0F2FE" fill-opacity="0.5" />
 
     <path d="M540 270 L554 318 L602 332 L554 346 L540 394 L526 346 L478 332 L526 318 Z" fill="#FEF08A" fill-opacity="0.88" />
     <path d="M775 435 L784 462 L811 471 L784 480 L775 507 L766 480 L739 471 L766 462 Z" fill="#E0F2FE" fill-opacity="0.82" />
     <path d="M305 465 L312 486 L333 493 L312 500 L305 521 L298 500 L277 493 L298 486 Z" fill="#A5F3FC" fill-opacity="0.78" />
-
-    <circle cx="205" cy="850" r="24" fill="#93C5FD" fill-opacity="0.34" />
-    <circle cx="885" cy="825" r="30" fill="#FDE68A" fill-opacity="0.25" />
 
     <rect x="0" y="1080" width="1080" height="270" fill="#050B16" fill-opacity="0.75" />
   </svg>
@@ -298,7 +282,7 @@ function clinicSmileHtml() {
 </html>`;
 }
 
-function clinicChairHtml() {
+function businessServiceHtml() {
   return `<!doctype html>
 <html>
 <head><meta charset="utf-8" /></head>
@@ -307,12 +291,12 @@ function clinicChairHtml() {
     <defs>
       <linearGradient id="wallGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="#0F172A" />
-        <stop offset="50%" stop-color="#0C2238" />
+        <stop offset="50%" stop-color="#1E1B4B" />
         <stop offset="100%" stop-color="#08101C" />
       </linearGradient>
-      <linearGradient id="chairCushion" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id="deskGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="#38BDF8" />
-        <stop offset="100%" stop-color="#0369A1" />
+        <stop offset="100%" stop-color="#6366F1" />
       </linearGradient>
       <filter id="ambientBlur" x="-30%" y="-30%" width="160%" height="160%">
         <feGaussianBlur stdDeviation="24" />
@@ -323,22 +307,19 @@ function clinicChairHtml() {
 
     <polygon points="0,0 320,160 320,1040 0,1210" fill="#1E293B" fill-opacity="0.45" />
     <polygon points="1080,0 760,160 760,1040 1080,1210" fill="#0F172A" fill-opacity="0.65" />
-    <rect x="320" y="160" width="440" height="880" fill="#0B192C" stroke="#38BDF8" stroke-opacity="0.18" stroke-width="2" />
+    <rect x="300" y="160" width="480" height="880" rx="28" fill="#0B192C" stroke="#818CF8" stroke-opacity="0.22" stroke-width="2" />
 
-    <rect x="355" y="210" width="370" height="14" rx="7" fill="#7DD3FC" fill-opacity="0.85" />
-    <rect x="370" y="220" width="340" height="58" rx="28" fill="#38BDF8" fill-opacity="0.28" filter="url(#ambientBlur)" />
+    <rect x="355" y="210" width="370" height="14" rx="7" fill="#A5B4FC" fill-opacity="0.85" />
+    <rect x="370" y="220" width="340" height="58" rx="28" fill="#6366F1" fill-opacity="0.28" filter="url(#ambientBlur)" />
 
-    <circle cx="540" cy="430" r="95" fill="#E0F2FE" fill-opacity="0.16" />
-    <path d="M540 160 L540 310 L620 385" fill="none" stroke="#94A3B8" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
-    <ellipse cx="635" cy="405" rx="68" ry="30" transform="rotate(-18 635 405)" fill="#E0F2FE" fill-opacity="0.92" />
-    <ellipse cx="635" cy="405" rx="95" ry="44" transform="rotate(-18 635 405)" fill="#38BDF8" fill-opacity="0.22" filter="url(#ambientBlur)" />
+    <!-- Modern SME studio / consultation lounge visual -->
+    <rect x="360" y="340" width="360" height="230" rx="24" fill="#111827" stroke="#38BDF8" stroke-opacity="0.45" stroke-width="3" />
+    <circle cx="445" cy="455" r="54" fill="#38BDF8" fill-opacity="0.25" stroke="#38BDF8" stroke-width="4" />
+    <rect x="525" y="420" width="145" height="22" rx="11" fill="#E0F2FE" fill-opacity="0.8" />
+    <rect x="525" y="460" width="110" height="16" rx="8" fill="#94A3B8" fill-opacity="0.6" />
 
-    <path d="M350 960 L690 960 L640 1030 L390 1030 Z" fill="#1E293B" />
-    <rect x="460" y="830" width="120" height="135" rx="20" fill="#334155" />
-
-    <path d="M275 605 C325 585, 395 625, 445 735 L685 755 C740 760, 775 795, 760 838 C745 876, 695 882, 625 876 L410 858 C345 850, 305 805, 275 715 C258 660, 250 618, 275 605 Z"
-          fill="url(#chairCushion)" />
-    <rect x="242" y="555" width="95" height="52" rx="24" transform="rotate(-14 242 555)" fill="#E0F2FE" />
+    <rect x="260" y="690" width="560" height="170" rx="30" fill="url(#deskGrad)" fill-opacity="0.9" />
+    <rect x="340" y="860" width="400" height="110" rx="20" fill="#1E293B" fill-opacity="0.9" />
 
     <rect x="0" y="1060" width="1080" height="290" fill="#040912" fill-opacity="0.78" />
   </svg>
@@ -390,7 +371,7 @@ function guideStepHtml(stepNum, title, subtitle, pillText, codeText, highlightBt
 
 async function generatePngAssets(browser) {
   ensureDir(LOGO_PATH);
-  ensureDir(PHOTO_SCALING_PATH);
+  ensureDir(PHOTO_SHOWCASE_PATH);
 
   const logoPage = await browser.newPage({ viewport: { width: 512, height: 512 }, deviceScaleFactor: 1 });
   await logoPage.setContent(logoHtml());
@@ -398,9 +379,9 @@ async function generatePngAssets(browser) {
   await logoPage.close();
 
   const photoSpecs = [
-    { path: PHOTO_SCALING_PATH, html: clinicScalingHtml() },
-    { path: PHOTO_SMILE_PATH, html: clinicSmileHtml() },
-    { path: PHOTO_CHAIR_PATH, html: clinicChairHtml() },
+    { path: PHOTO_SHOWCASE_PATH, html: businessShowcaseHtml() },
+    { path: PHOTO_PRODUCT_PATH, html: businessProductHtml() },
+    { path: PHOTO_SERVICE_PATH, html: businessServiceHtml() },
   ];
 
   const photoPage = await browser.newPage({ viewport: { width: 1080, height: 1350 }, deviceScaleFactor: 1 });
@@ -413,7 +394,7 @@ async function generatePngAssets(browser) {
 
 async function generateGuideVideo(browser) {
   ensureDir(GUIDE_VIDEO_PATH);
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kks-byok-guide-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'adforge-byok-guide-'));
   const stepPaths = [
     path.join(tmpDir, 'step1.png'),
     path.join(tmpDir, 'step2.png'),
@@ -435,7 +416,7 @@ async function generateGuideVideo(browser) {
       title: 'Klik "Create API Key"',
       subtitle: 'Pilih projek atau cipta kunci API baharu khas untuk workbench anda.',
       pill: 'aistudio.google.com — API Keys',
-      code: 'Project: kilang-kempen-workbench',
+      code: 'Project: adforge-my-workbench',
       btn: '+ Create API key',
     },
     {
@@ -443,7 +424,7 @@ async function generateGuideVideo(browser) {
       title: 'Salin Kunci BYOK Anda',
       subtitle: 'Kunci disimpan secara tempatan pada pelayar anda sahaja (Bring Your Own Key).',
       pill: 'API Key Created',
-      code: 'AIzaSyDemoKey-FreelancerWorkbench-8821',
+      code: 'adforge-byok-demo-key-8821',
       btn: 'Copy API Key',
     },
     {

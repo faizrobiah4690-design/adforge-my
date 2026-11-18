@@ -27,17 +27,17 @@ const GEMINI_ENDPOINT = [
 
 function cleanOfferText(offerSentence: string): string {
   const normalized = offerSentence.trim().replace(/\s+/g, ' ');
-  return normalized || 'Promosi Scaling & Polish serta pemeriksaan klinikal berkala.';
+  return normalized || 'Promosi istimewa minggu ini — tawaran terhad untuk pelanggan terawal.';
 }
 
 function extractOfferFocus(offerSentence: string): string {
   const lower = offerSentence.toLowerCase();
-  if (lower.includes('braces')) return 'Braces';
-  if (lower.includes('whitening') || lower.includes('putih')) return 'Pemutihan Gigi';
-  if (lower.includes('scaling') || lower.includes('polish')) return 'Scaling & Polish';
-  if (lower.includes('implan')) return 'Implan Pergigian';
-  if (lower.includes('veneer')) return 'Veneer';
-  return 'Penjagaan Pergigian';
+  if (/diskaun|promo|jimat|potongan|sale|rebate/.test(lower)) return 'Tawaran Penjimatan';
+  if (/pakej|kombo|bundle|set/.test(lower)) return 'Pakej Kombo';
+  if (/servis|khidmat|tempahan|booking|penghantaran|bengkel/.test(lower)) return 'Servis Pilihan';
+  if (/makanan|minuman|menu|kopi|kek|kafe|restoran/.test(lower)) return 'Menu Istimewa';
+  if (/produk|koleksi|stok|item|edisi|fesyen|baju|butik/.test(lower)) return 'Produk Pilihan';
+  return 'Tawaran Utama';
 }
 
 export function enforceRsaLength(
@@ -72,7 +72,7 @@ export function buildCustomerPsychology(
   brand: BrandProfile,
   offerSentence: string
 ): CustomerPsychologyProfile {
-  const brandName = brand.name.trim() || 'Klinik Gigi Impian';
+  const brandName = brand.name.trim() || 'Bisnes Saya';
   const cleanOffer = cleanOfferText(offerSentence);
   const focus = extractOfferFocus(cleanOffer);
   const shortOffer =
@@ -82,25 +82,25 @@ export function buildCustomerPsychology(
 
   if (brand.tone === 'casual') {
     return {
-      targetPersona: `Dewasa bekerja & keluarga muda sekitar ${brandName} yang mahukan ${focus} tanpa rasa kekok atau jadual rumit.`,
-      coreTrigger: `Tawaran mesra poket ("${shortOffer}") yang senang ditempah terus melalui WhatsApp apabila slot masih ada.`,
+      targetPersona: `Pelanggan harian & pembeli pantas di Malaysia yang mencari ${focus} daripada ${brandName} dengan proses pertanyaan yang mudah.`,
+      coreTrigger: `Tawaran jelas & berbaloi ("${shortOffer}") yang boleh terus ditempah melalui WhatsApp sebelum stok atau slot habis.`,
       frictionObjections:
-        'Risau kos tersembunyi, takut rasa ngilu semasa rawatan, atau bertangguh kerana tiada masa menunggu lama di kaunter.',
-      trustAnchors: `Gaya komunikasi santai di ${brandName}, penerangan harga telus sebelum rawatan, dan konsultasi bersama doktor pergigian bertauliah.`,
+        'Risau caj tersembunyi, lambat dapat jawapan di mesej, atau tidak pasti sama ada stok masih ada.',
+      trustAnchors: `Komunikasi mesra di ${brandName}, penerangan harga telus, serta maklum balas pantas melalui WhatsApp rasmi.`,
     };
   }
 
   return {
-    targetPersona: `Golongan profesional dan isi rumah berorientasikan kualiti yang memilih ${brandName} untuk rawatan ${focus} yang teratur dan beretika.`,
-    coreTrigger: `Keperluan penjagaan kesihatan oral berjadual berpandukan tawaran klinikal ("${shortOffer}") dengan pengesahan temujanji pantas.`,
+    targetPersona: `Golongan profesional dan pembeli berorientasikan kualiti yang memilih ${brandName} untuk ${focus} yang teratur dan meyakinkan.`,
+    coreTrigger: `Nilai tawaran rasmi ("${shortOffer}") yang mudah disahkan bersama wakil ${brandName} melalui saluran WhatsApp.`,
     frictionObjections:
-      'Keraguan terhadap piawaian kebersihan klinikal, ketidaktentuan tempoh prosedur, dan keperluan jaminan komunikasi profesional.',
-    trustAnchors: `Reputasi klinikal ${brandName}, protokol konsultasi berstruktur oleh doktor pergigian bertauliah, serta pematuhan garis panduan KKLIU.`,
+      'Keraguan terhadap konsistensi kualiti produk atau servis, ketepatan masa penghantaran, dan sokongan selepas jualan.',
+    trustAnchors: `Reputasi jenama ${brandName}, standard perkhidmatan yang konsisten, serta komunikasi rasmi yang jelas dan berhemah.`,
   };
 }
 
 function buildShortBrandTag(brandName: string, maxLen: number): string {
-  const trimmed = stripLoneSurrogates(brandName.trim()) || 'Klinik Gigi';
+  const trimmed = stripLoneSurrogates(brandName.trim()) || 'Bisnes';
   if (trimmed.length <= maxLen) {
     return trimmed;
   }
@@ -111,7 +111,7 @@ function buildShortBrandTag(brandName: string, maxLen: number): string {
       return twoWords;
     }
   }
-  return sliceSafeUtf16(trimmed, maxLen).trimEnd() || 'Klinik Gigi';
+  return sliceSafeUtf16(trimmed, maxLen).trimEnd() || 'Bisnes';
 }
 
 export function generateCampaignCopyForAngle(
@@ -119,7 +119,7 @@ export function generateCampaignCopyForAngle(
   offerSentence: string,
   angle: AngleId
 ): ChannelCopy {
-  const brandName = brand.name.trim() || 'Klinik Gigi Impian';
+  const brandName = brand.name.trim() || 'Bisnes Saya';
   const cleanOffer = cleanOfferText(offerSentence);
   const focus = extractOfferFocus(cleanOffer);
   const isCasual = brand.tone === 'casual';
@@ -132,17 +132,18 @@ export function generateCampaignCopyForAngle(
 
   const shortBrand14 = buildShortBrandTag(brandName, 14);
   const shortBrand12 = buildShortBrandTag(brandName, 12);
+  const hashBrand = shortBrand14.replace(/\s+/g, '') || 'BisnesMY';
 
-  if (angle === 'confidence') {
+  if (angle === 'urgency') {
     const fbHeadline = isCasual
-      ? `${brandName} — Senyum Yakin Santai`
-      : `${brandName} — Keyakinan Klinikal`;
+      ? `${brandName} — Tawaran Terhad Minggu Ini`
+      : `${brandName} — Promosi Masa Terhad`;
     const fbDesc = isCasual
-      ? `Slot ${focus} selesa • Konsultasi doktor gigi bertauliah`
-      : `Penilaian profesional ${focus} oleh pengamal pergigian bertauliah`;
+      ? `Stok & slot ${focus} terhad • WhatsApp terus`
+      : `Penempahan awal ${focus} untuk pelanggan terawal`;
     const fbPrimary = isCasual
-      ? `Nak rasa lebih yakin bila senyum dan jumpa klien atau kawan? Jom singgah ke ${brandName}! ${cleanOffer} Kami sediakan sesi konsultasi santai bersama doktor pergigian bertauliah (patuh KKLIU). Klik WhatsApp untuk semak slot: ${waUrl}`
-      : `Tingkatkan keyakinan penampilan diri melalui penjagaan ${focus} yang teratur di ${brandName}. ${cleanOffer} Setiap rawatan dimulakan dengan konsultasi profesional oleh doktor pergigian bertauliah selaras piawaian KKLIU. Hubungi kami di WhatsApp: ${waUrl}`;
+      ? `Jangan tunggu saat akhir! ${brandName} tengah buka ${focus} dengan kuota terhad minggu ini. ${cleanOffer} Siapa cepat dia dapat — tekan WhatsApp sekarang untuk sahkan pesanan anda: ${waUrl}`
+      : `Rebut peluang ${focus} bersama ${brandName} sementara kuota promosi masih dibuka. ${cleanOffer} Hubungi pasukan kami melalui WhatsApp rasmi untuk pengesahan pantas hari ini: ${waUrl}`;
 
     return {
       facebook: {
@@ -153,79 +154,79 @@ export function generateCampaignCopyForAngle(
       },
       instagram: {
         caption: isCasual
-          ? `Senyum lebih selesa bila bergambar & berjumpa orang di ${brandName} ✨\n${cleanOffer}\nKonsultasi bersama doktor gigi bertauliah menanti anda. Tekan WhatsApp: ${waUrl}`
-          : `Penjagaan ${focus} yang teliti untuk senyuman kemas dan meyakinkan di ${brandName}.\n${cleanOffer}\nTempah konsultasi klinikal melalui WhatsApp rasmi kami: ${waUrl}`,
+          ? `Kuota terhad di ${brandName} — jangan sampai terlepas! ⚡\n${cleanOffer}\nKlik WhatsApp sekarang sebelum penuh: ${waUrl}`
+          : `Tawaran eksklusif masa terhad daripada ${brandName}.\n${cleanOffer}\nSahkan tempahan atau pertanyaan anda melalui WhatsApp rasmi: ${waUrl}`,
         hashtags: isCasual
-          ? `#${shortBrand14.replace(/\s+/g, '')} #SenyumYakin #KlinikGigi #ScalingPolish #KeyakinanDiri`
-          : `#${shortBrand14.replace(/\s+/g, '')} #PergigianProfesional #PenjagaanOral #KonsultasiGigi`,
+          ? `#${hashBrand} #TawaranTerhad #PromosiMalaysia #BisnesLokal #CepatGrab`
+          : `#${hashBrand} #PromosiRasmi #TawaranEksklusif #PerniagaanMalaysia`,
         whatsappUrl: waUrl,
       },
       tiktok: {
         hook: isCasual
-          ? `POV: Lepas sesi konsultasi & ${focus} santai di ${brandName}, terus rasa lagi yakin nak senyum depan kamera!`
-          : `3 perkara yang dinilai doktor pergigian bertauliah sebelum rawatan ${focus} di ${brandName}.`,
+          ? `Jangan scroll dulu! Tawaran ${focus} di ${brandName} ini hanya untuk kuota terawal minggu ini.`
+          : `Makluman rasmi: Tempoh promosi ${focus} di ${brandName} kini hampir tamat.`,
         script: isCasual
-          ? `0-2s: Visual senyuman kemas di kaunter ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Tekan pautan WhatsApp di bio untuk tanya slot konsultasi (${waUrl}).`
-          : `0-2s: Paparan ruang klinikal ${brandName}. 2-4s: Penerangan ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi untuk temujanji konsultasi (${waUrl}).`,
+          ? `0-2s: Paparan ${focus} ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Tekan pautan WhatsApp di bio sebelum kuota habis (${waUrl}).`
+          : `0-2s: Paparan produk & servis ${brandName}. 2-4s: Penerangan ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi untuk pengesahan awal (${waUrl}).`,
         caption: isCasual
-          ? `Senyum lebih yakin dengan konsultasi ${focus} di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`
-          : `Temujanji konsultasi ${focus} di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
+          ? `Tawaran terhad ${focus} di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`
+          : `Promosi masa terhad ${focus} di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
         whatsappUrl: waUrl,
       },
       google_rsa: {
         headlines: [
           enforceRsaLength(
-            isCasual ? `${shortBrand14} Senyum Yakin` : `${shortBrand14} Profesional`,
+            isCasual ? `${shortBrand14} Terhad` : `${shortBrand14} Rasmi`,
             30,
-            'Klinik Gigi Pilihan Anda'
+            'Promosi Terhad Kini'
           ),
           enforceRsaLength(
-            isCasual ? `Jom ${focus} Selesa` : `Konsultasi ${focus} Klinikal`,
+            isCasual ? `Rebut ${focus} Kini` : `Tempahan ${focus} Awal`,
             30,
-            'Konsultasi Pergigian'
+            'Tawaran Utama Hari Ini'
           ),
           enforceRsaLength(
-            isCasual ? 'Tempah Slot WhatsApp Mudah' : 'Temujanji Doktor Bertauliah',
+            isCasual ? 'WhatsApp Sebelum Habis' : 'Sahkan Slot WhatsApp Kini',
             30,
-            'Tempah Slot Klinik'
+            'Tempah WhatsApp Segera'
           ),
         ],
         descriptions: [
           enforceRsaLength(
-            `Konsultasi ${shortBrand12}: ${cleanOffer}`,
+            `${shortBrand12}: ${cleanOffer}`,
             90,
-            'Penjagaan gigi selesa bersama doktor bertauliah.'
+            'Tawaran terhad untuk pelanggan terawal. Hubungi kami sekarang.'
           ),
           enforceRsaLength(
             isCasual
-              ? `Sesi konsultasi santai di ${shortBrand12}. Semak slot kosong melalui WhatsApp hari ini.`
-              : `Pemeriksaan klinikal berstruktur di ${shortBrand12}. Tempah konsultasi WhatsApp rasmi.`,
+              ? `Kuota terhad di ${shortBrand12}. Klik WhatsApp untuk semak stok & tempah terus.`
+              : `Pengesahan pantas bersama ${shortBrand12} melalui saluran WhatsApp rasmi.`,
             90,
-            'Tempah sesi konsultasi pergigian bersama doktor bertauliah hari ini.'
+            'Hubungi WhatsApp rasmi kami untuk menyemak ketersediaan hari ini.'
           ),
         ],
         negativeKeywords: [
           'percuma',
-          'diy pemutih',
-          'ubat sakit gigi murah',
-          'braces shopee',
-          'tanpa doktor',
+          'produk tiruan',
+          'jualan borong',
+          'tiada waranti',
+          'terpakai',
         ],
         whatsappUrl: waUrl,
       },
     };
   }
 
-  if (angle === 'hygiene') {
+  if (angle === 'value') {
     const fbHeadline = isCasual
-      ? `${brandName} — Nafas Segar & Bersih`
-      : `${brandName} — Penjagaan Pencegahan`;
+      ? `${brandName} — Berbaloi & Berkualiti`
+      : `${brandName} — Piawaian Nilai & Kualiti`;
     const fbDesc = isCasual
-      ? `Buang plak & karang lembut • Konsultasi doktor gigi bertauliah`
-      : `Penskaleran berkala & pemeriksaan gusi secara klinikal`;
+      ? `Harga telus & kualiti padu • Tanya terus di WhatsApp`
+      : `Kualiti teratur dengan kadar harga telus & berdaya saing`;
     const fbPrimary = isCasual
-      ? `Dah lama tak buat pemeriksaan kebersihan gigi berkala? Jom segarkan senyuman di ${brandName}! ${cleanOffer} Rawatan lembut dengan sesi konsultasi doktor pergigian bertauliah (patuh KKLIU). WhatsApp kami sekarang: ${waUrl}`
-      : `Pencegahan awal karang gigi dan penjagaan kesihatan gusi membantu mengekalkan kebersihan oral jangka panjang di ${brandName}. ${cleanOffer} Dapatkan pemeriksaan serta konsultasi bersama doktor pergigian bertauliah mengikut garis panduan KKLIU: ${waUrl}`;
+      ? `Cari pilihan yang betul-betul berbaloi dengan bajet anda? Di ${brandName}, setiap ringgit anda memang berasa nilainya. ${cleanOffer} Harga jelas tanpa caj tersembunyi — jom tanya detail di WhatsApp: ${waUrl}`
+      : `Pilih nilai yang konsisten dan mutu perkhidmatan yang telus bersama ${brandName}. ${cleanOffer} Dapatkan pecahan pakej serta maklumat terperinci secara terus melalui WhatsApp rasmi kami: ${waUrl}`;
 
     return {
       facebook: {
@@ -236,79 +237,79 @@ export function generateCampaignCopyForAngle(
       },
       instagram: {
         caption: isCasual
-          ? `Servis berkala 6 bulan sekali buat mulut rasa lebih bersih & ringan di ${brandName} 🪥\n${cleanOffer}\nTanya slot konsultasi melalui WhatsApp: ${waUrl}`
-          : `Penjagaan pencegahan oral dan kebersihan gusi menyeluruh di ${brandName}.\n${cleanOffer}\nJadualkan pemeriksaan klinikal melalui WhatsApp: ${waUrl}`,
+          ? `Kualiti kemas, harga berbaloi di ${brandName} ✨\n${cleanOffer}\nTanya pakej & pilihan melalui WhatsApp: ${waUrl}`
+          : `Nilai dan kualiti yang telus untuk keperluan anda di ${brandName}.\n${cleanOffer}\nHubungi WhatsApp rasmi untuk maklumat pakej: ${waUrl}`,
         hashtags: isCasual
-          ? `#${shortBrand14.replace(/\s+/g, '')} #KebersihanGigi #ScalingGigi #NafasSegar #PenjagaanOral`
-          : `#${shortBrand14.replace(/\s+/g, '')} #PencegahanPergigian #KesihatanGusi #KlinikPergigian`,
+          ? `#${hashBrand} #KualitiMantap #Berbaloi #SupportLokal #SMEMalaysia`
+          : `#${hashBrand} #NilaiKorporat #KualitiKonsisten #PerniagaanMalaysia`,
         whatsappUrl: waUrl,
       },
       tiktok: {
         hook: isCasual
-          ? `Kenapa doktor gigi selalu pesan buat ${focus} berkala setiap 6 bulan? Ini sebabnya!`
-          : `Kepentingan pemeriksaan berkala dan penskaleran klinikal di ${brandName}.`,
+          ? `3 sebab kenapa ramai pelanggan pilih ${focus} di ${brandName} sebab sangat berbaloi!`
+          : `Bagaimana ${brandName} mengekalkan piawaian kualiti dalam setiap ${focus}.`,
         script: isCasual
-          ? `0-2s: Visual kebersihan peralatan moden di ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Klik WhatsApp untuk sesi konsultasi & pilih masa yang sesuai (${waUrl}).`
-          : `0-2s: Penerangan kebersihan oral di ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Hubungi WhatsApp untuk konsultasi berjadual (${waUrl}).`,
+          ? `0-2s: Tunjuk perincian kualiti ${brandName}. 2-4s: ${cleanOffer}. 4-6s: WhatsApp kami untuk senarai harga penuh (${waUrl}).`
+          : `0-2s: Paparan proses & mutu kerja ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi untuk sebut harga telus (${waUrl}).`,
         caption: isCasual
-          ? `Jaga kebersihan mulut & konsultasi berkala di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`
-          : `Pemeriksaan klinikal & pencegahan oral di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
+          ? `Nilai berbaloi & kualiti ${focus} di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`
+          : `Piawaian kualiti & harga telus di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
         whatsappUrl: waUrl,
       },
       google_rsa: {
         headlines: [
           enforceRsaLength(
-            isCasual ? `${shortBrand14} Bersih Segar` : `${shortBrand14} Pencegahan`,
+            isCasual ? `${shortBrand14} Berbaloi` : `${shortBrand14} Berkualiti`,
             30,
-            'Klinik Pergigian Bersih'
+            'Kualiti & Nilai Berbaloi'
           ),
           enforceRsaLength(
-            isCasual ? `Sesi ${focus} Lembut` : `Pemeriksaan Gusi & Karang`,
+            isCasual ? `Pakej ${focus} Telus` : `Piawaian ${focus} Jelas`,
             30,
-            'Konsultasi Scaling Lembut'
+            'Harga Telus & Jelas'
           ),
           enforceRsaLength(
-            isCasual ? 'Semak Slot Pemeriksaan' : 'Doktor Pergigian Bertauliah',
+            isCasual ? 'Semak Harga di WhatsApp' : 'Dapatkan Sebut Harga Rasmi',
             30,
-            'Konsultasi Berkala'
+            'Semak Pakej WhatsApp'
           ),
         ],
         descriptions: [
           enforceRsaLength(
-            `Konsultasi ${shortBrand12}: ${cleanOffer}`,
+            `Nilai ${shortBrand12}: ${cleanOffer}`,
             90,
-            'Rawatan kebersihan mulut berkala bersama doktor bertauliah.'
+            'Kualiti konsisten dan harga telus untuk pelanggan Malaysia.'
           ),
           enforceRsaLength(
             isCasual
-              ? `Penjagaan gusi & gigi lebih bersih di ${shortBrand12}. Klik WhatsApp untuk konsultasi.`
-              : `Penilaian kebersihan oral menyeluruh di ${shortBrand12}. Temujanji WhatsApp rasmi.`,
+              ? `Tiada caj tersembunyi di ${shortBrand12}. Klik WhatsApp untuk senarai pilihan.`
+              : `Ketelusan harga dan mutu teratur di ${shortBrand12}. Hubungi WhatsApp rasmi.`,
             90,
-            'Jadualkan pemeriksaan kebersihan gigi berkala bersama kami.'
+            'Dapatkan penerangan pakej dan harga penuh melalui WhatsApp hari ini.'
           ),
         ],
         negativeKeywords: [
           'percuma',
-          'petua kampung',
-          'alat scaling sendiri',
           'murah sangat',
-          'klinik tidak berdaftar',
+          'kualiti rendah',
+          'barang rosak',
+          'tiada jaminan',
         ],
         whatsappUrl: waUrl,
       },
     };
   }
 
-  // angle === 'payday'
+  // angle === 'social_proof'
   const fbHeadline = isCasual
-    ? `${brandName} — Promosi & Konsultasi Gaji`
-    : `${brandName} — Pakej Konsultasi Gaji`;
+    ? `${brandName} — Pilihan Ramai Pelanggan`
+    : `${brandName} — Dipercayai Pelanggan Tempatan`;
   const fbDesc = isCasual
-    ? `Nilai berbaloi minggu gaji • Slot terhad • Konsultasi doktor gigi`
-    : `Penjadualan keutamaan minggu gaji bersama doktor bertauliah`;
+    ? `Maklum balas positif & pelanggan berulang • WhatsApp kami`
+    : `Rekod kepuasan pelanggan yang konsisten di seluruh Malaysia`;
   const fbPrimary = isCasual
-    ? `Gaji baru masuk? Ini masa sesuai untuk manjakan diri dengan penjagaan gigi di ${brandName}! ${cleanOffer} Harga jelas selepas konsultasi bersama doktor pergigian bertauliah (patuh KKLIU). Tempah slot minggu gaji via WhatsApp: ${waUrl}`
-    : `Rancang perbelanjaan kesihatan keluarga anda sempena minggu gaji di ${brandName}. ${cleanOffer} Nikmati penjadualan teratur serta konsultasi telus oleh doktor pergigian bertauliah selaras piawaian KKLIU. Hubungi WhatsApp rasmi: ${waUrl}`;
+    ? `Ramai pelanggan yang dah cuba ${focus} di ${brandName} terus repeat order sebab layanan mesra & hasil memuaskan! ${cleanOffer} Nak tahu kenapa ramai rekomen? Jom sembang di WhatsApp: ${waUrl}`
+    : `Kepercayaan pelanggan menjadi keutamaan kami di ${brandName} dengan rekod maklum balas positif yang konsisten. ${cleanOffer} Sertai pelanggan sedia ada kami dan hubungi WhatsApp rasmi untuk maklumat lanjut: ${waUrl}`;
 
   return {
     facebook: {
@@ -319,63 +320,63 @@ export function generateCampaignCopyForAngle(
     },
     instagram: {
       caption: isCasual
-        ? `Checklist Minggu Gaji: 1) Bayar bil 2) Reward diri servis ${focus} di ${brandName} 💙\n${cleanOffer}\nSlot terhad — WhatsApp terus untuk konsultasi: ${waUrl}`
-        : `Peruntukan kesihatan oral berkala sempena Minggu Gaji di ${brandName}.\n${cleanOffer}\nSahkan temujanji konsultasi anda melalui WhatsApp: ${waUrl}`,
+        ? `Terima kasih kepada semua pelanggan yang sentiasa sokong ${brandName} 💙\n${cleanOffer}\nJom WhatsApp kami untuk cuba sendiri: ${waUrl}`
+        : `Dipercayai oleh pelanggan individu dan perniagaan di ${brandName}.\n${cleanOffer}\nHubungi saluran WhatsApp rasmi kami untuk pertanyaan: ${waUrl}`,
       hashtags: isCasual
-        ? `#${shortBrand14.replace(/\s+/g, '')} #MingguGaji #PaydayPromo #ScalingPolish #KlinikGigi`
-        : `#${shortBrand14.replace(/\s+/g, '')} #KesihatanKeluarga #PakejMingguGaji #Pergigian`,
+        ? `#${hashBrand} #PilihanRamai #Dipercayai #SokongLokal #BisnesMalaysia`
+        : `#${hashBrand} #KepercayaanPelanggan #RekodPositif #SMEMalaysia`,
       whatsappUrl: waUrl,
     },
     tiktok: {
       hook: isCasual
-        ? `Gaji dah masuk? Jangan lupa masukkan bajet ${focus} dalam list minggu gaji anda di ${brandName}!`
-        : `Cara bijak merancang pemeriksaan pergigian berkala sempena Minggu Gaji di ${brandName}.`,
+        ? `Kenapa ramai pelanggan tetap balik semula ke ${brandName}? Ini jawapannya!`
+        : `Mengapa pelanggan korporat dan isi rumah terus mempercayai ${brandName}.`,
       script: isCasual
-        ? `0-2s: Visual checklist Minggu Gaji di ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Tekan WhatsApp sekarang untuk konsultasi sebelum slot minggu ini penuh (${waUrl}).`
-        : `0-2s: Paparan jadual temujanji ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Tempah konsultasi melalui WhatsApp rasmi (${waUrl}).`,
+        ? `0-2s: Visual suasana mesra pelanggan di ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Tekan WhatsApp sekarang untuk tanya pilihan popular (${waUrl}).`
+        : `0-2s: Paparan operasi profesional ${brandName}. 2-4s: ${cleanOffer}. 4-6s: Hubungi WhatsApp rasmi untuk konsultasi pesanan (${waUrl}).`,
       caption: isCasual
-        ? `Slot konsultasi Minggu Gaji di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`
-        : `Temujanji konsultasi Minggu Gaji ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
+        ? `Pilihan ramai pelanggan di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`
+        : `Dipercayai ramai di ${brandName} • ${cleanOffer} • WhatsApp: ${waUrl}`,
       whatsappUrl: waUrl,
     },
     google_rsa: {
       headlines: [
         enforceRsaLength(
-          isCasual ? `${shortBrand14} Minggu Gaji` : `${shortBrand14} Nilai Gaji`,
+          isCasual ? `${shortBrand14} Pilihan Ramai` : `${shortBrand14} Dipercayai`,
           30,
-          'Konsultasi Minggu Gaji'
+          'Pilihan Ramai Pelanggan'
         ),
         enforceRsaLength(
-          isCasual ? `Nilai Berbaloi ${focus}` : `Jadual ${focus} Teratur`,
+          isCasual ? `Disukai Pelanggan ${focus}` : `Rekod Positif ${focus}`,
           30,
-          'Tempah Slot Terhad'
+          'Dipercayai Pelanggan MY'
         ),
         enforceRsaLength(
-          isCasual ? 'Lock Slot WhatsApp Kini' : 'Konsultasi Telus Bertauliah',
+          isCasual ? 'Tanya Pilihan Popular Kini' : 'Hubungi Wakil Rasmi Kini',
           30,
-          'WhatsApp Klinik Kini'
+          'Tanya Pakej WhatsApp'
         ),
       ],
       descriptions: [
         enforceRsaLength(
-          `Konsultasi ${shortBrand12}: ${cleanOffer}`,
+          `Pilihan ramai ${shortBrand12}: ${cleanOffer}`,
           90,
-          'Nilai berbaloi minggu gaji di klinik pergigian bertauliah.'
+          'Dipercayai pelanggan Malaysia dengan layanan pantas dan mesra.'
         ),
         enforceRsaLength(
           isCasual
-            ? `Slot Minggu Gaji terhad di ${shortBrand12}. WhatsApp kami untuk konsultasi & tempahan.`
-            : `Susun temujanji Minggu Gaji anda di ${shortBrand12} bersama doktor bertauliah.`,
+            ? `Ramai pelanggan berpuas hati dengan ${shortBrand12}. WhatsApp kami sekarang.`
+            : `Khidmat pelanggan yang konsisten di ${shortBrand12}. Hubungi WhatsApp rasmi.`,
           90,
-          'Tempah slot konsultasi minggu gaji anda melalui WhatsApp hari ini.'
+          'Ketahui pakej paling popular kami melalui saluran WhatsApp rasmi.'
         ),
       ],
       negativeKeywords: [
         'percuma',
-        'ansuran tanpa lesen',
-        'diy braces',
-        'ubat murah online',
-        'tiada doktor',
+        'ulasan palsu',
+        'scam',
+        'kedai tidak sah',
+        'tiada sokongan',
       ],
       whatsappUrl: waUrl,
     },
@@ -387,14 +388,14 @@ export function generateCampaignCopyMap(
   offerSentence: string
 ): Record<AngleId, ChannelCopy> {
   return {
-    confidence: generateCampaignCopyForAngle(brand, offerSentence, 'confidence'),
-    hygiene: generateCampaignCopyForAngle(brand, offerSentence, 'hygiene'),
-    payday: generateCampaignCopyForAngle(brand, offerSentence, 'payday'),
+    urgency: generateCampaignCopyForAngle(brand, offerSentence, 'urgency'),
+    value: generateCampaignCopyForAngle(brand, offerSentence, 'value'),
+    social_proof: generateCampaignCopyForAngle(brand, offerSentence, 'social_proof'),
   };
 }
 
 export function isValidGeminiKeyFormat(apiKey: string): boolean {
-  return /^AIza[0-9A-Za-z_-]{8,}$/.test(apiKey.trim());
+  return /^\S{12,}$/.test(apiKey.trim());
 }
 
 function ensureSingleWhatsappUrl(
@@ -442,11 +443,11 @@ function sanitizeRsaItem(
   brandName: string
 ): string {
   const safeFallback =
-    checkCopyCompliance(fallback).length === 0 ? fallback : 'Konsultasi Pergigian';
+    checkCopyCompliance(fallback).length === 0 ? fallback : 'Tawaran Utama';
   const sanitized = sanitizeChannelText(candidate, safeFallback, brandName);
   const bounded = enforceRsaLength(sanitized, maxLen, safeFallback);
   if (checkCopyCompliance(bounded).length > 0) {
-    return enforceRsaLength(safeFallback, maxLen, 'Konsultasi Pergigian');
+    return enforceRsaLength(safeFallback, maxLen, 'Tawaran Utama');
   }
   return bounded;
 }
@@ -473,12 +474,12 @@ export async function enhanceCopyWithGemini(params: {
 
   try {
     const prompt = [
-      `Anda ialah penulis iklan pergigian Malaysia yang mematuhi polisi Meta Personal Attributes & KKLIU.`,
+      `Anda ialah penulis iklan pemasaran digital SME Malaysia yang mematuhi polisi Meta Personal Attributes & etika pengiklanan Malaysia.`,
       `Jenama: ${params.brand.name}. Nada: ${params.brand.tone}. Sudut: ${params.angle}.`,
       `Tawaran: ${cleanOfferText(params.offerSentence)}.`,
       `Pulangkan JSON sahaja mengikut struktur ChannelCopy (facebook, instagram, tiktok, google_rsa).`,
       `Had wajib: google_rsa.headlines setiap satu <= 30 aksara; google_rsa.descriptions setiap satu <= 90 aksara.`,
-      `Dilarang menggunakan: gigi anda kuning, 100%, dijamin, terbaik, No. 1, sebelum dan selepas.`,
+      `Dilarang menggunakan: dakwaan ciri peribadi (seperti kulit anda kusam/anda bermasalah), 100%, dijamin, terbaik, No. 1, sebelum dan selepas.`,
     ].join('\n');
 
     const response = await fetch(GEMINI_ENDPOINT, {
@@ -513,7 +514,7 @@ export async function enhanceCopyWithGemini(params: {
       ? parsed.google_rsa.headlines.slice(0, 3)
       : baseline.google_rsa.headlines;
     while (rawHeadlines.length < 3) {
-      rawHeadlines.push(baseline.google_rsa.headlines[rawHeadlines.length] ?? 'Konsultasi Pergigian');
+      rawHeadlines.push(baseline.google_rsa.headlines[rawHeadlines.length] ?? 'Tawaran Utama');
     }
 
     const rawDescriptions = Array.isArray(parsed.google_rsa?.descriptions)
@@ -522,7 +523,7 @@ export async function enhanceCopyWithGemini(params: {
     while (rawDescriptions.length < 2) {
       rawDescriptions.push(
         baseline.google_rsa.descriptions[rawDescriptions.length] ??
-          'Tempah konsultasi bersama doktor pergigian bertauliah.'
+          'Hubungi kami di WhatsApp untuk maklumat lanjut.'
       );
     }
 
@@ -603,7 +604,7 @@ export async function enhanceCopyWithGemini(params: {
           sanitizeRsaItem(
             h,
             30,
-            baseline.google_rsa.headlines[idx] ?? 'Klinik Pergigian',
+            baseline.google_rsa.headlines[idx] ?? 'Promosi Bisnes',
             params.brand.name
           )
         ),
@@ -611,7 +612,7 @@ export async function enhanceCopyWithGemini(params: {
           sanitizeRsaItem(
             d,
             90,
-            baseline.google_rsa.descriptions[idx] ?? 'Konsultasi bersama doktor bertauliah.',
+            baseline.google_rsa.descriptions[idx] ?? 'Produk & servis berkualiti untuk anda.',
             params.brand.name
           )
         ),

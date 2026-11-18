@@ -28,8 +28,8 @@ function collectSourceFiles(dir: string): string[] {
 }
 
 describe('same-origin pre-seeded assets & zero external media URLs', () => {
-  it('validates klinik-gigi-impian-logo.png as 512x512 RGBA PNG', () => {
-    const logoPath = path.join(PROJECT_ROOT, 'public/assets/brands/klinik-gigi-impian-logo.png');
+  it('validates demo-brand-logo.png as 512x512 RGBA PNG', () => {
+    const logoPath = path.join(PROJECT_ROOT, 'public/assets/brands/demo-brand-logo.png');
     expect(fs.existsSync(logoPath)).toBe(true);
     const png = readPngHeader(logoPath);
     expect(Array.from(png.signature)).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -39,8 +39,12 @@ describe('same-origin pre-seeded assets & zero external media URLs', () => {
     expect(png.colorType).toBe(6); // RGBA with alpha channel
   });
 
-  it('validates all 3 clinic photos as >= 1080x1350 PNGs', () => {
-    const names = ['clinic-scaling-1.png', 'clinic-smile-2.png', 'clinic-chair-3.png'];
+  it('validates all 3 business showcase photos as >= 1080x1350 PNGs', () => {
+    const names = [
+      'business-showcase-1.png',
+      'business-product-2.png',
+      'business-service-3.png',
+    ];
     for (const name of names) {
       const photoPath = path.join(PROJECT_ROOT, 'public/assets/photos', name);
       expect(fs.existsSync(photoPath)).toBe(true);
@@ -92,18 +96,60 @@ describe('same-origin pre-seeded assets & zero external media URLs', () => {
     expect(Array.from(buf.subarray(0, 4))).toEqual([0x1a, 0x45, 0xdf, 0xa3]);
   });
 
-  it('contains zero external http(s):// URLs in index.html and src/ (except https://wa.me/)', () => {
-    const files = [
-      path.join(PROJECT_ROOT, 'index.html'),
-      ...collectSourceFiles(path.join(PROJECT_ROOT, 'src')),
-    ];
+  it('validates AdForge MY branding icon and OG JPEG assets', () => {
+    for (const relPath of [
+      'public/assets/adforge-my-icon.jpg',
+      'public/assets/adforge-my-og.jpg',
+    ]) {
+      const fullPath = path.join(PROJECT_ROOT, relPath);
+      expect(fs.existsSync(fullPath)).toBe(true);
+      const buf = fs.readFileSync(fullPath);
+      expect(buf.length).toBeGreaterThan(10_000);
+      expect(Array.from(buf.subarray(0, 3))).toEqual([0xff, 0xd8, 0xff]);
+    }
+  });
+
+  it('validates index.html uses AdForge MY favicon and OG/Twitter meta tags without brand demo logo', () => {
+    const html = fs.readFileSync(path.join(PROJECT_ROOT, 'index.html'), 'utf8');
+    expect(html).not.toContain('demo-brand-logo.png');
+    expect(html).not.toMatch(/klinik|gigi|dental/i);
+    expect(html).toMatch(/<link[^>]*rel=["']icon["'][^>]*href=["']\/assets\/adforge-my-icon\.jpg["']/i);
+    for (const metaKey of [
+      'og:title',
+      'og:description',
+      'og:image',
+      'og:url',
+      'twitter:card',
+      'twitter:image',
+    ]) {
+      expect(html).toContain(metaKey);
+    }
+  });
+
+  it('contains zero external http(s):// URLs in src/ (except https://wa.me/) and restricts index.html to passive OG/Twitter meta tags', () => {
+    const srcFiles = collectSourceFiles(path.join(PROJECT_ROOT, 'src'));
     const urlPattern = /https?:\/\/[^\s'"`<>)]+/g;
-    for (const file of files) {
+    for (const file of srcFiles) {
       const content = fs.readFileSync(file, 'utf8');
       const matches = content.match(urlPattern) ?? [];
       for (const match of matches) {
         expect(match.startsWith('https://wa.me/')).toBe(true);
       }
     }
+
+    const indexHtml = fs.readFileSync(path.join(PROJECT_ROOT, 'index.html'), 'utf8');
+    const passiveSocialMetaTagPattern =
+      /<meta\b[^>]*(?:property=["']og:[^"']+["']|name=["']twitter:[^"']+["'])[^>]*>/gi;
+    const passiveMetaTags = indexHtml.match(passiveSocialMetaTagPattern) ?? [];
+    for (const tag of passiveMetaTags) {
+      const tagUrls = tag.match(urlPattern) ?? [];
+      for (const url of tagUrls) {
+        expect(url.startsWith('https://adforge-my-eight.vercel.app/')).toBe(true);
+      }
+    }
+
+    const htmlWithoutPassiveSocialMeta = indexHtml.replace(passiveSocialMetaTagPattern, '');
+    const disallowedIndexUrls = htmlWithoutPassiveSocialMeta.match(urlPattern) ?? [];
+    expect(disallowedIndexUrls).toEqual([]);
   });
 });

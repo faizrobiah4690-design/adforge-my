@@ -19,9 +19,9 @@ import {
 } from '../../src/utils/carouselExport';
 
 const MOCK_BRAND: BrandProfile = {
-  id: 'klinik-gigi-impian',
-  name: 'Klinik Gigi Impian',
-  logoDataUrl: '/assets/brands/klinik-gigi-impian-logo.png',
+  id: 'demo-bisnes-saya',
+  name: 'Demo Bisnes Saya',
+  logoDataUrl: '/assets/brands/demo-brand-logo.png',
   themeColor: '#0EA5E9',
   tone: 'casual',
   whatsappNumber: '60123456789',
@@ -34,9 +34,9 @@ const MOCK_SLIDE: CarouselSlide = {
   index: 0,
   role: 'hook',
   photoIndex: 0,
-  badgeText: 'Klinik Gigi Impian',
-  headline: 'Senyuman Bersih & Yakin Setiap Hari',
-  subheadline: 'Rawatan scaling & polish lembut di klinik moden.',
+  badgeText: 'Demo Bisnes Saya',
+  headline: 'Tawaran Istimewa Untuk Anda',
+  subheadline: 'Produk & servis berkualiti tinggi daripada Demo Bisnes Saya.',
   ctaText: 'Slide 1 / 4',
   editedByUser: false,
 };
@@ -167,10 +167,10 @@ describe('m4 carouselExport pure math helpers', () => {
     const measure = (s: string) => s.length * 10;
 
     expect(wrapTextLines(measure, '   ', 200)).toEqual([]);
-    expect(wrapTextLines(measure, 'Promosi Scaling Polish', 100)).toEqual([
+    expect(wrapTextLines(measure, 'Promosi Pakej Kombo', 100)).toEqual([
       'Promosi',
-      'Scaling',
-      'Polish',
+      'Pakej',
+      'Kombo',
     ]);
     expect(wrapTextLines(measure, 'Baris Satu\nBaris Dua', 200)).toEqual([
       'Baris Satu',
@@ -185,7 +185,7 @@ describe('m4 carouselExport pure math helpers', () => {
 
     const capped = wrapTextLines(
       measure,
-      'Promosi Istimewa Scaling Dan Polish Gigi Di Seluruh Cawangan Klinik Gigi Impian',
+      'Promosi Istimewa Pakej Kombo Di Seluruh Cawangan Demo Bisnes Saya',
       150,
       2
     );
@@ -203,7 +203,7 @@ describe('m4 carouselExport pure math helpers', () => {
 
     const mixedEmojiTruncated = wrapTextLines(
       measure,
-      'Gigi \u{1F601}\u{1F601}\u{1F601} Cantik',
+      'Kopi \u{1F601}\u{1F601}\u{1F601} Sedap',
       100,
       1
     );
@@ -255,7 +255,7 @@ describe('m4 carouselExport pure math helpers', () => {
     expect(isAllowedImageSrc('data:image/webp;base64,AAAA')).toBe(true);
     expect(isAllowedImageSrc('data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=')).toBe(false);
     expect(isAllowedImageSrc(`blob:${window.location.origin}/123`)).toBe(true);
-    expect(isAllowedImageSrc('/assets/photos/clinic-scaling-1.png')).toBe(true);
+    expect(isAllowedImageSrc('/assets/photos/business-showcase-1.png')).toBe(true);
     expect(isAllowedImageSrc('//cdn.example.com/evil.png')).toBe(false);
     expect(isAllowedImageSrc('/\\evil.com/x.png')).toBe(false);
     expect(isAllowedImageSrc('\\\\evil.com\\x.png')).toBe(false);
@@ -331,7 +331,7 @@ describe('m4 Canvas 2D compositor & PNG exporter', () => {
     await renderSlideToCanvas(canvas, {
       slide: MOCK_SLIDE,
       brand: MOCK_BRAND,
-      photoSrc: '/assets/photos/clinic-scaling-1.png',
+      photoSrc: '/assets/photos/business-showcase-1.png',
       aspectMode: '4:5',
       totalSlides: 4,
     });
@@ -366,10 +366,10 @@ describe('m4 Canvas 2D compositor & PNG exporter', () => {
       slide: MOCK_SLIDE,
       brand: {
         ...MOCK_BRAND,
-        name: '\u{1F9B7} Klinik Gigi',
+        name: '\u{1F680} Kedai Maju',
         logoDataUrl: '/missing-logo.png',
       },
-      photoSrc: '/assets/photos/clinic-scaling-1.png',
+      photoSrc: '/assets/photos/business-showcase-1.png',
       aspectMode: '9:16',
       totalSlides: 4,
     });
@@ -377,7 +377,7 @@ describe('m4 Canvas 2D compositor & PNG exporter', () => {
     const loneSurrogateRegex =
       /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
     const fillTextCalls = mockCtx.fillText.mock.calls.map((call) => String(call[0]));
-    expect(fillTextCalls).toContain('\u{1F9B7}K');
+    expect(fillTextCalls).toContain('\u{1F680}K');
     expect(fillTextCalls.every((text) => !loneSurrogateRegex.test(text))).toBe(true);
   });
 
@@ -429,7 +429,7 @@ describe('m4 Canvas 2D compositor & PNG exporter', () => {
     const result = await exportSlideAsPng({
       slide: MOCK_SLIDE,
       brand: MOCK_BRAND,
-      photoSrc: '/assets/photos/clinic-scaling-1.png',
+      photoSrc: '/assets/photos/business-showcase-1.png',
       aspectMode: '9:16',
       totalSlides: 4,
     });
@@ -459,7 +459,7 @@ describe('m4 Canvas 2D compositor & PNG exporter', () => {
     }
     globalThis.Image = HangingImageMock as unknown as typeof Image;
 
-    const loadPromise = loadDecodedImage('/assets/photos/clinic-scaling-1.png');
+    const loadPromise = loadDecodedImage('/assets/photos/business-showcase-1.png');
     await vi.advanceTimersByTimeAsync(4000);
     await expect(loadPromise).resolves.toBeNull();
 
@@ -485,7 +485,7 @@ describe('m4 Canvas 2D compositor & PNG exporter', () => {
       renderSlideToCanvas(badCanvas, {
         slide: MOCK_SLIDE,
         brand: MOCK_BRAND,
-        photoSrc: '/assets/photos/clinic-scaling-1.png',
+        photoSrc: '/assets/photos/business-showcase-1.png',
         aspectMode: '9:16',
       })
     ).rejects.toThrow(/Canvas 2D context is unavailable/i);
@@ -511,7 +511,7 @@ describe('m4 Canvas 2D compositor & PNG exporter', () => {
       exportSlideAsPng({
         slide: MOCK_SLIDE,
         brand: MOCK_BRAND,
-        photoSrc: '/assets/photos/clinic-scaling-1.png',
+        photoSrc: '/assets/photos/business-showcase-1.png',
         aspectMode: '9:16',
       })
     ).rejects.toThrow(/Failed to export PNG image blob/i);
@@ -540,7 +540,7 @@ describe('m4 CarouselTab UI integration', () => {
     expect(previewStage.querySelectorAll('img').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByTestId('carousel-logo-img')).toHaveAttribute(
       'src',
-      '/assets/brands/klinik-gigi-impian-logo.png'
+      '/assets/brands/demo-brand-logo.png'
     );
 
     const headlineInput = screen.getByTestId('carousel-headline-input') as HTMLInputElement;
@@ -765,7 +765,7 @@ describe('m4 CarouselTab UI integration', () => {
       fireEvent.click(photo1Btn);
       expect(photo1Btn).toHaveAttribute('aria-pressed', 'true');
       const bgImg = screen.getByTestId('carousel-preview-stage').querySelector('img')!;
-      expect(bgImg.getAttribute('src')).toContain('clinic-smile-2.png');
+      expect(bgImg.getAttribute('src')).toContain('business-product-2.png');
 
       // Edit subheadline, badge, and CTA
       fireEvent.change(screen.getByTestId('carousel-subheadline-input'), {

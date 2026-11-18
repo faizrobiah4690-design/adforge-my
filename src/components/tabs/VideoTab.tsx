@@ -165,14 +165,14 @@ export function VideoTab() {
           </span>
           <span
             data-testid="video-audio-source-badge"
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium max-w-full ${
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-medium max-w-full ${
               usingTab3Audio
                 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
                 : 'border-amber-500/40 bg-amber-500/10 text-amber-200'
             }`}
           >
             <Music className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">
+            <span className="whitespace-normal break-words leading-snug">
               {t('tab4.audioSourceLabel')}:{' '}
               {usingTab3Audio
                 ? t('tab4.audioSourceTab3')

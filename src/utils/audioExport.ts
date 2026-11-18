@@ -73,13 +73,13 @@ const STYLE_ARRANGEMENTS: Record<JingleStyleId, StyleArrangement> = {
 };
 
 export function buildJingleLyrics(brandName: string, offerSentence: string): string {
-  const safeBrand = brandName.trim() || 'Klinik Gigi Impian';
+  const safeBrand = brandName.trim() || 'Bisnes Saya';
   const conciseOffer = offerSentence.trim() || SAMPLE_OFFER_CHIP;
   return [
-    `Senyum berseri bersama ${safeBrand},`,
-    `Gigi bersih hati pun tenang,`,
+    `Pilihan tepat bersama ${safeBrand},`,
+    `Kualiti terjamin untuk anda semua,`,
     `${conciseOffer}`,
-    `Jom WhatsApp sekarang, slot menanti anda!`,
+    `Jom WhatsApp sekarang, jangan lepaskan peluang!`,
   ].join('\n');
 }
 

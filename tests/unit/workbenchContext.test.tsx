@@ -22,6 +22,7 @@ function WorkbenchProbe() {
     selectBrand,
     createBrand,
     updateBrand,
+    deleteBrand,
   } = useWorkbench();
 
   const seeded = brands.find((b) => b.id === SEEDED_BRAND_ID);
@@ -51,7 +52,7 @@ function WorkbenchProbe() {
       <button
         type="button"
         data-testid="do-save-key"
-        onClick={() => saveByokKey('  AIzaTestKey123  ', false)}
+        onClick={() => saveByokKey('  sk-live-test-key-123456  ', false)}
       >
         saveKey
       </button>
@@ -67,7 +68,7 @@ function WorkbenchProbe() {
         data-testid="do-create-brand"
         onClick={() =>
           createBrand({
-            name: 'Klinik Harmoni',
+            name: 'Kafe Kopi Harmoni',
             themeColor: '#10B981',
             tone: 'professional',
             whatsappNumber: '0198887777',
@@ -75,6 +76,13 @@ function WorkbenchProbe() {
         }
       >
         createBrand
+      </button>
+      <button
+        type="button"
+        data-testid="do-delete-active"
+        onClick={() => deleteBrand(activeBrand.id)}
+      >
+        deleteActive
       </button>
       <button
         type="button"
@@ -129,7 +137,7 @@ describe('WorkbenchContext', () => {
             type="button"
             data-testid="create-0060"
             onClick={() =>
-              createBrand({ name: 'Klinik 0060', whatsappNumber: '0060 12-345 6789' })
+              createBrand({ name: 'Kedai 0060', whatsappNumber: '0060 12-345 6789' })
             }
           >
             create0060
@@ -172,7 +180,7 @@ describe('WorkbenchContext', () => {
     expect(screen.getByTestId('norm-wa')).toHaveTextContent('60123456789');
   });
 
-  it('isolates Brand Vault folders and persists state under kks_workbench:v1', () => {
+  it('isolates Brand Vault folders, supports deleteBrand for custom folders only, and persists state under adforge_workbench:v1', () => {
     const { unmount } = render(
       <WorkbenchProvider>
         <WorkbenchProbe />
@@ -182,21 +190,25 @@ describe('WorkbenchContext', () => {
     expect(screen.getByTestId('active-brand-id')).toHaveTextContent(SEEDED_BRAND_ID);
     expect(screen.getByTestId('brand-count')).toHaveTextContent('1');
 
+    // Cannot delete the pre-seeded brand folder
+    fireEvent.click(screen.getByTestId('do-delete-active'));
+    expect(screen.getByTestId('brand-count')).toHaveTextContent('1');
+
     fireEvent.click(screen.getByTestId('do-login'));
     fireEvent.click(screen.getByTestId('do-save-key'));
     expect(screen.getByTestId('logged-in')).toHaveTextContent('true');
     expect(screen.getByTestId('email')).toHaveTextContent('nurul@agency.my');
-    expect(screen.getByTestId('byok')).toHaveTextContent('AIzaTestKey123');
+    expect(screen.getByTestId('byok')).toHaveTextContent('sk-live-test-key-123456');
     expect(screen.getByTestId('screen')).toHaveTextContent('workbench');
 
     fireEvent.click(screen.getByTestId('do-create-brand'));
     expect(screen.getByTestId('brand-count')).toHaveTextContent('2');
-    expect(screen.getByTestId('active-brand-id')).toHaveTextContent('klinik-harmoni');
+    expect(screen.getByTestId('active-brand-id')).toHaveTextContent('kafe-kopi-harmoni');
     expect(screen.getByTestId('active-brand-wa')).toHaveTextContent('60198887777');
 
     fireEvent.click(screen.getByTestId('do-update-active'));
     expect(screen.getByTestId('active-brand-wa')).toHaveTextContent('60175554433');
-    // Seeded Klinik Gigi Impian must remain untouched
+    // Seeded Demo Bisnes Saya must remain untouched
     expect(screen.getByTestId('seeded-wa')).toHaveTextContent('60123456789');
     expect(screen.getByTestId('seeded-tone')).toHaveTextContent('casual');
 
@@ -210,9 +222,13 @@ describe('WorkbenchContext', () => {
       </WorkbenchProvider>
     );
     expect(screen.getByTestId('brand-count')).toHaveTextContent('2');
-    expect(screen.getByTestId('active-brand-id')).toHaveTextContent('klinik-harmoni');
+    expect(screen.getByTestId('active-brand-id')).toHaveTextContent('kafe-kopi-harmoni');
     expect(screen.getByTestId('active-brand-wa')).toHaveTextContent('60175554433');
     expect(screen.getByTestId('screen')).toHaveTextContent('workbench');
+
+    fireEvent.click(screen.getByTestId('do-delete-active'));
+    expect(screen.getByTestId('brand-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('active-brand-id')).toHaveTextContent(SEEDED_BRAND_ID);
   });
 
   it('recovers gracefully from malformed localStorage payloads', () => {
@@ -249,7 +265,7 @@ describe('WorkbenchContext', () => {
           {
             id: 'invalid-no-updated-at',
             name: 'Missing Timestamp',
-            logoDataUrl: '/assets/brands/klinik-gigi-impian-logo.png',
+            logoDataUrl: '/assets/brands/demo-brand-logo.png',
             themeColor: '#0EA5E9',
             tone: 'casual',
             whatsappNumber: '60111111111',
@@ -270,7 +286,7 @@ describe('WorkbenchContext', () => {
     expect(screen.getByTestId('screen')).toHaveTextContent('onboarding');
     expect(screen.getByTestId('brand-count')).toHaveTextContent('1');
     expect(screen.getByTestId('active-brand-id')).toHaveTextContent(SEEDED_BRAND_ID);
-    expect(screen.getByTestId('active-brand-name')).toHaveTextContent('Klinik Gigi Impian');
+    expect(screen.getByTestId('active-brand-name')).toHaveTextContent('Demo Bisnes Saya');
   });
 
   it('preserves existing brand name when updateBrand receives whitespace-only name', () => {
@@ -281,10 +297,10 @@ describe('WorkbenchContext', () => {
     );
 
     fireEvent.click(screen.getByTestId('do-create-brand'));
-    expect(screen.getByTestId('active-brand-name')).toHaveTextContent('Klinik Harmoni');
+    expect(screen.getByTestId('active-brand-name')).toHaveTextContent('Kafe Kopi Harmoni');
 
     fireEvent.click(screen.getByTestId('do-blank-name-update'));
-    expect(screen.getByTestId('active-brand-name')).toHaveTextContent('Klinik Harmoni');
+    expect(screen.getByTestId('active-brand-name')).toHaveTextContent('Kafe Kopi Harmoni');
   });
 
   it('keeps activeScreen on onboarding when saveByokKey receives whitespace-only key without demoMode while logged in', () => {
@@ -311,13 +327,13 @@ describe('WorkbenchContext', () => {
         version: 1,
         isLoggedIn: true,
         freelancerEmail: 'pro@studio.my',
-        byokKey: 'AIzaTestKey12345',
+        byokKey: 'sk-live-test-key-123456',
         isDemoMode: false,
         activeScreen: 'workbench',
         brands: [
           {
             id: 'unsafe-brand',
-            name: 'Klinik Terkawal',
+            name: 'Bisnes Terkawal',
             logoDataUrl: 'https://evil.example/tracker.png',
             themeColor: 'not-a-hex-color',
             tone: 'professional',
@@ -354,7 +370,7 @@ describe('WorkbenchContext', () => {
     );
 
     expect(screen.getByTestId('san-logo')).toHaveTextContent(
-      '/assets/brands/klinik-gigi-impian-logo.png'
+      '/assets/brands/demo-brand-logo.png'
     );
     expect(screen.getByTestId('san-color')).toHaveTextContent('#0EA5E9');
     expect(screen.getByTestId('san-wa')).toHaveTextContent('60123456789');

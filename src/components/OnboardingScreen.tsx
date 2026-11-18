@@ -269,7 +269,7 @@ export function OnboardingScreen() {
         <div className="flex flex-wrap items-center gap-2 min-w-0">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-300 max-w-full">
             <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{t('onboarding.badge')}</span>
+            <span className="break-words whitespace-normal leading-tight">{t('onboarding.badge')}</span>
           </span>
           {isDemoMode ? (
             <span
@@ -393,7 +393,7 @@ export function OnboardingScreen() {
               >
                 {t('onboarding.byokLabel')}
               </label>
-              <div className="flex items-stretch gap-2 min-w-0">
+              <div className="flex flex-wrap sm:flex-nowrap items-stretch gap-2 min-w-0">
                 <input
                   id="byok-input"
                   data-testid="byok-input"
@@ -414,14 +414,14 @@ export function OnboardingScreen() {
                   aria-label={showKey ? copy.hideKey : copy.showKey}
                   aria-pressed={showKey}
                   onClick={() => setShowKey((prev) => !prev)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-[#111827] px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 transition cursor-pointer shrink-0"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-[#111827] px-2.5 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 transition cursor-pointer shrink-0"
                 >
                   {showKey ? (
                     <EyeOff className="h-3.5 w-3.5 shrink-0" />
                   ) : (
                     <Eye className="h-3.5 w-3.5 shrink-0" />
                   )}
-                  <span className="hidden sm:inline">{showKey ? copy.hideKey : copy.showKey}</span>
+                  <span className="hidden sm:inline whitespace-nowrap">{showKey ? copy.hideKey : copy.showKey}</span>
                 </button>
               </div>
               <p className="mt-1.5 text-xs text-slate-500 break-words">{t('onboarding.byokHint')}</p>
@@ -437,12 +437,12 @@ export function OnboardingScreen() {
               </p>
             ) : null}
 
-            <div className="flex flex-col sm:flex-row gap-2.5 pt-1 min-w-0">
+            <div className="flex flex-col sm:flex-row lg:flex-col flex-wrap gap-2.5 pt-1 min-w-0">
               <button
                 type="submit"
                 data-testid="byok-save-btn"
                 disabled={!isLoggedIn}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                className="inline-flex w-full sm:flex-1 lg:w-full items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 text-center leading-snug whitespace-normal hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
               >
                 {t('onboarding.saveKeyBtn')}
               </button>
@@ -451,10 +451,10 @@ export function OnboardingScreen() {
                 data-testid="byok-demo-btn"
                 disabled={!isLoggedIn}
                 onClick={handleDemoEnter}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+                className="inline-flex w-full sm:flex-1 lg:w-full items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-4 py-2.5 text-sm font-medium text-slate-200 text-center leading-snug whitespace-normal hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
               >
                 <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
-                {t('onboarding.demoBtn')}
+                <span>{t('onboarding.demoBtn')}</span>
               </button>
             </div>
           </form>
@@ -487,7 +487,7 @@ export function OnboardingScreen() {
               onClick={() => {
                 void handleToggleGuideVideo();
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-[#111827] px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 transition cursor-pointer shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-[#111827] px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 transition cursor-pointer max-w-full whitespace-normal text-center leading-tight"
             >
               {isVideoPlaying ? (
                 <PauseCircle className="h-3.5 w-3.5 text-sky-400 shrink-0" />
@@ -539,7 +539,7 @@ export function OnboardingScreen() {
             aria-modal="true"
             aria-labelledby="api-settings-modal-title"
             data-testid="api-settings-modal"
-            className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl min-w-0"
+            className="w-full max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-2xl min-w-0"
           >
             {cardBody}
           </div>

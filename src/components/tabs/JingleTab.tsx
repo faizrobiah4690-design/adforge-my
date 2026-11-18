@@ -32,8 +32,8 @@ const STYLE_OPTIONS: StyleOption[] = [
     id: 'santai-akustik',
     labelKey: 'tab3.styleSantaiAkustik',
     bpm: 90,
-    descMs: 'Petikan akustik lembut & suasana klinik tenang',
-    descEn: 'Warm acoustic plucks & calm clinic atmosphere',
+    descMs: 'Petikan akustik lembut & suasana mesra pelanggan',
+    descEn: 'Warm acoustic plucks & relaxed welcoming mood',
   },
   {
     id: 'korporat-segar',
@@ -214,7 +214,9 @@ export function JingleTab() {
                 }`}
               >
                 <div className="flex w-full items-center justify-between gap-2 min-w-0">
-                  <span className="text-sm font-semibold truncate">{t(opt.labelKey)}</span>
+                  <span className="text-sm font-semibold break-words leading-tight text-left">
+                    {t(opt.labelKey)}
+                  </span>
                   <span
                     className={`rounded-md px-1.5 py-0.5 text-[10px] font-mono shrink-0 ${
                       isSelected

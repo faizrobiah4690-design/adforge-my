@@ -12,7 +12,7 @@ import {
 } from 'react';
 import {
   DEFAULT_CPA_INPUTS,
-  SAMPLE_CLINIC_PHOTOS,
+  SAMPLE_BUSINESS_PHOTOS,
   SAMPLE_OFFER_CHIP,
 } from '../data/seedVault';
 import { useWorkbench } from './WorkbenchContext';
@@ -24,6 +24,7 @@ import {
 } from '../utils/copyGenerator';
 import {
   JINGLE_DURATION_SEC,
+  buildJingleLyrics,
   generateJingleAudio,
   resolveVideoAudioBuffer,
 } from '../utils/audioExport';
@@ -58,6 +59,7 @@ interface LaunchedSnapshot {
 
 function buildBaselineSlides(brand: BrandProfile, offerSentence: string): CarouselSlide[] {
   const shortOffer = offerSentence.trim() || SAMPLE_OFFER_CHIP;
+  const isCasual = brand.tone === 'casual';
   return [
     {
       id: 'slide-1',
@@ -65,8 +67,12 @@ function buildBaselineSlides(brand: BrandProfile, offerSentence: string): Carous
       role: 'hook',
       photoIndex: 0,
       badgeText: brand.name,
-      headline: 'Senyuman Bersih & Yakin Setiap Hari',
-      subheadline: 'Rawatan scaling & polish lembut di klinik moden.',
+      headline: isCasual
+        ? 'Tawaran Istimewa Untuk Anda'
+        : `Pilihan Berkualiti ${brand.name}`,
+      subheadline: isCasual
+        ? `Produk & servis berkualiti tinggi daripada ${brand.name}.`
+        : `Piawaian perkhidmatan teratur & telus di ${brand.name}.`,
       ctaText: 'Slide 1 / 4',
       editedByUser: false,
     },
@@ -78,7 +84,7 @@ function buildBaselineSlides(brand: BrandProfile, offerSentence: string): Carous
       badgeText: 'TAWARAN KHAS',
       headline: shortOffer.length > 62 ? `${shortOffer.slice(0, 59)}...` : shortOffer,
       subheadline: `Eksklusif di ${brand.name}`,
-      ctaText: 'Slot Terhad',
+      ctaText: isCasual ? 'Stok & Slot Terhad' : 'Promosi Rasmi Terhad',
       editedByUser: false,
     },
     {
@@ -86,9 +92,13 @@ function buildBaselineSlides(brand: BrandProfile, offerSentence: string): Carous
       index: 2,
       role: 'proof',
       photoIndex: 0,
-      badgeText: 'PENJAGAAN SELESA',
-      headline: 'Pemeriksaan Teliti & Mesra Pelanggan',
-      subheadline: 'Peralatan moden serta penerangan jelas sebelum rawatan.',
+      badgeText: 'KUALITI TERJAMIN',
+      headline: isCasual
+        ? 'Dipercayai Ramai Pelanggan Malaysia'
+        : 'Rekod Kepercayaan Pelanggan Tempatan',
+      subheadline: isCasual
+        ? 'Layanan mesra, harga telus & respons pantas.'
+        : 'Khidmat pelanggan konsisten, telus & profesional.',
       ctaText: 'Dipercayai Ramai',
       editedByUser: false,
     },
@@ -107,13 +117,7 @@ function buildBaselineSlides(brand: BrandProfile, offerSentence: string): Carous
 }
 
 function buildBaselineLyrics(brand: BrandProfile, offerSentence: string): string {
-  const conciseOffer = offerSentence.trim() || SAMPLE_OFFER_CHIP;
-  return [
-    `Senyum berseri bersama ${brand.name},`,
-    `Gigi bersih hati pun tenang,`,
-    `${conciseOffer}`,
-    `Jom WhatsApp sekarang, slot menanti anda!`,
-  ].join('\n');
+  return buildJingleLyrics(brand.name, offerSentence);
 }
 
 function buildBaselineJingle(brand: BrandProfile, offerSentence: string): JingleState {
@@ -141,6 +145,7 @@ function buildBaselineStoryboard(
     .map((line) => line.trim())
     .filter(Boolean);
   const shortOffer = offerSentence.trim() || SAMPLE_OFFER_CHIP;
+  const isCasual = brand.tone === 'casual';
 
   return [
     {
@@ -149,8 +154,8 @@ function buildBaselineStoryboard(
       startSec: 0.0,
       endSec: 1.35,
       photoIndex: 0,
-      overlayHeadline: `${brand.name}: Senyum Yakin`,
-      lyricLine: lines[0] ?? `Senyum berseri bersama ${brand.name}`,
+      overlayHeadline: `${brand.name}: Pilihan Tepat`,
+      lyricLine: lines[0] ?? `Pilihan tepat bersama ${brand.name},`,
     },
     {
       id: 'frame-2',
@@ -158,8 +163,8 @@ function buildBaselineStoryboard(
       startSec: 1.35,
       endSec: 2.75,
       photoIndex: 1,
-      overlayHeadline: 'Scaling & Polish Lembut',
-      lyricLine: lines[1] ?? 'Gigi bersih hati pun tenang',
+      overlayHeadline: isCasual ? 'Kualiti & Nilai Berbaloi' : 'Piawaian Kualiti Teratur',
+      lyricLine: lines[1] ?? 'Kualiti terjamin untuk anda semua,',
     },
     {
       id: 'frame-3',
@@ -177,7 +182,7 @@ function buildBaselineStoryboard(
       endSec: 5.5,
       photoIndex: 1,
       overlayHeadline: `WhatsApp +${brand.whatsappNumber}`,
-      lyricLine: lines[3] ?? 'Jom WhatsApp sekarang!',
+      lyricLine: lines[3] ?? 'Jom WhatsApp sekarang, jangan lepaskan peluang!',
     },
   ];
 }
@@ -230,7 +235,7 @@ function syncChannelCopyWhatsapp(copy: ChannelCopy, nextPhone: string): ChannelC
   };
 }
 
-const ANGLES_LIST: readonly AngleId[] = ['confidence', 'hygiene', 'payday'];
+const ANGLES_LIST: readonly AngleId[] = ['urgency', 'value', 'social_proof'];
 
 function safeRevokeBlobUrl(url: string | null): void {
   if (url && url.startsWith('blob:') && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
@@ -254,13 +259,13 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
   const [input, setInputState] = useState<CampaignInput>(() => ({
     brandId: activeBrandId,
-    photos: [SAMPLE_CLINIC_PHOTOS[0], SAMPLE_CLINIC_PHOTOS[1]],
+    photos: [SAMPLE_BUSINESS_PHOTOS[0], SAMPLE_BUSINESS_PHOTOS[1]],
     offerSentence: SAMPLE_OFFER_CHIP,
     generatedAt: null,
   }));
 
   const [activeTab, setActiveTab] = useState<WorkspaceTabId>('strategy');
-  const [selectedAngle, setSelectedAngle] = useState<AngleId>('confidence');
+  const [selectedAngle, setSelectedAngle] = useState<AngleId>('urgency');
   const [editedCopyByAngle, setEditedCopyByAngle] = useState<EditedCopyByAngle>(() =>
     generateCampaignCopyMap(activeBrand, SAMPLE_OFFER_CHIP)
   );
@@ -424,7 +429,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
       });
     }
 
-    if (nameChanged || phoneChanged) {
+    if (nameChanged || toneChanged || phoneChanged) {
       const baselineSlides = buildBaselineSlides(activeBrand, currentOffer);
       setSlides((prevSlides) =>
         prevSlides.map((slide, idx) =>
@@ -432,11 +437,13 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
         )
       );
 
-      const nextLyrics = buildBaselineLyrics(activeBrand, currentOffer);
-      if (!jingleRef.current.lyricsEditedByUser) {
-        setJingle((prevJingle) =>
-          prevJingle.lyricsEditedByUser ? prevJingle : { ...prevJingle, lyrics: nextLyrics }
-        );
+      if (nameChanged || phoneChanged) {
+        const nextLyrics = buildBaselineLyrics(activeBrand, currentOffer);
+        if (!jingleRef.current.lyricsEditedByUser) {
+          setJingle((prevJingle) =>
+            prevJingle.lyricsEditedByUser ? prevJingle : { ...prevJingle, lyrics: nextLyrics }
+          );
+        }
       }
     }
 

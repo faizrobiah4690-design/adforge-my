@@ -61,14 +61,14 @@ export function WorkspaceShell() {
                   data-testid={`tab-${tab.id}`}
                   aria-selected={isActive}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs sm:text-sm font-semibold transition cursor-pointer min-w-0 ${
+                  className={`flex items-center justify-center gap-1.5 sm:gap-2 rounded-xl border px-2 sm:px-2.5 md:px-3 py-2 text-[11px] sm:text-xs md:text-sm font-semibold transition cursor-pointer min-w-0 ${
                     isActive
                       ? 'border-sky-500 bg-sky-500/15 text-sky-200 shadow-sm'
                       : 'border-slate-800 bg-[#111827] text-slate-300 hover:border-slate-700 hover:text-slate-100'
                   }`}
                 >
                   <TabIcon tabId={tab.id} />
-                  <span className="truncate">{t(tab.labelKey)}</span>
+                  <span className="leading-tight text-center break-words">{t(tab.labelKey)}</span>
                 </button>
               );
             })}

@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BrandVaultScreen } from '../../src/components/BrandVaultScreen';
 import { OnboardingScreen } from '../../src/components/OnboardingScreen';
 import { QuickCampaignForm } from '../../src/components/QuickCampaignForm';
-import { SAMPLE_CLINIC_PHOTOS, SAMPLE_OFFER_CHIP, SEEDED_BRAND_ID } from '../../src/data/seedVault';
+import {
+  SAMPLE_BUSINESS_PHOTOS,
+  SAMPLE_OFFER_CHIP,
+  SEEDED_BRAND_ID,
+  SME_OFFER_PRESETS,
+} from '../../src/data/seedVault';
 import { I18nProvider, useI18n } from '../../src/i18n/I18nContext';
 import { CampaignProvider, useCampaign } from '../../src/state/CampaignContext';
 import { WorkbenchProvider, useWorkbench } from '../../src/state/WorkbenchContext';
@@ -224,7 +229,7 @@ describe('imageNormalize', () => {
       naturalWidth: 2400,
       naturalHeight: 3000,
     });
-    const jpgFile = new File([new Uint8Array([255, 216, 255])], 'clinic.jpg', {
+    const jpgFile = new File([new Uint8Array([255, 216, 255])], 'product.jpg', {
       type: 'image/jpeg',
     });
 
@@ -328,7 +333,7 @@ describe('imageNormalize', () => {
       naturalWidth: 800,
       naturalHeight: 600,
     });
-    const webpFile = new File([new Uint8Array([82, 73, 70, 70])], 'clinic.webp', {
+    const webpFile = new File([new Uint8Array([82, 73, 70, 70])], 'product.webp', {
       type: 'image/webp',
     });
     const webpRes = await normalizePhotoFile(webpFile, webpDeps);
@@ -429,46 +434,52 @@ describe('OnboardingScreen', () => {
     const byokInput = screen.getByTestId('byok-input') as HTMLInputElement;
     expect(byokInput.type).toBe('password');
 
-    fireEvent.change(byokInput, { target: { value: 'AIzaSySecretKeyTest999' } });
+    fireEvent.change(byokInput, { target: { value: 'sk-live-secret-key-999' } });
     fireEvent.click(screen.getByTestId('onboarding-byok-visibility'));
     expect(byokInput.type).toBe('text');
-    expect(byokInput.value).toBe('AIzaSySecretKeyTest999');
+    expect(byokInput.value).toBe('sk-live-secret-key-999');
 
     fireEvent.click(screen.getByTestId('onboarding-byok-visibility'));
     expect(byokInput.type).toBe('password');
-    expect(byokInput.value).toBe('AIzaSySecretKeyTest999');
+    expect(byokInput.value).toBe('sk-live-secret-key-999');
 
-    // Empty key blocked
-    fireEvent.change(byokInput, { target: { value: '   ' } });
+    // Empty or whitespace-only key (even >= 12 chars) blocked
+    fireEvent.change(byokInput, { target: { value: '            ' } });
     fireEvent.click(screen.getByTestId('byok-save-btn'));
     expect(screen.getByTestId('onboarding-byok-error')).toHaveAttribute('role', 'alert');
     expect(screen.getByTestId('probe-screen')).toHaveTextContent('onboarding');
 
-    // Malformed key blocked
+    // Key with internal whitespace blocked
+    fireEvent.change(byokInput, { target: { value: 'sk live key 123456' } });
+    fireEvent.click(screen.getByTestId('byok-save-btn'));
+    expect(screen.getByTestId('onboarding-byok-error')).toHaveTextContent(/12 aksara|12 characters|Format kunci API tidak sah/i);
+    expect(screen.getByTestId('probe-screen')).toHaveTextContent('onboarding');
+
+    // 11-char key blocked (< 12 char minimum)
     fireEvent.change(byokInput, { target: { value: 'bad-key-123' } });
     fireEvent.click(screen.getByTestId('byok-save-btn'));
-    expect(screen.getByTestId('onboarding-byok-error')).toHaveTextContent(/AIza/i);
+    expect(screen.getByTestId('onboarding-byok-error')).toHaveTextContent(/12 aksara|12 characters|Format kunci API tidak sah/i);
     expect(screen.getByTestId('probe-screen')).toHaveTextContent('onboarding');
 
-    // 11-char AIza key blocked (< 12 char minimum)
-    fireEvent.change(byokInput, { target: { value: 'AIza1234567' } });
+    // 11-char key (< 12 char minimum) blocked
+    fireEvent.change(byokInput, { target: { value: 'key12345678' } });
     fireEvent.click(screen.getByTestId('byok-save-btn'));
-    expect(screen.getByTestId('onboarding-byok-error')).toHaveTextContent(/AIza/i);
+    expect(screen.getByTestId('onboarding-byok-error')).toHaveTextContent(/12 aksara|12 characters|Format kunci API tidak sah/i);
     expect(screen.getByTestId('probe-screen')).toHaveTextContent('onboarding');
 
-    // Valid key transitions to workbench
-    fireEvent.change(byokInput, { target: { value: 'AIzaSyValidKey123456' } });
+    // Valid non-AIza key >= 12 chars transitions to workbench
+    fireEvent.change(byokInput, { target: { value: 'sk-live-test-key-123456' } });
     fireEvent.click(screen.getByTestId('byok-save-btn'));
-    expect(screen.getByTestId('probe-byok')).toHaveTextContent('AIzaSyValidKey123456');
+    expect(screen.getByTestId('probe-byok')).toHaveTextContent('sk-live-test-key-123456');
     expect(screen.getByTestId('probe-demo')).toHaveTextContent('false');
     expect(screen.getByTestId('probe-screen')).toHaveTextContent('workbench');
 
-    // 12-char AIza key accepted (matches isValidGeminiKeyFormat {8,} rule)
+    // Exact 12-char non-AIza key accepted (matches /^\S{12,}$/)
     fireEvent.change(screen.getByTestId('byok-input'), {
-      target: { value: 'AIza12345678' },
+      target: { value: 'custom123456' },
     });
     fireEvent.click(screen.getByTestId('byok-save-btn'));
-    expect(screen.getByTestId('probe-byok')).toHaveTextContent('AIza12345678');
+    expect(screen.getByTestId('probe-byok')).toHaveTextContent('custom123456');
     expect(screen.getByTestId('probe-screen')).toHaveTextContent('workbench');
   });
 
@@ -553,11 +564,11 @@ describe('OnboardingScreen', () => {
 
     // Entering Demo Mode with valid keyDraft preserves trimmed valid key
     fireEvent.change(screen.getByTestId('byok-input'), {
-      target: { value: '  AIzaSyValidDemoKey123  ' },
+      target: { value: '  sk-live-valid-demo-123  ' },
     });
     fireEvent.click(screen.getByTestId('byok-demo-btn'));
     expect(screen.getByTestId('probe-demo')).toHaveTextContent('true');
-    expect(screen.getByTestId('probe-byok')).toHaveTextContent('AIzaSyValidDemoKey123');
+    expect(screen.getByTestId('probe-byok')).toHaveTextContent('sk-live-valid-demo-123');
   });
 
   it('closes api-settings-modal on Escape key and re-gates workbench on logout', () => {
@@ -636,7 +647,7 @@ describe('BrandVaultScreen', () => {
     );
   }
 
-  it('displays pre-seeded Klinik Gigi Impian, demo badge when active, and rejects blank folder creation', () => {
+  it('displays pre-seeded Demo Bisnes Saya, demo badge when active, and rejects blank folder creation', () => {
     renderWithProviders(
       <>
         <VaultProbe />
@@ -645,9 +656,10 @@ describe('BrandVaultScreen', () => {
     );
 
     expect(screen.getByTestId(`brand-folder-${SEEDED_BRAND_ID}`)).toBeInTheDocument();
+    expect(screen.queryByTestId('delete-brand-btn')).toBeNull();
     expect(screen.getByTestId('brand-logo-preview')).toHaveAttribute(
       'src',
-      '/assets/brands/klinik-gigi-impian-logo.png'
+      '/assets/brands/demo-brand-logo.png'
     );
     expect((screen.getByTestId('brand-whatsapp-input') as HTMLInputElement).value).toBe(
       '60123456789'
@@ -726,14 +738,14 @@ describe('BrandVaultScreen', () => {
       });
       expect(screen.getByTestId('brand-logo-preview')).toHaveAttribute('src', uploadedLogoSrc);
 
-      // Switch back to Klinik Gigi Impian — completely isolated
+      // Switch back to Demo Bisnes Saya — completely isolated
       fireEvent.click(screen.getByTestId(`brand-folder-${SEEDED_BRAND_ID}`));
       expect(screen.getByTestId('vault-active-color')).toHaveTextContent('#0EA5E9');
       expect(screen.getByTestId('vault-active-tone')).toHaveTextContent('casual');
       expect(screen.getByTestId('vault-active-wa')).toHaveTextContent('60123456789');
       expect(screen.getByTestId('brand-logo-preview')).toHaveAttribute(
         'src',
-        '/assets/brands/klinik-gigi-impian-logo.png'
+        '/assets/brands/demo-brand-logo.png'
       );
     } finally {
       cleanupImage();
@@ -758,10 +770,11 @@ describe('BrandVaultScreen', () => {
 
     // Create second folder
     fireEvent.change(screen.getByTestId('new-brand-name-input'), {
-      target: { value: 'Klinik & Co <1>' },
+      target: { value: 'Kopi & Co <1>' },
     });
     fireEvent.click(screen.getByTestId('create-brand-btn'));
-    expect(screen.getByTestId('vault-active-id')).toHaveTextContent('klinik-co-1');
+    expect(screen.getByTestId('vault-active-id')).toHaveTextContent('kopi-co-1');
+    expect(screen.getByTestId('delete-brand-btn')).toBeInTheDocument();
 
     const updatedFolders = Array.from(
       vaultScreen.querySelectorAll('[data-testid^="brand-folder-"]')
@@ -770,14 +783,21 @@ describe('BrandVaultScreen', () => {
     expect(updatedFolders.every((el) => el.tagName === 'BUTTON')).toBe(true);
     expect(vaultScreen.querySelectorAll('div[data-testid^="brand-folder-"]')).toHaveLength(0);
 
-    // Clicking the [data-testid^="brand-folder-"] element matching Klinik Gigi Impian switches back cleanly
-    const seededBtn = updatedFolders.find((el) => el.textContent?.includes('Klinik Gigi Impian'));
+    // Clicking the [data-testid^="brand-folder-"] element matching Demo Bisnes Saya switches back cleanly
+    const seededBtn = updatedFolders.find((el) => el.textContent?.includes('Demo Bisnes Saya'));
     expect(seededBtn).toBeDefined();
     fireEvent.click(seededBtn!);
     expect(screen.getByTestId('vault-active-id')).toHaveTextContent(SEEDED_BRAND_ID);
     expect((screen.getByTestId('brand-name-input') as HTMLInputElement).value).toBe(
-      'Klinik Gigi Impian'
+      'Demo Bisnes Saya'
     );
+    expect(screen.queryByTestId('delete-brand-btn')).toBeNull();
+
+    // Deleting custom folder removes it and switches back to Demo Bisnes Saya
+    fireEvent.click(screen.getByTestId('brand-folder-kopi-co-1'));
+    fireEvent.click(screen.getByTestId('delete-brand-btn'));
+    expect(screen.getByTestId('vault-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('vault-active-id')).toHaveTextContent(SEEDED_BRAND_ID);
 
     // Trigger inline error and verify BM <-> EN toggle translates it reactively
     fireEvent.change(screen.getByTestId('new-brand-name-input'), { target: { value: '   ' } });
@@ -915,10 +935,10 @@ describe('BrandVaultScreen', () => {
 
       // Create Brand B then switch back to Brand A (seeded)
       fireEvent.change(screen.getByTestId('new-brand-name-input'), {
-        target: { value: 'Klinik Kedua' },
+        target: { value: 'Butik Kedua' },
       });
       fireEvent.click(screen.getByTestId('create-brand-btn'));
-      expect(screen.getByTestId('vault-active-id')).toHaveTextContent('klinik-kedua');
+      expect(screen.getByTestId('vault-active-id')).toHaveTextContent('butik-kedua');
 
       fireEvent.click(screen.getByTestId(`brand-folder-${SEEDED_BRAND_ID}`));
       expect(screen.getByTestId('vault-active-id')).toHaveTextContent(SEEDED_BRAND_ID);
@@ -937,8 +957,8 @@ describe('BrandVaultScreen', () => {
       });
 
       // Switch to Brand B before Brand A upload settles -> Brand B Save must be enabled immediately
-      fireEvent.click(screen.getByTestId('brand-folder-klinik-kedua'));
-      expect(screen.getByTestId('vault-active-id')).toHaveTextContent('klinik-kedua');
+      fireEvent.click(screen.getByTestId('brand-folder-butik-kedua'));
+      expect(screen.getByTestId('vault-active-id')).toHaveTextContent('butik-kedua');
       expect(screen.getByTestId('brand-save-btn')).toBeEnabled();
 
       // Reject Brand A deferred upload -> must NOT leak invalid_logo error onto Brand B
@@ -995,7 +1015,7 @@ describe('BrandVaultScreen', () => {
 
     // Editing brand name must NOT clear invalid_wa while waDraft is still invalid
     fireEvent.change(screen.getByTestId('brand-name-input'), {
-      target: { value: 'Klinik Gigi Impian X' },
+      target: { value: 'Demo Bisnes Saya X' },
     });
     expect(screen.getByTestId('brand-error')).toHaveTextContent(/WhatsApp/i);
     expect(waInput.value).toBe('123');
@@ -1017,13 +1037,13 @@ describe('BrandVaultScreen', () => {
     fireEvent.blur(waInput);
     expect(screen.getByTestId('brand-error')).toHaveTextContent(/WhatsApp/i);
     fireEvent.change(screen.getByTestId('new-brand-name-input'), {
-      target: { value: 'Klinik Folder B' },
+      target: { value: 'Servis Folder B' },
     });
     fireEvent.click(screen.getByTestId('create-brand-btn'));
     expect(screen.queryByTestId('brand-error')).toBeNull();
   });
 
-  it('creates duplicate brand folder name with -2 slug suffix without overwriting seeded Klinik Gigi Impian and syncs QuickCampaignForm select', () => {
+  it('creates duplicate brand folder name with -2 slug suffix without overwriting seeded Demo Bisnes Saya and syncs QuickCampaignForm select', () => {
     renderWithProviders(
       <>
         <VaultProbe />
@@ -1033,14 +1053,14 @@ describe('BrandVaultScreen', () => {
     );
 
     fireEvent.change(screen.getByTestId('new-brand-name-input'), {
-      target: { value: 'Klinik Gigi Impian' },
+      target: { value: 'Demo Bisnes Saya' },
     });
     fireEvent.click(screen.getByTestId('create-brand-btn'));
 
     expect(screen.getByTestId('vault-count')).toHaveTextContent('2');
-    expect(screen.getByTestId('vault-active-id')).toHaveTextContent('klinik-gigi-impian-2');
-    expect(screen.getByTestId('brand-folder-klinik-gigi-impian')).toBeInTheDocument();
-    expect(screen.getByTestId('brand-folder-klinik-gigi-impian-2')).toBeInTheDocument();
+    expect(screen.getByTestId('vault-active-id')).toHaveTextContent('demo-bisnes-saya-2');
+    expect(screen.getByTestId('brand-folder-demo-bisnes-saya')).toBeInTheDocument();
+    expect(screen.getByTestId('brand-folder-demo-bisnes-saya-2')).toBeInTheDocument();
 
     // Mutate the duplicate folder's WhatsApp and color
     fireEvent.change(screen.getByTestId('brand-whatsapp-input'), {
@@ -1053,7 +1073,7 @@ describe('BrandVaultScreen', () => {
 
     // Selecting seeded brand via QuickCampaignForm <select> switches Brand Vault back to uncorrupted seeded folder
     const brandSelect = screen.getByTestId('campaign-brand-select') as HTMLSelectElement;
-    expect(brandSelect.value).toBe('klinik-gigi-impian-2');
+    expect(brandSelect.value).toBe('demo-bisnes-saya-2');
     fireEvent.change(brandSelect, { target: { value: SEEDED_BRAND_ID } });
 
     expect(screen.getByTestId('vault-active-id')).toHaveTextContent(SEEDED_BRAND_ID);
@@ -1084,7 +1104,7 @@ describe('QuickCampaignForm', () => {
         <button
           type="button"
           data-testid="add-folder-btn"
-          onClick={() => createBrand({ name: 'Klinik Harmoni' })}
+          onClick={() => createBrand({ name: 'Auto Harmoni' })}
         >
           addFolder
         </button>
@@ -1112,7 +1132,19 @@ describe('QuickCampaignForm', () => {
     expect(screen.getByTestId('campaign-form-error')).toHaveAttribute('role', 'alert');
     expect(screen.getByTestId('form-launched')).toHaveTextContent('false');
 
-    // Fill offer via quick chip, clear Photo 2 -> blocks launch
+    // Fill offer via quick chip & SME vertical presets, clear Photo 2 -> blocks launch
+    fireEvent.click(screen.getByTestId('offer-preset-fnb'));
+    expect((screen.getByTestId('offer-input') as HTMLTextAreaElement).value).toBe(
+      SME_OFFER_PRESETS[0].offer
+    );
+    fireEvent.click(screen.getByTestId('offer-preset-retail'));
+    expect((screen.getByTestId('offer-input') as HTMLTextAreaElement).value).toBe(
+      SME_OFFER_PRESETS[1].offer
+    );
+    fireEvent.click(screen.getByTestId('offer-preset-services'));
+    expect((screen.getByTestId('offer-input') as HTMLTextAreaElement).value).toBe(
+      SME_OFFER_PRESETS[2].offer
+    );
     fireEvent.click(screen.getByTestId('offer-sample-chip'));
     expect((screen.getByTestId('offer-input') as HTMLTextAreaElement).value).toBe(
       SAMPLE_OFFER_CHIP
@@ -1124,18 +1156,18 @@ describe('QuickCampaignForm', () => {
     expect(screen.getByTestId('campaign-form-error')).toHaveAttribute('role', 'alert');
     expect(screen.getByTestId('form-launched')).toHaveTextContent('false');
 
-    // 1-click sample picker attaches Photo 2 when empty and opens 3-photo clinic gallery
+    // 1-click sample picker attaches Photo 2 when empty and opens 3-photo business gallery
     fireEvent.click(screen.getByTestId('sample-photo-picker-1'));
     expect(screen.getByTestId('photo-slot-1').querySelector('img')).not.toBeNull();
-    expect(screen.getByText(SAMPLE_CLINIC_PHOTOS[2].label)).toBeInTheDocument();
+    expect(screen.getByText(SAMPLE_BUSINESS_PHOTOS[2].label)).toBeInTheDocument();
 
-    // Select 3rd clinic photo from gallery on Slot 2 and Slot 1
-    fireEvent.click(screen.getByText(SAMPLE_CLINIC_PHOTOS[2].label));
-    expect(screen.getByTestId('form-photo-1')).toHaveTextContent(SAMPLE_CLINIC_PHOTOS[2].src);
+    // Select 3rd business photo from gallery on Slot 2 and Slot 1
+    fireEvent.click(screen.getByText(SAMPLE_BUSINESS_PHOTOS[2].label));
+    expect(screen.getByTestId('form-photo-1')).toHaveTextContent(SAMPLE_BUSINESS_PHOTOS[2].src);
 
     fireEvent.click(screen.getByTestId('sample-photo-picker-0'));
-    fireEvent.click(within(screen.getByTestId('photo-slot-0')).getByText(SAMPLE_CLINIC_PHOTOS[2].label));
-    expect(screen.getByTestId('form-photo-0')).toHaveTextContent(SAMPLE_CLINIC_PHOTOS[2].src);
+    fireEvent.click(within(screen.getByTestId('photo-slot-0')).getByText(SAMPLE_BUSINESS_PHOTOS[2].label));
+    expect(screen.getByTestId('form-photo-0')).toHaveTextContent(SAMPLE_BUSINESS_PHOTOS[2].src);
 
     // Valid submit launches campaign
     fireEvent.click(screen.getByTestId('launch-campaign-btn'));
@@ -1154,10 +1186,10 @@ describe('QuickCampaignForm', () => {
 
       fireEvent.click(screen.getByTestId('add-folder-btn'));
       const brandSelect = screen.getByTestId('campaign-brand-select') as HTMLSelectElement;
-      expect(brandSelect.value).toBe('klinik-harmoni');
+      expect(brandSelect.value).toBe('auto-harmoni');
 
       const photo1Input = screen.getByTestId('campaign-photo-1-input') as HTMLInputElement;
-      const validPhoto = new File([new Uint8Array([255, 216, 255])], 'smile.jpg', {
+      const validPhoto = new File([new Uint8Array([255, 216, 255])], 'showcase.jpg', {
         type: 'image/jpeg',
       });
       fireEvent.change(photo1Input, { target: { files: [validPhoto] } });
@@ -1178,19 +1210,19 @@ describe('QuickCampaignForm', () => {
 
       // Custom offer stays intact across BM <-> EN switch
       fireEvent.change(screen.getByTestId('offer-input'), {
-        target: { value: 'Promosi Khas Implan Gigi' },
+        target: { value: 'Promosi Khas Pakej Raya' },
       });
       fireEvent.click(screen.getByTestId('switch-en'));
       expect(screen.getByTestId('launch-campaign-btn')).toHaveTextContent('Build Campaign');
       expect((screen.getByTestId('offer-input') as HTMLTextAreaElement).value).toBe(
-        'Promosi Khas Implan Gigi'
+        'Promosi Khas Pakej Raya'
       );
       expect(screen.getByTestId('form-photo-0')).toHaveTextContent(validDataUrl ?? '');
 
       fireEvent.click(screen.getByTestId('switch-ms'));
       expect(screen.getByTestId('launch-campaign-btn')).toHaveTextContent('Bina Kempen');
       expect((screen.getByTestId('offer-input') as HTMLTextAreaElement).value).toBe(
-        'Promosi Khas Implan Gigi'
+        'Promosi Khas Pakej Raya'
       );
     } finally {
       cleanupImage();
@@ -1261,7 +1293,7 @@ describe('QuickCampaignForm', () => {
       );
 
       const photo1Input = screen.getByTestId('campaign-photo-1-input');
-      const png = new File([new Uint8Array([137, 80, 78, 71])], 'clinic.png', {
+      const png = new File([new Uint8Array([137, 80, 78, 71])], 'product.png', {
         type: 'image/png',
       });
       fireEvent.change(photo1Input, { target: { files: [png] } });

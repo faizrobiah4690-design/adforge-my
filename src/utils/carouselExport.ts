@@ -612,7 +612,7 @@ export async function renderSlideToCanvas(
         .split(/\s+/)
         .slice(0, 2)
         .map((w) => Array.from(w)[0]?.toUpperCase() ?? '')
-        .join('') || 'KG';
+        .join('') || 'BS';
     ctx.fillStyle = themeColor;
     ctx.font = `800 30px ${FONT_STACK}`;
     ctx.textBaseline = 'middle';

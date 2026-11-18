@@ -13,6 +13,7 @@ import {
   toggleLanguage,
 } from './helpers/app';
 import {
+  assertNoElementClipping,
   assertNoHorizontalOverflow,
   attachNetworkOriginAuditor,
   attachRuntimeErrorCollector,
@@ -227,7 +228,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
 
     // Non-square 160x40 PNG logo in Brand Vault
     await createBrandFolder(page, {
-      name: 'Klinik Logo Lebar',
+      name: 'Butik Logo Lebar',
       colorHex: '#10B981',
       tone: 'professional',
       whatsapp: '+019-777 6655',
@@ -291,7 +292,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await expect(loc.quickForm.launchBtn).toBeEnabled();
 
     await launchCampaign(page, {
-      brandName: 'Klinik Logo Lebar',
+      brandName: 'Butik Logo Lebar',
       offerSentence: DEFAULT_OFFER,
       attachSamplePhotos: false,
     });
@@ -330,7 +331,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await page.goto('/');
     await page.evaluate(() => {
       localStorage.setItem(
-        'kks_workbench:v1',
+        'adforge_workbench:v1',
         JSON.stringify({
           version: 1,
           isLoggedIn: true,
@@ -340,8 +341,8 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
           activeScreen: 'workbench',
           brands: [
             {
-              id: 'klinik-gigi-impian',
-              name: 'Klinik Gigi Impian',
+              id: 'demo-bisnes-saya',
+              name: 'Demo Bisnes Saya',
               logoDataUrl: 'https://evil.example/tracker.png',
               themeColor: 'not-a-hex',
               tone: 'casual',
@@ -350,7 +351,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
               updatedAt: '2026-11-17T00:00:00.000Z',
             },
           ],
-          activeBrandId: 'klinik-gigi-impian',
+          activeBrandId: 'demo-bisnes-saya',
         }),
       );
     });
@@ -361,10 +362,11 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     const recoveredLogo = await loc.vault.logoPreview.evaluate(
       (img: HTMLImageElement) => img.getAttribute('src') ?? '',
     );
-    expect(recoveredLogo).toBe('/assets/brands/klinik-gigi-impian-logo.png');
+    expect(recoveredLogo).toBe('/assets/brands/demo-brand-logo.png');
     await expect(loc.vault.whatsappInput).toHaveValue('60123456789');
 
     await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+    const casualFbBefore = await loc.tab1.channelCard('facebook').card.innerText();
 
     // Edit Tab 2 Slide 1 & Tab 3 lyrics, capture Slide 4 PNG before Brand Vault edit
     await openTab(page, 'carousel');
@@ -377,7 +379,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await loc.tab3.lyricsInput.fill('Lirik Kekal Disunting Pengguna');
 
     // Edit active Brand Vault folder mid-campaign (+019 normalization + name + tone)
-    await loc.vault.activeNameInput.fill('Klinik Baharu Pro');
+    await loc.vault.activeNameInput.fill('Kedai Baharu Pro');
     await setBrandTone(page, 'professional');
     await loc.vault.whatsappInput.fill('+019-999 8888');
     await saveBrandIfButtonVisible(page);
@@ -387,15 +389,17 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await openTab(page, 'strategy');
     const fbHref = await loc.tab1.channelCard('facebook').whatsappLink.getAttribute('href');
     assertWhatsAppUrl(fbHref, '60199998888');
-    await expect(loc.tab1.psychologyPanel).toContainText('Klinik Baharu Pro');
-    await expect(loc.tab1.channelCard('facebook').card).toContainText('Keyakinan Klinikal');
+    await expect(loc.tab1.psychologyPanel).toContainText('Kedai Baharu Pro');
+    const proFbAfter = await loc.tab1.channelCard('facebook').card.innerText();
+    expect(proFbAfter).not.toBe(casualFbBefore);
+    await expect(loc.tab1.channelCard('facebook').card).toContainText('Kedai Baharu Pro');
 
     // Tab 2 preserves edited Slide 1 while Slide 4 updates & PNG bytes change
     await openTab(page, 'carousel');
     await loc.tab2.slideBtn(1).click();
     await expect(loc.tab2.headlineInput).toHaveValue('Tajuk Slaid 1 Kekal');
     await loc.tab2.slideBtn(4).click();
-    await expect(loc.tab2.previewStage).toContainText('Klinik Baharu Pro');
+    await expect(loc.tab2.previewStage).toContainText('Kedai Baharu Pro');
     await expect(loc.tab2.previewStage).toContainText('+60199998888');
     const slide4After = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
     assertPngBytesChanged(slide4Before.buffer, slide4After.buffer, 'Mid-campaign brand update Slide 4');
@@ -406,13 +410,13 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
 
     // Tab 4 Frame 1 & Frame 4 update reactively
     await openTab(page, 'video');
-    await expect(loc.tab4.frameInput(1)).toHaveValue(/Klinik Baharu Pro/);
+    await expect(loc.tab4.frameInput(1)).toHaveValue(/Kedai Baharu Pro/);
     await expect(loc.tab4.frameInput(4)).toHaveValue(/\+60199998888/);
 
     // Creating & selecting an unlaunched Brand B + typing an unlaunched offer draft
     // MUST NOT mutate Campaign A across Tabs 1-4 until Bina Kempen is clicked
     await createBrandFolder(page, {
-      name: 'Klinik Belum Lancar',
+      name: 'Kedai Belum Lancar',
       colorHex: '#EF4444',
       tone: 'casual',
       whatsapp: '017-555 4433',
@@ -420,19 +424,19 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await loc.quickForm.offerInput.fill('Draf Belum Lancar Tier5');
 
     await openTab(page, 'strategy');
-    await expect(loc.tab1.psychologyPanel).toContainText('Klinik Baharu Pro');
+    await expect(loc.tab1.psychologyPanel).toContainText('Kedai Baharu Pro');
     await expect(loc.tab1.psychologyPanel).toContainText(DEFAULT_OFFER);
-    await expect(loc.tab1.psychologyPanel).not.toContainText('Klinik Belum Lancar');
+    await expect(loc.tab1.psychologyPanel).not.toContainText('Kedai Belum Lancar');
     await expect(loc.tab1.psychologyPanel).not.toContainText('Draf Belum Lancar Tier5');
     const fbStillHref = await loc.tab1.channelCard('facebook').whatsappLink.getAttribute('href');
     assertWhatsAppUrl(fbStillHref, '60199998888');
 
     await openTab(page, 'carousel');
     await loc.tab2.slideBtn(4).click();
-    await expect(loc.tab2.previewStage).toContainText('Klinik Baharu Pro');
-    await expect(loc.tab2.previewStage).not.toContainText('Klinik Belum Lancar');
+    await expect(loc.tab2.previewStage).toContainText('Kedai Baharu Pro');
+    await expect(loc.tab2.previewStage).not.toContainText('Kedai Belum Lancar');
 
-    await loc.vault.folderButton('Klinik Baharu Pro').click();
+    await loc.vault.folderButton('Kedai Baharu Pro').click();
     await openTab(page, 'strategy');
     const fbAfterReturnHref = await loc.tab1.channelCard('facebook').whatsappLink.getAttribute('href');
     assertWhatsAppUrl(fbAfterReturnHref, '60199998888');
@@ -479,8 +483,8 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await expect(loc.onboarding.settingsModal).toHaveCount(0);
 
     // Extreme unbroken brand name (96 chars) & offer (220 chars)
-    const extremeBrand = 'KlinikPergigianPakarEstetikDanKeluargaCawanganPusatBandarayaKualaLumpurSentralMalaysia99999999';
-    const extremeOffer = 'PromosiScalingDanPolishIstimewaSempenaMingguGajiUntukSemuaPelangganBaruDanLama_' + 'X'.repeat(140);
+    const extremeBrand = 'KedaiFesyenDanGayaHidupModenCawanganPusatBandarayaKualaLumpurSentralMalaysia99999999';
+    const extremeOffer = 'PromosiPakejIstimewaSempenaMingguGajiUntukSemuaPelangganBaruDanLama_' + 'X'.repeat(140);
 
     await createBrandFolder(page, {
       name: extremeBrand,
@@ -492,6 +496,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     });
 
     await assertNoHorizontalOverflow(page, '390 extreme vault+form+tab1');
+    await assertNoElementClipping(page, '390 extreme vault+form+tab1');
 
     // Clipboard rejection falls back cleanly to execCommand('copy')
     await loc.tab1.channelCard('facebook').copyBtn.click();
@@ -500,6 +505,16 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     for (const tab of ['carousel', 'jingle', 'video'] as const) {
       await openTab(page, tab);
       await assertNoHorizontalOverflow(page, `390 extreme ${tab}`);
+      await assertNoElementClipping(page, `390 extreme ${tab}`);
+    }
+
+    for (const smallVp of [
+      { width: 320, height: 700 },
+      { width: 360, height: 800 },
+    ]) {
+      await page.setViewportSize(smallVp);
+      await assertNoHorizontalOverflow(page, `${smallVp.width} extreme vault+form+video`);
+      await assertNoElementClipping(page, `${smallVp.width} extreme vault+form+video`);
     }
 
     errors.assertClean();
@@ -659,7 +674,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     // Sign out and re-enter with a valid BYOK key
     await loc.headerApiSettings.click();
     await loc.onboarding.settingsModal.getByRole('button', { name: /Log Keluar|Sign Out/i }).click();
-    await completeOnboarding(page, { useDemoMode: false, apiKey: 'AIzaSyTier5ValidKey123456' });
+    await completeOnboarding(page, { useDemoMode: false, apiKey: 'sk-live-tier5-key-123456' });
     await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
 
     // 2. Google RSA H1-H3 and D1-D2 resolve via getByLabel
@@ -685,19 +700,19 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
                     {
                       text: JSON.stringify({
                         facebook: {
-                          primaryText: 'Gigi anda kuning! 100% dijamin terbaik bersama doktor bertauliah.',
-                          headline: 'Senyum Yakin Gemini',
-                          description: 'Konsultasi klinikal',
+                          primaryText: 'Produk anda kusam? 100% dijamin terbaik bersama pakar kami.',
+                          headline: 'Tawaran Mantap Gemini',
+                          description: 'Konsultasi profesional',
                         },
                         google_rsa: {
                           headlines: [
                             'Tajuk Google RSA Sangat Panjang Melebihi Tiga Puluh Aksara',
-                            'Slot Scaling Gigi',
-                            'Konsultasi Klinik',
+                            'Slot Pakej Promo',
+                            'Konsultasi Kedai',
                           ],
                           descriptions: [
                             'Penerangan Google RSA yang sengaja dibuat melebihi sembilan puluh aksara untuk menguji pemangkasan selamat.',
-                            'Tempah slot pemeriksaan klinikal hari ini.',
+                            'Tempah slot konsultasi hari ini.',
                           ],
                         },
                       }),
@@ -716,14 +731,14 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     const enhanceBtn = loc.tab1.root.getByRole('button', { name: /Gemini/i });
     await enhanceBtn.click();
 
-    // Switch to payday mid-flight -> payday must NOT display Gemini enhancement notice
-    await loc.tab1.angleBtn('payday').click();
+    // Switch to social_proof mid-flight -> social_proof must NOT display Gemini enhancement notice
+    await loc.tab1.angleBtn('social_proof').click();
     await expect(page.getByTestId('strategy-enhance-notice')).toHaveCount(0);
     await expect(enhanceBtn).toBeEnabled({ timeout: 5_000 });
     await expect(page.getByTestId('strategy-enhance-notice')).toHaveCount(0);
 
-    // Switch back to confidence -> shows Gemini notice and sanitized RSA/FB copy
-    await loc.tab1.angleBtn('confidence').click();
+    // Switch back to urgency -> shows Gemini notice and sanitized RSA/FB copy
+    await loc.tab1.angleBtn('urgency').click();
     await expect(page.getByTestId('strategy-enhance-notice')).toContainText(/Salinan dipertingkat oleh Gemini/i);
     const fbText = await loc.tab1.channelCard('facebook').card.locator('textarea').inputValue();
     expect(fbText).not.toMatch(/100%|dijamin|terbaik/i);
@@ -734,8 +749,8 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     expect(rsaD1.length).toBeGreaterThan(0);
     expect(rsaD1.length).toBeLessThanOrEqual(90);
 
-    // Trigger HTTP 500 on payday -> falls back cleanly to baseline template notice
-    await loc.tab1.angleBtn('payday').click();
+    // Trigger HTTP 500 on social_proof -> falls back cleanly to baseline template notice
+    await loc.tab1.angleBtn('social_proof').click();
     await enhanceBtn.click();
     await expect(page.getByTestId('strategy-enhance-notice')).toContainText(/templat selamat terbina/i);
 
@@ -852,12 +867,12 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
 
     const loc = appLocators(page);
 
-    // Open sample-photo-picker-0 and select the 3rd sample photo (clinic-chair-3.png)
+    // Open sample-photo-picker-0 and select the 3rd sample photo (business-service-3.png)
     await loc.quickForm.photo1SampleBtn.click();
-    await loc.quickForm.photoSlot1.getByRole('button', { name: /Ruang Klinik Moden/i }).click();
+    await loc.quickForm.photoSlot1.locator('.grid.grid-cols-3 button').nth(2).click();
     await expect(loc.quickForm.photoSlot1.locator('img').first()).toHaveAttribute(
       'src',
-      /clinic-chair-3\.png/i,
+      /business-service-3\.png/i,
     );
 
     await launchCampaign(page, {
@@ -867,15 +882,15 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
 
     await openTab(page, 'carousel');
 
-    // Slide 1 initially uses clinic-chair-3.png
+    // Slide 1 initially uses business-service-3.png
     const stageBgImg = loc.tab2.previewStage.locator('img').first();
-    await expect(stageBgImg).toHaveAttribute('src', /clinic-chair-3\.png/i);
+    await expect(stageBgImg).toHaveAttribute('src', /business-service-3\.png/i);
     const png1 = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
     assertValidSlidePng(png1.buffer, '9:16');
 
-    // Switch Slide 1 Layer 1 photo to Photo 2 (clinic-smile-2.png) -> PNG bytes change
+    // Switch Slide 1 Layer 1 photo to Photo 2 (business-product-2.png) -> PNG bytes change
     await page.getByTestId('carousel-photo-btn-1').click();
-    await expect(stageBgImg).toHaveAttribute('src', /clinic-smile-2\.png/i);
+    await expect(stageBgImg).toHaveAttribute('src', /business-product-2\.png/i);
     const png2 = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
     assertPngBytesChanged(png1.buffer, png2.buffer, 'Layer 1 photo switch');
 
@@ -903,7 +918,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
   test('T5-14: StrategyTab mid-flight BYOK Gemini survives tab switch (tab-strategy -> tab-carousel -> tab-strategy), Vault swatch + invalid_wa guard, Shift+Tab modal wrap, and compliance reset', async ({ page }) => {
     const errors = attachRuntimeErrorCollector(page);
     await gotoFreshApp(page);
-    await completeOnboarding(page, { useDemoMode: false, apiKey: 'AIzaSyTier5Fourteen12345' });
+    await completeOnboarding(page, { useDemoMode: false, apiKey: 'sk-live-tier5-fourteen-12345' });
 
     const loc = appLocators(page);
 
@@ -917,7 +932,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await loc.vault.whatsappInput.blur();
     await expect(loc.vault.errorMsg).toBeVisible();
 
-    await loc.vault.activeNameInput.fill('Klinik Impian Tier5');
+    await loc.vault.activeNameInput.fill('Bisnes Impian Tier5');
     await expect(loc.vault.errorMsg).toBeVisible();
     await loc.vault.root.getByRole('button', { name: '#F59E0B' }).click();
     await expect(loc.vault.errorMsg).toBeVisible();
@@ -962,9 +977,9 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
                   {
                     text: JSON.stringify({
                       facebook: {
-                        primaryText: 'Salinan Gemini selamat merentas pertukaran tab bersama doktor bertauliah.',
+                        primaryText: 'Salinan Gemini selamat merentas pertukaran tab bersama pasukan bertauliah.',
                         headline: 'GEMINI_SURVIVED_TAB_SWITCH',
-                        description: 'Konsultasi klinikal',
+                        description: 'Konsultasi profesional',
                       },
                     }),
                   },
@@ -992,9 +1007,9 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     const fbCard = loc.tab1.channelCard('facebook').card;
     await expect(fbCard.locator('input[type="text"]').first()).toHaveValue('GEMINI_SURVIVED_TAB_SWITCH');
 
-    await loc.tab1.angleBtn('payday').click();
+    await loc.tab1.angleBtn('social_proof').click();
     await expect(page.getByTestId('strategy-enhance-notice')).toHaveCount(0);
-    await loc.tab1.angleBtn('confidence').click();
+    await loc.tab1.angleBtn('urgency').click();
     await expect(page.getByTestId('strategy-enhance-notice')).toContainText(
       /Salinan dipertingkat oleh Gemini/i,
     );
@@ -1024,11 +1039,11 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await expect(loc.tab4.generateBtn).toBeEnabled();
 
     // 1. Mid-campaign Brand Vault name + WhatsApp edit while awaiting-confirmation MUST uncheck gate
-    await loc.vault.activeNameInput.fill('Klinik Mutasi Sahkan');
+    await loc.vault.activeNameInput.fill('Bisnes Mutasi Sahkan');
     await loc.vault.whatsappInput.fill('019-111 2222');
     await saveBrandIfButtonVisible(page);
 
-    await expect(loc.tab4.frameInput(1)).toHaveValue(/Klinik Mutasi Sahkan/);
+    await expect(loc.tab4.frameInput(1)).toHaveValue(/Bisnes Mutasi Sahkan/);
     await expect(loc.tab4.frameInput(4)).toHaveValue(/\+60191112222/);
     await expect(loc.tab4.confirmCheckbox).not.toBeChecked();
     await expect(loc.tab4.gateWarning).toBeVisible();
@@ -1096,7 +1111,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await expect(loc.onboarding.byokError).toHaveCount(0);
 
     // 2. Upgrade Demo -> BYOK inside modal -> closes modal, restores focus, preserves campaign, mounts Gemini button
-    await loc.onboarding.byokInput.fill('AIzaSyTier5Upgrade123456');
+    await loc.onboarding.byokInput.fill('sk-live-tier5-upgrade-123456');
     await loc.onboarding.byokSaveBtn.click();
     await expect(loc.onboarding.settingsModal).toHaveCount(0);
     await expect(loc.headerApiSettings).toBeFocused();
@@ -1140,19 +1155,19 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await expect(rsaCard).toContainText(/92\/90\s*\(Melebihi had\)/i);
 
     // 2. Live FB primaryText -> Compliance auto-sync
-    await loc.tab1.channelCard('facebook').card.locator('textarea').fill('Gigi anda kuning! 100% dijamin!');
-    await expect(loc.tab1.compliance.input).toHaveValue('Gigi anda kuning! 100% dijamin!');
+    await loc.tab1.channelCard('facebook').card.locator('textarea').fill('Anda ada masalah kewangan? 100% dijamin!');
+    await expect(loc.tab1.compliance.input).toHaveValue('Anda ada masalah kewangan? 100% dijamin!');
     await expect(loc.tab1.compliance.statusBadge).toContainText(/2 Amaran Dikesan/i);
 
     // 3. Edited Instagram caption & hashtags copied via Quick-Copy
     const ig = loc.tab1.channelCard('instagram');
     await ig.card.locator('textarea').fill('Kapsyen IG Suntingan Tier 5');
-    await ig.card.locator('input[type="text"]').fill('#KlinikGigiTier5 #SenyumBersih');
+    await ig.card.locator('input[type="text"]').fill('#BisnesLokalTier5 #KualitiMantap');
     await clearClipboardSpy(page);
     await ig.copyBtn.click();
     const igCopied = await readClipboardWithFallback(page);
     expect(igCopied).toContain('Kapsyen IG Suntingan Tier 5');
-    expect(igCopied).toContain('#KlinikGigiTier5 #SenyumBersih');
+    expect(igCopied).toContain('#BisnesLokalTier5 #KualitiMantap');
     expect(igCopied).toContain('https://wa.me/');
 
     // 4. Edited TikTok hook, script, and caption copied via Quick-Copy
@@ -1179,7 +1194,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     errors.detach();
   });
 
-  test('T5-18: Duplicate brand folder -2 suffix, QuickCampaignForm select->Vault sync, and 390x844 api-settings-modal + 4:5 safe-zone overflow + empty headline placeholder', async ({ page }) => {
+  test('T5-18: Duplicate brand folder -2 suffix, delete-brand-btn, QuickCampaignForm select->Vault sync, and 390x844 api-settings-modal + 4:5 safe-zone overflow + empty headline placeholder', async ({ page }) => {
     const errors = attachRuntimeErrorCollector(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoFreshApp(page);
@@ -1188,26 +1203,38 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     const loc = appLocators(page);
 
     // 1. Duplicate brand name creates -2 slug without overwriting seeded folder
-    await loc.vault.newNameInput.fill('Klinik Gigi Impian');
+    await loc.vault.newNameInput.fill('Demo Bisnes Saya');
     await loc.vault.createBtn.click();
-    await expect(page.getByTestId('brand-folder-klinik-gigi-impian')).toBeVisible();
-    await expect(page.getByTestId('brand-folder-klinik-gigi-impian-2')).toBeVisible();
+    await expect(page.getByTestId('brand-folder-demo-bisnes-saya')).toBeVisible();
+    await expect(page.getByTestId('brand-folder-demo-bisnes-saya-2')).toBeVisible();
 
     await loc.vault.whatsappInput.fill('019-222 3333');
     await loc.vault.colorInput.fill('#10B981');
     await saveBrandIfButtonVisible(page);
     await expect(loc.vault.whatsappInput).toHaveValue('60192223333');
 
+    // Delete duplicate custom folder -> switches cleanly back to seeded Demo Bisnes Saya
+    await expect(page.getByTestId('delete-brand-btn')).toBeVisible();
+    await page.getByTestId('delete-brand-btn').click();
+    await expect(page.getByTestId('brand-folder-demo-bisnes-saya-2')).toHaveCount(0);
+    await expect(page.getByTestId('delete-brand-btn')).toHaveCount(0);
+
+    // Re-create duplicate to test QuickCampaignForm <select> -> Brand Vault sync
+    await loc.vault.newNameInput.fill('Demo Bisnes Saya');
+    await loc.vault.createBtn.click();
+    await expect(page.getByTestId('brand-folder-demo-bisnes-saya-2')).toBeVisible();
+
     // 2. Selecting seeded brand via QuickCampaignForm <select> updates Brand Vault active folder
-    await loc.quickForm.brandSelect.selectOption('klinik-gigi-impian');
-    await expect(loc.vault.activeNameInput).toHaveValue('Klinik Gigi Impian');
+    await loc.quickForm.brandSelect.selectOption('demo-bisnes-saya');
+    await expect(loc.vault.activeNameInput).toHaveValue('Demo Bisnes Saya');
     await expect(loc.vault.whatsappInput).toHaveValue('60123456789');
     await expect(loc.vault.colorInput).toHaveValue('#0ea5e9');
 
-    // 3. api-settings-modal at 390x844 has zero horizontal overflow
+    // 3. api-settings-modal at 390x844 has zero horizontal overflow & zero clipping
     await loc.headerApiSettings.click();
     await expect(loc.onboarding.settingsModal).toBeVisible();
     await assertNoHorizontalOverflow(page, '390 api-settings-modal');
+    await assertNoElementClipping(page, '390 api-settings-modal');
     await loc.onboarding.settingsCloseBtn.click();
 
     // 4. Tab 2 4:5 safe-zone at 390x844 has zero overflow & empty headline shows bilingual placeholder
@@ -1217,6 +1244,7 @@ test.describe('Tier 5 — Adversarial Coverage & Hardening (18 Tests)', () => {
     await loc.tab2.safeZoneToggleBtn.click();
     await expect(loc.tab2.safeZoneOverlay).toBeVisible();
     await assertNoHorizontalOverflow(page, '390 tab2 4:5 safe-zone');
+    await assertNoElementClipping(page, '390 tab2 4:5 safe-zone');
 
     await loc.tab2.headlineInput.fill('');
     await expect(loc.tab2.slideBtn(1)).toContainText('(Tiada tajuk)');

@@ -37,29 +37,29 @@ test.describe('Tier 3 — Cross-Feature Pairwise Interactions (12 Tests)', () =>
     await gotoFreshApp(page);
     await completeOnboarding(page, { useDemoMode: true });
     await createBrandFolder(page, {
-      name: 'Klinik Murni',
+      name: 'Kafe Murni',
       colorHex: '#10B981',
       tone: 'professional',
       whatsapp: '017-111 2222',
       logoRgba: [16, 185, 129, 255],
     });
 
-    await launchCampaign(page, { brandName: 'Klinik Gigi Impian', offerSentence: DEFAULT_OFFER });
+    await launchCampaign(page, { brandName: 'Demo Bisnes Saya', offerSentence: DEFAULT_OFFER });
     const loc = appLocators(page);
     const href1 = await loc.tab1.channelCard('facebook').whatsappLink.getAttribute('href');
     assertWhatsAppUrl(href1, '60123456789');
 
-    await launchCampaign(page, { brandName: 'Klinik Murni', offerSentence: DEFAULT_OFFER });
+    await launchCampaign(page, { brandName: 'Kafe Murni', offerSentence: DEFAULT_OFFER });
     const href2 = await loc.tab1.channelCard('facebook').whatsappLink.getAttribute('href');
     assertWhatsAppUrl(href2, '60171112222');
 
     await openTab(page, 'carousel');
     const logoSrc = await loc.tab2.logoImg.evaluate((img: HTMLImageElement) => img.currentSrc || img.src);
     expect(logoSrc.startsWith('data:image/png')).toBe(true);
-    await expect(loc.tab2.previewStage).toContainText('Klinik Murni');
+    await expect(loc.tab2.previewStage).toContainText('Kafe Murni');
 
     await openTab(page, 'jingle');
-    expect(await loc.tab3.lyricsInput.inputValue()).toContain('Klinik Murni');
+    expect(await loc.tab3.lyricsInput.inputValue()).toContain('Kafe Murni');
   });
 
   test('T3-02: BM <-> EN toggle mid-edit preserves Quick Form, Tab 1 & Tab 2 edits', async ({ page }) => {
@@ -72,7 +72,7 @@ test.describe('Tier 3 — Cross-Feature Pairwise Interactions (12 Tests)', () =>
     await loc.tab1.cpa.cplInput.fill('22');
 
     await openTab(page, 'carousel');
-    await loc.tab2.headlineInput.fill('Senyum Yakin');
+    await loc.tab2.headlineInput.fill('Tawaran Yakin');
 
     const before = await getActiveTabLanguageSnapshot(page);
     await toggleLanguage(page);
@@ -81,7 +81,7 @@ test.describe('Tier 3 — Cross-Feature Pairwise Interactions (12 Tests)', () =>
 
     await toggleLanguage(page);
     await expect(loc.quickForm.offerInput).toHaveValue('Offer Khas Gaji');
-    await expect(loc.tab2.headlineInput).toHaveValue('Senyum Yakin');
+    await expect(loc.tab2.headlineInput).toHaveValue('Tawaran Yakin');
     await openTab(page, 'strategy');
     await expect(loc.tab1.channelCard('facebook').editableField).toHaveValue('Salinan FB Terkini');
     await expect(loc.tab1.cpa.cplInput).toHaveValue('22');
@@ -130,17 +130,17 @@ test.describe('Tier 3 — Cross-Feature Pairwise Interactions (12 Tests)', () =>
     await gotoFreshApp(page);
     await completeOnboarding(page, { useDemoMode: true });
     await createBrandFolder(page, {
-      name: 'Klinik Korporat Pro',
+      name: 'Agensi Korporat Pro',
       tone: 'professional',
       whatsapp: '0181234567',
     });
 
-    await launchCampaign(page, { brandName: 'Klinik Gigi Impian', offerSentence: DEFAULT_OFFER });
+    await launchCampaign(page, { brandName: 'Demo Bisnes Saya', offerSentence: DEFAULT_OFFER });
     const loc = appLocators(page);
     const casualFb = await loc.tab1.channelCard('facebook').card.innerText();
     const casualPsych = await loc.tab1.psychologyPanel.innerText();
 
-    await launchCampaign(page, { brandName: 'Klinik Korporat Pro', offerSentence: DEFAULT_OFFER });
+    await launchCampaign(page, { brandName: 'Agensi Korporat Pro', offerSentence: DEFAULT_OFFER });
     const proFb = await loc.tab1.channelCard('facebook').card.innerText();
     const proPsych = await loc.tab1.psychologyPanel.innerText();
 
@@ -154,7 +154,7 @@ test.describe('Tier 3 — Cross-Feature Pairwise Interactions (12 Tests)', () =>
     await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
     const loc = appLocators(page);
 
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
     await loc.vault.whatsappInput.fill('018-777 6655');
     await saveBrandIfButtonVisible(page);
 
@@ -176,7 +176,7 @@ test.describe('Tier 3 — Cross-Feature Pairwise Interactions (12 Tests)', () =>
     const before = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
     assertValidSlidePng(before.buffer, '4:5');
 
-    await loc.tab2.headlineInput.fill('Gigi Bersih Minggu Gaji');
+    await loc.tab2.headlineInput.fill('Tawaran Minggu Gaji');
     if (await loc.tab2.safeZoneOverlay.isVisible().catch(() => false)) {
       await loc.tab2.safeZoneToggleBtn.click();
     }
@@ -242,7 +242,7 @@ test.describe('Tier 3 — Cross-Feature Pairwise Interactions (12 Tests)', () =>
     await openTab(page, 'carousel');
     const beforePng = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
 
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
     await loc.vault.colorInput.fill('#E11D48');
     await saveBrandIfButtonVisible(page);
 
@@ -269,9 +269,9 @@ test.describe('Tier 3 — Cross-Feature Pairwise Interactions (12 Tests)', () =>
     await loc.tab3.lyricsInput.fill('Lirik Tab 3 Kekal');
 
     await openTab(page, 'strategy');
-    await loc.tab1.angleBtn('payday').click();
+    await loc.tab1.angleBtn('social_proof').click();
     const href = await loc.tab1.channelCard('facebook').whatsappLink.getAttribute('href');
-    assertWhatsAppUrl(href, '60123456789', /SUDUT-3-MINGGUGAJI|MINGGUGAJI|payday/i);
+    assertWhatsAppUrl(href, '60123456789', /SUDUT-3-BUKTISOSIAL|BUKTISOSIAL|social_proof/i);
 
     await openTab(page, 'carousel');
     await expect(loc.tab2.headlineInput).toHaveValue('Tajuk Tab 2 Kekal');
@@ -294,20 +294,20 @@ test.describe('Tier 3 — Cross-Feature Pairwise Interactions (12 Tests)', () =>
       await loc.tab1.compliance.applyRewriteBtn.click();
     } else {
       await loc.tab1.compliance.input.fill(
-        'Penjagaan penskaleran profesional di Klinik Gigi Impian. No. Kelulusan KKLIU: 1234/2026',
+        'Servis berkualiti untuk pelanggan di Demo Bisnes Saya.',
       );
     }
 
     await expect(loc.tab1.compliance.statusBadge).toContainText(RX.compliancePass);
     const rewrittenText = await loc.tab1.compliance.input.inputValue();
-    expect(rewrittenText).not.toMatch(/100%|terbaik|dijamin|kuning/i);
+    expect(rewrittenText).not.toMatch(/100%|terbaik|dijamin/i);
 
     await clearClipboardSpy(page);
     await loc.tab1.channelCard('facebook').copyBtn.click();
     await expect(loc.tab1.channelCard('facebook').card).toContainText(RX.copiedFeedback);
     const copied = await readClipboardWithFallback(page);
     expect(copied).toContain('https://wa.me/60123456789?text=');
-    expect(copied).toMatch(/SUDUT-|Keyakinan|confidence|Scaling/i);
+    expect(copied).toMatch(/SUDUT-|Segera|urgency|Promosi/i);
     expect(copied).not.toMatch(/100%|terbaik di Malaysia|dijamin/i);
   });
 });

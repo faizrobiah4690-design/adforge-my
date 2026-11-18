@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 
-export type AngleId = 'confidence' | 'hygiene' | 'payday';
+export type AngleId = 'urgency' | 'value' | 'social_proof';
 export type ChannelId = 'facebook' | 'instagram' | 'tiktok' | 'google_rsa';
 export type JingleStyleId = 'pop-ceria' | 'santai-akustik' | 'korporat-segar';
 export type WorkspaceTabId = 'strategy' | 'carousel' | 'jingle' | 'video';
@@ -67,9 +67,9 @@ export const TEST_IDS = {
   // A4: Tab 1 — Strategy, Copy, CPA, Compliance
   tabPanelStrategy: 'tab-panel-strategy',
   strategyPsychologyPanel: 'strategy-psychology-panel',
-  angleConfidence: 'angle-confidence',
-  angleHygiene: 'angle-hygiene',
-  anglePayday: 'angle-payday',
+  angleUrgency: 'angle-urgency',
+  angleValue: 'angle-value',
+  angleSocialProof: 'angle-social_proof',
   channelFacebook: 'channel-facebook',
   channelInstagram: 'channel-instagram',
   channelTiktok: 'channel-tiktok',
@@ -133,15 +133,15 @@ export const RX = {
 
   brandVaultHeading: /Brand Vault|Peti Jenama|Profil Jenama/i,
   newBrand: /Folder Baru|Folder Baharu|Cipta Folder(?: Baharu)?|Cipta Jenama|Jenama Baru|New Brand|Create (?:New )?Folder|Add Brand/i,
-  brandNameLabel: /Nama Jenama|Brand Name|Folder Name|Nama Folder|Klinik Pergigian Harmoni/i,
+  brandNameLabel: /Nama Jenama|Brand Name|Folder Name|Nama Folder|Nama Bisnes Anda/i,
   toneCasual: /Santai|Casual/i,
   toneProfessional: /Profesional|Professional/i,
   saveBrand: /Simpan Jenama|Simpan Folder(?: Jenama)?|Save Brand Folder|Simpan|Save/i,
 
   quickFormHeading: /Kempen Pantas|Quick Campaign|Bina Kempen|Lancar Kempen/i,
   offerLabel: /Tawaran|Offer|Ayat Tawaran/i,
-  offerPlaceholder: /Promosi|Tawaran|Offer|Scaling/i,
-  offerChip: /Contoh|Quick sample|Sample Offer|Guna Contoh|Promosi Scaling|Isi Contoh/i,
+  offerPlaceholder: /Promosi|Tawaran|Offer/i,
+  offerChip: /Contoh|Quick sample|Sample Offer|Guna Contoh|Promosi Minggu Gaji|Isi Contoh/i,
   binaKempen: /Bina Kempen|Build Campaign|Launch Campaign/i,
 
   tabStrategy: /Strategi|Strategy/i,
@@ -151,9 +151,9 @@ export const RX = {
 
   psychologyHeading: /Psikologi Pelanggan|Customer Psychology/i,
   angles: {
-    confidence: /Keyakinan|Confidence/i,
-    hygiene: /Pencegahan|Hygiene|Kebersihan/i,
-    payday: /Minggu Gaji|Payday/i,
+    urgency: /Segera|Urgency|FOMO/i,
+    value: /Nilai|Value|Kualiti|Quality/i,
+    social_proof: /Bukti Sosial|Social Proof/i,
   } as Record<AngleId, RegExp>,
 
   channels: {
@@ -170,7 +170,7 @@ export const RX = {
   cpaCaution: /\b(Berhati-hati|Berhati|Berjaga-jaga|Awas|Caution)\b/i,
   cpaOverLimit: /\b(Rugi|Melebihi Had(?:\s+Pulang Modal)?|Over(?:\s+Break-Even)?\s*Limit|Bahaya)\b/i,
 
-  complianceHeading: /Polisi|Policy|Pematuhan|Compliance|KKLIU/i,
+  complianceHeading: /Polisi|Policy|Pematuhan|Compliance/i,
   testRisky: /Uji Ayat Berisiko|Uji Contoh Berisiko|Test Risky(?:\s+Sample)?|Sampel Berisiko/i,
   applyRewrite: /Tukar Selamat|Guna Ayat Selamat|Apply.*Rewrite|Safe Rewrite|Baiki/i,
   compliancePass: /Lulus|Tiada Risiko Polisi|Patuh|Compliant|Tiada risiko tinggi|Pass\b|No Policy Risks|Clean/i,
@@ -264,7 +264,7 @@ export function appLocators(page: Page) {
     byokInput: page
       .getByTestId(TEST_IDS.onboardingByokInput)
       .or(page.getByTestId('byok-input'))
-      .or(page.getByPlaceholder(/AIza|API Key|Kunci API/i))
+      .or(page.getByPlaceholder(/API Key|Kunci API/i))
       .or(page.getByLabel(/API Key|Kunci API/i))
       .first(),
     byokVisibilityBtn: page
@@ -543,9 +543,9 @@ export function appLocators(page: Page) {
       .first(),
     angleBtn: (angle: AngleId): Locator => {
       const map: Record<AngleId, string> = {
-        confidence: TEST_IDS.angleConfidence,
-        hygiene: TEST_IDS.angleHygiene,
-        payday: TEST_IDS.anglePayday,
+        urgency: TEST_IDS.angleUrgency,
+        value: TEST_IDS.angleValue,
+        social_proof: TEST_IDS.angleSocialProof,
       };
       return tab1Root
         .getByTestId(map[angle])

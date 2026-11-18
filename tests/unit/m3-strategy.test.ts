@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateMalaysianWhatsapp } from '../../src/components/BrandVaultScreen';
 import { StrategyTab } from '../../src/components/tabs/StrategyTab';
-import { SAMPLE_OFFER_CHIP, SEEDED_KLINIK_GIGI_IMPIAN } from '../../src/data/seedVault';
+import { SAMPLE_OFFER_CHIP, SEEDED_DEMO_BRAND } from '../../src/data/seedVault';
 import { I18nProvider, useI18n } from '../../src/i18n/I18nContext';
 import { CampaignProvider, useCampaign } from '../../src/state/CampaignContext';
 import { WorkbenchProvider, useWorkbench } from '../../src/state/WorkbenchContext';
@@ -40,7 +40,7 @@ function StrategyHarness() {
     createElement(
       'span',
       { 'data-testid': 'harness-context-wa' },
-      editedCopyByAngle.confidence?.facebook.whatsappUrl ?? ''
+      editedCopyByAngle.urgency?.facebook.whatsappUrl ?? ''
     ),
     createElement(
       'button',
@@ -82,10 +82,10 @@ function StrategyHarness() {
       'button',
       {
         type: 'button',
-        'data-testid': 'harness-select-payday',
-        onClick: () => setSelectedAngle('payday'),
+        'data-testid': 'harness-select-social-proof',
+        onClick: () => setSelectedAngle('social_proof'),
       },
-      'payday'
+      'social_proof'
     ),
     createElement(StrategyTab)
   );
@@ -108,26 +108,26 @@ describe('M3 whatsapp.ts utilities', () => {
   });
 
   it('truncates emoji surrogate pairs safely in buildWhatsappCtaUrl without URIError', () => {
-    const boundaryOffer = `${'a'.repeat(116)}🦷bbb`;
-    const emojiFloodOffer = '🦷'.repeat(120);
+    const boundaryOffer = `${'a'.repeat(116)}🚀bbb`;
+    const emojiFloodOffer = '🚀'.repeat(120);
 
     const url1 = buildWhatsappCtaUrl({
       phone: '0123456789',
-      brandName: 'Klinik Gigi Impian',
+      brandName: 'Demo Bisnes Saya',
       offerSentence: boundaryOffer,
-      angle: 'confidence',
+      angle: 'urgency',
     });
     const url2 = buildWhatsappCtaUrl({
       phone: '0123456789',
-      brandName: 'Klinik Gigi Impian',
+      brandName: 'Demo Bisnes Saya',
       offerSentence: emojiFloodOffer,
-      angle: 'payday',
+      angle: 'social_proof',
     });
 
     expect(() => decodeURIComponent(url1)).not.toThrow();
     expect(() => decodeURIComponent(url2)).not.toThrow();
-    expect(decodeURIComponent(url1)).toContain(ANGLE_WHATSAPP_TAGS.confidence);
-    expect(decodeURIComponent(url2)).toContain(ANGLE_WHATSAPP_TAGS.payday);
+    expect(decodeURIComponent(url1)).toContain(ANGLE_WHATSAPP_TAGS.urgency);
+    expect(decodeURIComponent(url2)).toContain(ANGLE_WHATSAPP_TAGS.social_proof);
     expect(/[\uD800-\uDFFF]/.test(url1.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ''))).toBe(false);
     expect(/[\uD800-\uDFFF]/.test(url2.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ''))).toBe(false);
   });
@@ -135,38 +135,38 @@ describe('M3 whatsapp.ts utilities', () => {
   it('uses fallback digits and builds angle-tagged wa.me CTA URLs', () => {
     expect(getSafeWhatsappDigits('bad')).toBe('60123456789');
 
-    const confUrl = buildWhatsappCtaUrl({
+    const urgUrl = buildWhatsappCtaUrl({
       phone: '018-777 6655',
-      brandName: 'Klinik Gigi Harmoni',
-      offerSentence: 'Promosi Scaling & Polish',
-      angle: 'confidence',
+      brandName: 'Kafe Kopi Harmoni',
+      offerSentence: 'Promosi Kombo Kopi',
+      angle: 'urgency',
     });
-    const hygUrl = buildWhatsappCtaUrl({
+    const valUrl = buildWhatsappCtaUrl({
       phone: '018-777 6655',
-      brandName: 'Klinik Gigi Harmoni',
-      offerSentence: 'Promosi Scaling & Polish',
-      angle: 'hygiene',
+      brandName: 'Kafe Kopi Harmoni',
+      offerSentence: 'Promosi Kombo Kopi',
+      angle: 'value',
     });
-    const payUrl = buildWhatsappCtaUrl({
+    const socUrl = buildWhatsappCtaUrl({
       phone: '018-777 6655',
-      brandName: 'Klinik Gigi Harmoni',
-      offerSentence: 'Promosi Scaling & Polish',
-      angle: 'payday',
+      brandName: 'Kafe Kopi Harmoni',
+      offerSentence: 'Promosi Kombo Kopi',
+      angle: 'social_proof',
     });
 
-    expect(confUrl).toContain('https://wa.me/60187776655?text=');
-    expect(decodeURIComponent(confUrl)).toContain(ANGLE_WHATSAPP_TAGS.confidence);
-    expect(decodeURIComponent(hygUrl)).toContain(ANGLE_WHATSAPP_TAGS.hygiene);
-    expect(decodeURIComponent(payUrl)).toContain(ANGLE_WHATSAPP_TAGS.payday);
-    expect(decodeURIComponent(payUrl)).toContain('Klinik Gigi Harmoni');
+    expect(urgUrl).toContain('https://wa.me/60187776655?text=');
+    expect(decodeURIComponent(urgUrl)).toContain(ANGLE_WHATSAPP_TAGS.urgency);
+    expect(decodeURIComponent(valUrl)).toContain(ANGLE_WHATSAPP_TAGS.value);
+    expect(decodeURIComponent(socUrl)).toContain(ANGLE_WHATSAPP_TAGS.social_proof);
+    expect(decodeURIComponent(socUrl)).toContain('Kafe Kopi Harmoni');
   });
 
   it('rewrites phone digits without wiping surrounding copy or angle tag', () => {
     const original =
-      'Teks disunting: https://wa.me/60123456789?text=Hai%20Klinik%20%5BKod%3A%20SUDUT-3-MINGGUGAJI%5D';
+      'Teks disunting: https://wa.me/60123456789?text=Hai%20Bisnes%20%5BKod%3A%20SUDUT-3-BUKTISOSIAL%5D';
     const updated = rewriteWhatsappUrlPhone(original, '019-222 3344');
     expect(updated).toContain('Teks disunting: https://wa.me/60192223344?text=');
-    expect(decodeURIComponent(updated)).toContain('SUDUT-3-MINGGUGAJI');
+    expect(decodeURIComponent(updated)).toContain('SUDUT-3-BUKTISOSIAL');
   });
 
   it('normalizes +01x trunk zero, rejects <8/>15/leading-0 numbers, and validates +01x in BrandVaultScreen', () => {
@@ -290,80 +290,79 @@ describe('M3 cpa.ts utilities', () => {
 });
 
 describe('M3 compliance.ts utilities', () => {
-  it('flags Meta Personal Attributes and MY dental/KKLIU risks in BM and EN', () => {
+  it('flags Meta Personal Attributes and MY General Ad Policy risks in BM and EN across all SME verticals', () => {
     const riskyFindings = checkCopyCompliance(RISKY_COMPLIANCE_SAMPLE);
     expect(riskyFindings.some((f) => f.category === 'meta_personal_attributes')).toBe(true);
-    expect(riskyFindings.some((f) => f.category === 'my_healthcare_norm')).toBe(true);
+    expect(riskyFindings.some((f) => f.category === 'my_advertising_norm')).toBe(true);
 
     const enFindings = checkCopyCompliance(
-      'Are you suffering from bad breath? Cheapest dentist!'
+      'Are you suffering from debt or bad credit? Cheapest shop!'
     );
     expect(enFindings.some((f) => f.category === 'meta_personal_attributes')).toBe(true);
-    expect(enFindings.some((f) => f.category === 'my_healthcare_norm')).toBe(true);
+    expect(enFindings.some((f) => f.category === 'my_advertising_norm')).toBe(true);
 
-    const missingKkliu = checkCopyCompliance(
-      'Promosi scaling gigi murah di klinik kami bulan ini!'
+    const cleanSmeOffer = checkCopyCompliance(
+      'Promosi kombo kopi & kek di Kafe Harmoni bulan ini! Hubungi WhatsApp rasmi.'
     );
-    expect(missingKkliu.some((f) => f.ruleKey === 'tab1.complianceRuleKkliu')).toBe(true);
+    expect(cleanSmeOffer).toHaveLength(0);
   });
 
   it('passes clean copy and rewrites risky copy into guaranteed-clean text', () => {
     const clean =
-      'Penjagaan penskaleran profesional di Klinik Gigi Impian. Tempah sesi konsultasi bersama doktor pergigian bertauliah (patuh KKLIU).';
+      'Produk & servis berkualiti di Demo Bisnes Saya. Hubungi kami melalui WhatsApp untuk maklumat lanjut.';
     expect(checkCopyCompliance(clean)).toHaveLength(0);
 
-    const rewritten = rewriteSafeCopy(RISKY_COMPLIANCE_SAMPLE, 'Klinik Gigi Impian');
+    const rewritten = rewriteSafeCopy(RISKY_COMPLIANCE_SAMPLE, 'Demo Bisnes Saya');
     expect(checkCopyCompliance(rewritten)).toHaveLength(0);
-    expect(rewritten).not.toMatch(/100%|terbaik|dijamin|kuning/i);
+    expect(rewritten).not.toMatch(/100%|terbaik|dijamin|kusam/i);
   });
 
-  it('flags (#1), prevents orphaned dan-nafas artifacts, and keeps clean output for regulated brandNames', () => {
-    const parenSuperlative = checkCopyCompliance('Promosi scaling (#1) di bandar!');
+  it('flags (#1), prevents orphaned personal-attribute artifacts, and keeps clean output for regulated brandNames', () => {
+    const parenSuperlative = checkCopyCompliance('Promosi servis (#1) di bandar!');
     expect(parenSuperlative.some((f) => f.id === 'my-superlative')).toBe(true);
 
     const stackedMultiline =
-      'Gigi\nanda\nberkarang dan nafas\nanda\nberbau?\n(#1) klinik!\n100% dijamin!';
-    const rewrittenMultiline = rewriteSafeCopy(stackedMultiline, 'Klinik Gigi Impian');
+      'Kulit\nanda\nkusam dan kewangan\nanda\nbermasalah?\n(#1) kedai!\n100% dijamin!';
+    const rewrittenMultiline = rewriteSafeCopy(stackedMultiline, 'Demo Bisnes Saya');
     expect(checkCopyCompliance(rewrittenMultiline)).toHaveLength(0);
-    expect(rewrittenMultiline).not.toMatch(/\banda\s+berbau/i);
+    expect(rewrittenMultiline).not.toMatch(/\banda\s+bermasalah/i);
 
     for (const riskyBrand of [
-      'Klinik Terbaik No. 1',
-      'Klinik Gigi 100% Dijamin',
-      'Cheapest Dental Clinic',
+      'Kedai Terbaik No. 1',
+      'Servis 100% Dijamin',
+      'Cheapest Auto Workshop',
     ]) {
-      const rewrittenBrand = rewriteSafeCopy('Gigi anda kuning! Dijamin 100%!', riskyBrand);
+      const rewrittenBrand = rewriteSafeCopy('Kulit anda kusam! Dijamin 100%!', riskyBrand);
       expect(checkCopyCompliance(rewrittenBrand)).toHaveLength(0);
     }
   });
 
-  it('produces fluent rewrites without garbled phrases, preserves comma CTAs and tema kuning, and detects crooked teeth / Pusat Pergigian offers', () => {
-    const rewrittenSample = rewriteSafeCopy(RISKY_COMPLIANCE_SAMPLE, 'Klinik Gigi Impian');
-    expect(rewrittenSample).not.toContain('berhemah putih');
+  it('produces fluent rewrites without garbled phrases, preserves comma CTAs and tema kuning, and detects EN personal attributes', () => {
+    const rewrittenSample = rewriteSafeCopy(RISKY_COMPLIANCE_SAMPLE, 'Demo Bisnes Saya');
     expect(rewrittenSample).not.toContain('dipercayai ramai berpengalaman');
     expect(checkCopyCompliance(rewrittenSample)).toHaveLength(0);
 
     const preservedCta = rewriteSafeCopy(
-      'Anda mengalami sakit gigi, WhatsApp 0123456789 untuk slot',
-      'Klinik A'
+      'Anda mengalami masalah kewangan, WhatsApp 0123456789 untuk sebut harga',
+      'Butik A'
     );
     expect(preservedCta).toContain('0123456789');
     expect(checkCopyCompliance(preservedCta)).toHaveLength(0);
 
     const benignTheme = rewriteSafeCopy(
-      'Klinik kami berhias tema kuning dan biru untuk keselesaan anda.',
-      'Klinik A'
+      'Kedai kami berhias tema kuning dan biru untuk keselesaan anda.',
+      'Butik A'
     );
     expect(benignTheme).toContain('tema kuning dan biru');
 
     expect(
-      checkCopyCompliance('You have crooked teeth').some(
+      checkCopyCompliance('You have bad credit').some(
         (f) => f.category === 'meta_personal_attributes'
       )
     ).toBe(true);
     expect(
-      checkCopyCompliance('Offer Scaling RM99 di Pusat Pergigian').some(
-        (f) => f.id === 'my-kkliu-notice'
+      checkCopyCompliance('Transformasi segera sebelum dan selepas').some(
+        (f) => f.id === 'my-before-after'
       )
     ).toBe(true);
   });
@@ -371,33 +370,33 @@ describe('M3 compliance.ts utilities', () => {
 
 describe('M3 copyGenerator.ts', () => {
   const proBrand: BrandProfile = {
-    ...SEEDED_KLINIK_GIGI_IMPIAN,
-    id: 'klinik-korporat-pro',
-    name: 'Klinik Korporat Pro',
+    ...SEEDED_DEMO_BRAND,
+    id: 'syarikat-korporat-pro',
+    name: 'Syarikat Korporat Pro',
     tone: 'professional',
     whatsappNumber: '60181234567',
   };
 
   it('differentiates psychology and copy across angles and brand tones', () => {
-    const casualPsych = buildCustomerPsychology(SEEDED_KLINIK_GIGI_IMPIAN, SAMPLE_OFFER_CHIP);
+    const casualPsych = buildCustomerPsychology(SEEDED_DEMO_BRAND, SAMPLE_OFFER_CHIP);
     const proPsych = buildCustomerPsychology(proBrand, SAMPLE_OFFER_CHIP);
     expect(casualPsych.targetPersona).not.toBe(proPsych.targetPersona);
     expect(casualPsych.trustAnchors).not.toBe(proPsych.trustAnchors);
 
-    const casualMap = generateCampaignCopyMap(SEEDED_KLINIK_GIGI_IMPIAN, SAMPLE_OFFER_CHIP);
+    const casualMap = generateCampaignCopyMap(SEEDED_DEMO_BRAND, SAMPLE_OFFER_CHIP);
     const proMap = generateCampaignCopyMap(proBrand, SAMPLE_OFFER_CHIP);
 
-    expect(casualMap.confidence.facebook.primaryText).not.toBe(
-      casualMap.hygiene.facebook.primaryText
+    expect(casualMap.urgency.facebook.primaryText).not.toBe(
+      casualMap.value.facebook.primaryText
     );
-    expect(casualMap.hygiene.facebook.primaryText).not.toBe(
-      casualMap.payday.facebook.primaryText
+    expect(casualMap.value.facebook.primaryText).not.toBe(
+      casualMap.social_proof.facebook.primaryText
     );
-    expect(casualMap.confidence.facebook.primaryText).not.toBe(
-      proMap.confidence.facebook.primaryText
+    expect(casualMap.urgency.facebook.primaryText).not.toBe(
+      proMap.urgency.facebook.primaryText
     );
 
-    for (const angle of ['confidence', 'hygiene', 'payday'] as const) {
+    for (const angle of ['urgency', 'value', 'social_proof'] as const) {
       expect(checkCopyCompliance(casualMap[angle].facebook.primaryText)).toHaveLength(0);
       expect(checkCopyCompliance(proMap[angle].facebook.primaryText)).toHaveLength(0);
     }
@@ -405,13 +404,13 @@ describe('M3 copyGenerator.ts', () => {
 
   it('enforces Google RSA <=30 headline and <=90 description limits on extreme inputs', () => {
     const longBrand: BrandProfile = {
-      ...SEEDED_KLINIK_GIGI_IMPIAN,
-      name: 'Klinik Pergigian Pakar Keluarga Dan Estetik Senyuman Indah Cawangan Kuala Lumpur Tengah',
+      ...SEEDED_DEMO_BRAND,
+      name: 'Syarikat Perdagangan Dan Perkhidmatan Keluarga Indah Cawangan Kuala Lumpur Tengah',
     };
-    const longOffer = `${'Promosi Scaling & Polish Istimewa '.repeat(12)}slot terhad!`;
+    const longOffer = `${'Promosi Pakej Istimewa Minggu Gaji '.repeat(12)}stok terhad!`;
     const map = generateCampaignCopyMap(longBrand, longOffer);
 
-    for (const angle of ['confidence', 'hygiene', 'payday'] as const) {
+    for (const angle of ['urgency', 'value', 'social_proof'] as const) {
       const rsa = map[angle].google_rsa;
       expect(rsa.headlines.length).toBeGreaterThanOrEqual(3);
       expect(rsa.descriptions.length).toBeGreaterThanOrEqual(2);
@@ -427,54 +426,58 @@ describe('M3 copyGenerator.ts', () => {
     }
   });
 
-  it('guards BYOK Gemini enhance in demo mode and falls back cleanly on fetch error', async () => {
+  it('validates any >=12-char non-whitespace API key without AIza prefix, guards demo mode, and falls back cleanly on fetch error', async () => {
+    expect(isValidGeminiKeyFormat('sk-live-test-key-123456')).toBe(true);
+    expect(isValidGeminiKeyFormat('custom123456')).toBe(true); // exact 12 chars, no AIza prefix
+    expect(isValidGeminiKeyFormat('  sk-live-test-key-123456  ')).toBe(true);
     expect(isValidGeminiKeyFormat('AIzaSyDemoTestKey1234567890')).toBe(true);
-    expect(isValidGeminiKeyFormat('AIza12345678')).toBe(true); // 12 chars (matches OnboardingScreen)
-    expect(isValidGeminiKeyFormat('AIzaSyValidKey12345')).toBe(true); // 19 chars
-    expect(isValidGeminiKeyFormat('AIza1234567')).toBe(false); // 11 chars (<12)
+    expect(isValidGeminiKeyFormat('            ')).toBe(false); // 12 spaces rejected
+    expect(isValidGeminiKeyFormat('  short1234  ')).toBe(false); // <12 after trim
+    expect(isValidGeminiKeyFormat('has spaces 123456')).toBe(false); // internal whitespace rejected
+    expect(isValidGeminiKeyFormat('12345678901')).toBe(false); // 11 chars (<12)
     expect(isValidGeminiKeyFormat('short')).toBe(false);
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
     const demoResult = await enhanceCopyWithGemini({
-      apiKey: 'AIzaSyDemoTestKey1234567890',
+      apiKey: 'sk-live-test-key-123456',
       isDemoMode: true,
-      brand: SEEDED_KLINIK_GIGI_IMPIAN,
+      brand: SEEDED_DEMO_BRAND,
       offerSentence: SAMPLE_OFFER_CHIP,
-      angle: 'confidence',
+      angle: 'urgency',
     });
     expect(demoResult.source).toBe('baseline');
     expect(fetchSpy).not.toHaveBeenCalled();
 
-    // 14-char key (12-19 char range) must be accepted for live BYOK call rather than silently bypassed
+    // Non-AIza 12+ char key must be accepted for live BYOK call rather than silently bypassed
     fetchSpy.mockRejectedValueOnce(new Error('Network down'));
-    const midLengthResult = await enhanceCopyWithGemini({
-      apiKey: 'AIzaTestKey123',
+    const customKeyResult = await enhanceCopyWithGemini({
+      apiKey: 'sk-live-test-key-123456',
       isDemoMode: false,
-      brand: SEEDED_KLINIK_GIGI_IMPIAN,
+      brand: SEEDED_DEMO_BRAND,
       offerSentence: SAMPLE_OFFER_CHIP,
-      angle: 'hygiene',
+      angle: 'value',
     });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(midLengthResult.source).toBe('baseline');
-    expect(midLengthResult.copy.facebook.whatsappUrl).toContain('SUDUT-2-PENCEGAHAN');
+    expect(customKeyResult.source).toBe('baseline');
+    expect(customKeyResult.copy.facebook.whatsappUrl).toContain('SUDUT-2-NILAI');
 
     fetchSpy.mockRejectedValueOnce(new Error('Network down'));
     const fallbackResult = await enhanceCopyWithGemini({
-      apiKey: 'AIzaSyDemoTestKey1234567890',
+      apiKey: 'custom123456',
       isDemoMode: false,
-      brand: SEEDED_KLINIK_GIGI_IMPIAN,
+      brand: SEEDED_DEMO_BRAND,
       offerSentence: SAMPLE_OFFER_CHIP,
-      angle: 'payday',
+      angle: 'social_proof',
     });
     expect(fallbackResult.source).toBe('baseline');
-    expect(fallbackResult.copy.facebook.whatsappUrl).toContain('SUDUT-3-MINGGUGAJI');
+    expect(fallbackResult.copy.facebook.whatsappUrl).toContain('SUDUT-3-BUKTISOSIAL');
 
     fetchSpy.mockRestore();
   });
 
   it('enforces surrogate-safe RSA truncation without lone UTF-16 surrogates', () => {
-    const bounded = enforceRsaLength(`${'a'.repeat(29)}🦷`, 30, 'Fallback');
+    const bounded = enforceRsaLength(`${'a'.repeat(29)}🚀`, 30, 'Fallback');
     expect(bounded.length).toBeLessThanOrEqual(30);
     expect(bounded).toBe('a'.repeat(29));
     expect(/[\uD800-\uDFFF]/.test(bounded.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ''))).toBe(
@@ -484,13 +487,13 @@ describe('M3 copyGenerator.ts', () => {
 
   it('produces 0 compliance findings across every baseline angle, tone, channel, and field', () => {
     const brands: BrandProfile[] = [
-      SEEDED_KLINIK_GIGI_IMPIAN,
-      { ...SEEDED_KLINIK_GIGI_IMPIAN, id: 'pro-seeded', tone: 'professional' },
+      SEEDED_DEMO_BRAND,
+      { ...SEEDED_DEMO_BRAND, id: 'pro-seeded', tone: 'professional' },
     ];
 
     for (const brand of brands) {
       const map = generateCampaignCopyMap(brand, SAMPLE_OFFER_CHIP);
-      for (const angle of ['confidence', 'hygiene', 'payday'] as const) {
+      for (const angle of ['urgency', 'value', 'social_proof'] as const) {
         const entry = map[angle];
         const fields = [
           entry.facebook.primaryText,
@@ -523,30 +526,30 @@ describe('M3 copyGenerator.ts', () => {
   it('sanitizes risky Gemini BYOK output on google_rsa and instagram.hashtags while keeping RSA limits', async () => {
     const riskyPayload = {
       facebook: {
-        primaryText: 'Gigi anda kuning? Klinik terbaik No. 1!',
-        headline: 'Dijamin 100% Putih',
+        primaryText: 'Kulit anda kusam? Kedai terbaik No. 1!',
+        headline: 'Dijamin 100% Berkesan',
         description: 'Testimoni sebelum dan selepas',
       },
       instagram: {
-        caption: 'Nafas anda berbau? Datang segera!',
-        hashtags: '#KlinikTerbaik #Dijamin100% #No1',
+        caption: 'Masalah kewangan anda teruk? Datang segera!',
+        hashtags: '#KedaiTerbaik #Dijamin100% #No1',
       },
       tiktok: {
-        hook: 'Gigi anda kuning?!',
-        script: 'Dijamin 100% putih dalam 1 sesi!',
-        caption: 'Klinik terbaik No. 1 Malaysia!',
+        hook: 'Kulit anda kusam?!',
+        script: 'Dijamin 100% hasil dalam 1 hari!',
+        caption: 'Kedai terbaik No. 1 Malaysia!',
       },
       google_rsa: {
         headlines: [
-          'Klinik Terbaik No. 1',
-          'Promosi Scaling Gigi Terbaik',
-          'Dijamin 100% Putih Bersih',
+          'Kedai Terbaik No. 1',
+          'Promosi Pakej Terbaik',
+          'Dijamin 100% Berjaya',
         ],
         descriptions: [
-          'Gigi anda kuning? Klinik terbaik No. 1 dijamin 100% putih!',
-          'Cheapest dental clinic with permanent cure before and after!',
+          'Kulit anda kusam? Kedai terbaik No. 1 dijamin 100% berkesan!',
+          'Cheapest shop with instant miracle before and after!',
         ],
-        negativeKeywords: ['percuma', 'diy', 'murah', 'tanpa doktor'],
+        negativeKeywords: ['percuma', 'tiruan', 'murah sangat', 'tiada waranti'],
       },
     };
 
@@ -558,11 +561,11 @@ describe('M3 copyGenerator.ts', () => {
     } as Response);
 
     const result = await enhanceCopyWithGemini({
-      apiKey: 'AIzaSyDemoTestKey1234567890',
+      apiKey: 'sk-live-test-key-123456',
       isDemoMode: false,
-      brand: SEEDED_KLINIK_GIGI_IMPIAN,
+      brand: SEEDED_DEMO_BRAND,
       offerSentence: SAMPLE_OFFER_CHIP,
-      angle: 'confidence',
+      angle: 'urgency',
     });
 
     expect(result.source).toBe('gemini');
@@ -581,21 +584,21 @@ describe('M3 copyGenerator.ts', () => {
 
   it('does not append duplicate wa.me links when Gemini payload or baseline fallback already includes waUrl', async () => {
     const expectedWa = buildWhatsappCtaUrl({
-      phone: SEEDED_KLINIK_GIGI_IMPIAN.whatsappNumber,
-      brandName: SEEDED_KLINIK_GIGI_IMPIAN.name,
+      phone: SEEDED_DEMO_BRAND.whatsappNumber,
+      brandName: SEEDED_DEMO_BRAND.name,
       offerSentence: SAMPLE_OFFER_CHIP,
-      angle: 'confidence',
+      angle: 'urgency',
     });
 
     const payloadWithWa = {
       facebook: {
-        primaryText: `Jom semak slot konsultasi bersama doktor bertauliah! ${expectedWa}`,
-        headline: 'Senyum Yakin',
-        description: 'Konsultasi klinikal',
+        primaryText: `Jom semak tawaran terkini bersama pasukan kami! ${expectedWa}`,
+        headline: 'Tawaran Terhad',
+        description: 'Pakej berkualiti',
       },
       instagram: {
         // caption omitted -> falls back to baseline.instagram.caption which already includes waUrl
-        hashtags: '#KlinikGigi #SenyumYakin',
+        hashtags: '#BisnesMY #TawaranTerhad',
       },
       tiktok: {
         hook: 'Hook ringkas',
@@ -612,11 +615,11 @@ describe('M3 copyGenerator.ts', () => {
     } as Response);
 
     const res = await enhanceCopyWithGemini({
-      apiKey: 'AIzaSyDemoTestKey1234567890',
+      apiKey: 'sk-live-test-key-123456',
       isDemoMode: false,
-      brand: SEEDED_KLINIK_GIGI_IMPIAN,
+      brand: SEEDED_DEMO_BRAND,
       offerSentence: SAMPLE_OFFER_CHIP,
-      angle: 'confidence',
+      angle: 'urgency',
     });
 
     const countWa = (s: string) => s.match(/https:\/\/wa\.me\//g)?.length ?? 0;
@@ -687,7 +690,7 @@ describe('M3 StrategyTab component integration', () => {
     expect(writeTextMock).toHaveBeenCalledTimes(1);
     const copiedText = String(writeTextMock.mock.calls[0][0]);
     expect(copiedText).toContain('https://wa.me/60187776655?text=');
-    expect(copiedText).toContain('SUDUT-1-KEYAKINAN');
+    expect(copiedText).toContain('SUDUT-1-SEGERA');
     expect(screen.getByTestId('copy-btn-facebook').textContent).toMatch(/Disalin|Copied/i);
 
     // Compliance risky -> rewrite -> BM/EN toggle keeps edited text
@@ -785,7 +788,7 @@ describe('M3 StrategyTab component integration', () => {
             'data-testid': 'enable-byok',
             onClick: () => {
               loginWithGoogle('pro@studio.my');
-              saveByokKey('AIzaSyValidKey1234567890', false);
+              saveByokKey('sk-live-valid-key-123456', false);
             },
           },
           'enableByok'
@@ -810,11 +813,11 @@ describe('M3 StrategyTab component integration', () => {
     const enhanceBtn = screen.getByRole('button', { name: /Gemini/i });
     fireEvent.click(enhanceBtn);
 
-    // Switch to payday and edit payday Facebook headline before fetch resolves
-    fireEvent.click(screen.getByTestId('angle-payday'));
+    // Switch to social_proof and edit social_proof Facebook headline before fetch resolves
+    fireEvent.click(screen.getByTestId('angle-social_proof'));
     const fbInputs = screen.getByTestId('channel-facebook').querySelectorAll('input[type="text"]');
     fireEvent.change(fbInputs[0] as HTMLInputElement, {
-      target: { value: 'Payday Suntingan Kekal' },
+      target: { value: 'Bukti Sosial Suntingan Kekal' },
     });
 
     await act(async () => {
@@ -828,9 +831,9 @@ describe('M3 StrategyTab component integration', () => {
                   {
                     text: JSON.stringify({
                       facebook: {
-                        primaryText: 'Salinan Gemini untuk sudut keyakinan bersama doktor bertauliah.',
-                        headline: 'Gemini Keyakinan',
-                        description: 'Konsultasi klinikal',
+                        primaryText: 'Salinan Gemini untuk sudut segera bersama pasukan kami.',
+                        headline: 'Gemini Urgency',
+                        description: 'Tawaran pantas',
                       },
                     }),
                   },
@@ -845,11 +848,11 @@ describe('M3 StrategyTab component integration', () => {
     await waitFor(() => {
       expect(enhanceBtn).toBeEnabled();
     });
-    expect((fbInputs[0] as HTMLInputElement).value).toBe('Payday Suntingan Kekal');
+    expect((fbInputs[0] as HTMLInputElement).value).toBe('Bukti Sosial Suntingan Kekal');
 
-    fireEvent.click(screen.getByTestId('angle-confidence'));
-    const confInputs = screen.getByTestId('channel-facebook').querySelectorAll('input[type="text"]');
-    expect((confInputs[0] as HTMLInputElement).value).toBe('Gemini Keyakinan');
+    fireEvent.click(screen.getByTestId('angle-urgency'));
+    const urgInputs = screen.getByTestId('channel-facebook').querySelectorAll('input[type="text"]');
+    expect((urgInputs[0] as HTMLInputElement).value).toBe('Gemini Urgency');
   });
 
   it('resets isEnhancing immediately and ignores stale Gemini BYOK response when launchCampaign runs mid-flight', async () => {
@@ -872,7 +875,7 @@ describe('M3 StrategyTab component integration', () => {
             'data-testid': 'enable-byok-2',
             onClick: () => {
               loginWithGoogle('pro@studio.my');
-              saveByokKey('AIzaSyValidKey1234567890', false);
+              saveByokKey('sk-live-valid-key-123456', false);
             },
           },
           'enableByok'
@@ -927,9 +930,9 @@ describe('M3 StrategyTab component integration', () => {
                   {
                     text: JSON.stringify({
                       facebook: {
-                        primaryText: 'Salinan Lama Kempen 1 bersama doktor bertauliah.',
+                        primaryText: 'Salinan Lama Kempen 1 bersama pasukan kami.',
                         headline: 'Gemini Kempen Lama',
-                        description: 'Konsultasi klinikal',
+                        description: 'Pakej teratur',
                       },
                     }),
                   },
@@ -969,7 +972,7 @@ describe('M3 StrategyTab component integration', () => {
             'data-testid': 'enable-byok-tone',
             onClick: () => {
               loginWithGoogle('pro@studio.my');
-              saveByokKey('AIzaSyValidKey1234567890', false);
+              saveByokKey('sk-live-valid-key-123456', false);
             },
           },
           'enableByok'
@@ -1007,7 +1010,7 @@ describe('M3 StrategyTab component integration', () => {
     // Mutate launched brand tone to professional mid-flight
     fireEvent.click(screen.getByTestId('switch-tone-pro'));
     expect(enhanceBtn).toBeEnabled();
-    expect(screen.getByTestId('channel-facebook').textContent).toContain('Keyakinan Klinikal');
+    expect(screen.getByTestId('channel-facebook').textContent).toContain('Promosi Masa Terhad');
 
     // Resolve stale casual Gemini payload -> must NOT overwrite updated professional copy
     await act(async () => {
@@ -1021,9 +1024,9 @@ describe('M3 StrategyTab component integration', () => {
                   {
                     text: JSON.stringify({
                       facebook: {
-                        primaryText: 'Salinan santai basi bersama doktor bertauliah.',
+                        primaryText: 'Salinan santai basi bersama pasukan kami.',
                         headline: 'STALE_CASUAL_HEADLINE',
-                        description: 'Konsultasi santai',
+                        description: 'Pakej santai',
                       },
                     }),
                   },
@@ -1037,7 +1040,7 @@ describe('M3 StrategyTab component integration', () => {
 
     expect(enhanceBtn).toBeEnabled();
     const fbCardText = screen.getByTestId('channel-facebook').textContent ?? '';
-    expect(fbCardText).toContain('Keyakinan Klinikal');
+    expect(fbCardText).toContain('Promosi Masa Terhad');
     expect(fbCardText).not.toContain('STALE_CASUAL_HEADLINE');
   });
 
@@ -1060,7 +1063,7 @@ describe('M3 StrategyTab component integration', () => {
             'data-testid': 'enable-byok-isolation',
             onClick: () => {
               loginWithGoogle('pro@studio.my');
-              saveByokKey('AIzaSyValidKey1234567890', false);
+              saveByokKey('sk-live-valid-key-123456', false);
             },
           },
           'enableByok'
@@ -1091,8 +1094,8 @@ describe('M3 StrategyTab component integration', () => {
     fireEvent.click(screen.getByTestId('enable-byok-isolation'));
     fireEvent.click(screen.getByRole('button', { name: /Gemini/i }));
 
-    // Switch to payday mid-flight
-    fireEvent.click(screen.getByTestId('angle-payday'));
+    // Switch to social_proof mid-flight
+    fireEvent.click(screen.getByTestId('angle-social_proof'));
     expect(screen.queryByTestId('strategy-enhance-notice')).toBeNull();
 
     await act(async () => {
@@ -1106,9 +1109,9 @@ describe('M3 StrategyTab component integration', () => {
                   {
                     text: JSON.stringify({
                       facebook: {
-                        primaryText: 'Salinan Gemini untuk sudut keyakinan bersama doktor bertauliah.',
-                        headline: 'Gemini Confidence Only',
-                        description: 'Konsultasi klinikal',
+                        primaryText: 'Salinan Gemini untuk sudut segera bersama pasukan kami.',
+                        headline: 'Gemini Urgency Only',
+                        description: 'Tawaran masa terhad',
                       },
                     }),
                   },
@@ -1120,16 +1123,16 @@ describe('M3 StrategyTab component integration', () => {
       } as Response);
     });
 
-    // Payday MUST NOT show Gemini enhancement notice
+    // Social Proof MUST NOT show Gemini enhancement notice
     expect(screen.queryByTestId('strategy-enhance-notice')).toBeNull();
 
-    // Switching back to confidence shows the notice and enhanced headline
-    fireEvent.click(screen.getByTestId('angle-confidence'));
+    // Switching back to urgency shows the notice and enhanced headline
+    fireEvent.click(screen.getByTestId('angle-urgency'));
     expect(screen.getByTestId('strategy-enhance-notice')).toHaveTextContent(
       /Salinan dipertingkat oleh Gemini/i
     );
-    const confInputs = screen.getByTestId('channel-facebook').querySelectorAll('input[type="text"]');
-    expect((confInputs[0] as HTMLInputElement).value).toBe('Gemini Confidence Only');
+    const urgInputs = screen.getByTestId('channel-facebook').querySelectorAll('input[type="text"]');
+    expect((urgInputs[0] as HTMLInputElement).value).toBe('Gemini Urgency Only');
   });
 
   it('preserves in-flight Gemini BYOK copy and strategy-enhance-notice across StrategyTab unmount/remount while keeping per-angle isolation', async () => {
@@ -1152,7 +1155,7 @@ describe('M3 StrategyTab component integration', () => {
             'data-testid': 'enable-byok-tabswitch',
             onClick: () => {
               loginWithGoogle('pro@studio.my');
-              saveByokKey('AIzaSyValidKey1234567890', false);
+              saveByokKey('sk-live-valid-key-123456', false);
             },
           },
           'enableByok'
@@ -1213,9 +1216,9 @@ describe('M3 StrategyTab component integration', () => {
                   {
                     text: JSON.stringify({
                       facebook: {
-                        primaryText: 'Salinan Gemini semasa tab bertukar bersama doktor bertauliah.',
+                        primaryText: 'Salinan Gemini semasa tab bertukar bersama pasukan kami.',
                         headline: 'GEMINI_ACROSS_TAB_SWITCH',
-                        description: 'Konsultasi klinikal',
+                        description: 'Pakej teratur',
                       },
                     }),
                   },
@@ -1227,17 +1230,17 @@ describe('M3 StrategyTab component integration', () => {
       } as Response);
     });
 
-    // Remount StrategyTab -> enhanced copy and notice are preserved on confidence, isolated from payday
+    // Remount StrategyTab -> enhanced copy and notice are preserved on urgency, isolated from social_proof
     fireEvent.click(screen.getByTestId('switch-to-strategy'));
     expect(screen.getByTestId('strategy-enhance-notice')).toHaveTextContent(
       /Salinan dipertingkat oleh Gemini/i
     );
-    const confInputs = screen.getByTestId('channel-facebook').querySelectorAll('input[type="text"]');
-    expect((confInputs[0] as HTMLInputElement).value).toBe('GEMINI_ACROSS_TAB_SWITCH');
+    const urgInputs = screen.getByTestId('channel-facebook').querySelectorAll('input[type="text"]');
+    expect((urgInputs[0] as HTMLInputElement).value).toBe('GEMINI_ACROSS_TAB_SWITCH');
 
-    fireEvent.click(screen.getByTestId('angle-payday'));
+    fireEvent.click(screen.getByTestId('angle-social_proof'));
     expect(screen.queryByTestId('strategy-enhance-notice')).toBeNull();
-    fireEvent.click(screen.getByTestId('angle-confidence'));
+    fireEvent.click(screen.getByTestId('angle-urgency'));
     expect(screen.getByTestId('strategy-enhance-notice')).toHaveTextContent(
       /Salinan dipertingkat oleh Gemini/i
     );
@@ -1262,7 +1265,7 @@ describe('M3 StrategyTab component integration', () => {
             'data-testid': 'enable-byok-unmount',
             onClick: () => {
               loginWithGoogle('pro@studio.my');
-              saveByokKey('AIzaSyValidKey1234567890', false);
+              saveByokKey('sk-live-valid-key-123456', false);
             },
           },
           'enableByok'
@@ -1300,7 +1303,7 @@ describe('M3 StrategyTab component integration', () => {
                       facebook: {
                         primaryText: 'Salinan selepas provider dinyahlekap.',
                         headline: 'DISCARDED_ON_UNMOUNT',
-                        description: 'Konsultasi klinikal',
+                        description: 'Pakej teratur',
                       },
                     }),
                   },
@@ -1346,7 +1349,7 @@ describe('M3 StrategyTab component integration', () => {
 
     // Toggle to EN -> button translates to Load from Facebook Copy and still resets manual edits
     fireEvent.click(screen.getByTestId('harness-toggle-en'));
-    fireEvent.change(complianceInput, { target: { value: 'You have crooked teeth!' } });
+    fireEvent.change(complianceInput, { target: { value: 'You have bad credit!' } });
     expect(screen.getByTestId('compliance-findings').textContent).toMatch(
       /Meta Personal Attributes/i
     );
@@ -1385,7 +1388,7 @@ describe('M3 StrategyTab component integration', () => {
             'data-testid': 'enable-byok-demo-switch',
             onClick: () => {
               loginWithGoogle('pro@studio.my');
-              saveByokKey('AIzaSyValidKey1234567890', false);
+              saveByokKey('sk-live-valid-key-123456', false);
             },
           },
           'enableByok'
@@ -1439,9 +1442,9 @@ describe('M3 StrategyTab component integration', () => {
                   {
                     text: JSON.stringify({
                       facebook: {
-                        primaryText: 'Salinan basi sebelum mod demo bersama doktor bertauliah.',
+                        primaryText: 'Salinan basi sebelum mod demo bersama pasukan kami.',
                         headline: 'STALE_BEFORE_DEMO_MODE',
-                        description: 'Konsultasi klinikal',
+                        description: 'Pakej santai',
                       },
                     }),
                   },
@@ -1492,7 +1495,7 @@ describe('M3 StrategyTab component integration', () => {
             'data-testid': 'set-key-one',
             onClick: () => {
               loginWithGoogle('pro@studio.my');
-              saveByokKey('AIzaSyKeyOne1111111111', false);
+              saveByokKey('sk-live-key-one-1111111111', false);
             },
           },
           'setKeyOne'
@@ -1502,7 +1505,7 @@ describe('M3 StrategyTab component integration', () => {
           {
             type: 'button',
             'data-testid': 'rotate-key-two',
-            onClick: () => saveByokKey('AIzaSyKeyTwo2222222222', false),
+            onClick: () => saveByokKey('sk-live-key-two-2222222222', false),
           },
           'rotateKeyTwo'
         ),
@@ -1553,9 +1556,9 @@ describe('M3 StrategyTab component integration', () => {
                   {
                     text: JSON.stringify({
                       facebook: {
-                        primaryText: 'Salinan lama kunci pertama bersama doktor bertauliah.',
+                        primaryText: 'Salinan lama kunci pertama bersama pasukan kami.',
                         headline: 'STALE_KEY_ONE_HEADLINE',
-                        description: 'Konsultasi klinikal',
+                        description: 'Pakej teratur',
                       },
                     }),
                   },
@@ -1585,9 +1588,9 @@ describe('M3 StrategyTab component integration', () => {
                   {
                     text: JSON.stringify({
                       facebook: {
-                        primaryText: 'Salinan baharu kunci kedua bersama doktor bertauliah.',
+                        primaryText: 'Salinan baharu kunci kedua bersama pasukan kami.',
                         headline: 'FRESH_KEY_TWO_HEADLINE',
-                        description: 'Konsultasi klinikal',
+                        description: 'Pakej teratur',
                       },
                     }),
                   },
@@ -1627,9 +1630,9 @@ describe('M3 StrategyTab component integration', () => {
                   {
                     text: JSON.stringify({
                       facebook: {
-                        primaryText: 'Salinan payday awal bersama doktor bertauliah.',
-                        headline: 'PAYDAY_BEFORE_LOGOUT',
-                        description: 'Konsultasi klinikal',
+                        primaryText: 'Salinan bukti sosial awal bersama pasukan kami.',
+                        headline: 'SOCIAL_BEFORE_LOGOUT',
+                        description: 'Pakej teratur',
                       },
                     }),
                   },
@@ -1665,7 +1668,7 @@ describe('M3 StrategyTab component integration', () => {
             'data-testid': 'login-byok-logout-test',
             onClick: () => {
               loginWithGoogle('pro@studio.my');
-              saveByokKey('AIzaSyValidKey1234567890', false);
+              saveByokKey('sk-live-valid-key-123456', false);
             },
           },
           'loginByok'
@@ -1694,7 +1697,7 @@ describe('M3 StrategyTab component integration', () => {
             type: 'button',
             'data-testid': 'direct-enhance-call',
             onClick: () => {
-              void enhanceStrategyAngleWithGemini('confidence');
+              void enhanceStrategyAngleWithGemini('urgency');
             },
           },
           'directEnhance'
@@ -1717,18 +1720,18 @@ describe('M3 StrategyTab component integration', () => {
 
     fireEvent.click(screen.getByTestId('login-byok-logout-test'));
 
-    // First complete a payday enhancement so strategyEnhanceNoticeByAngle is populated
-    fireEvent.click(screen.getByTestId('angle-payday'));
+    // First complete a social_proof enhancement so strategyEnhanceNoticeByAngle is populated
+    fireEvent.click(screen.getByTestId('angle-social_proof'));
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Gemini/i }));
     });
     expect(screen.getByTestId('strategy-enhance-notice')).toHaveTextContent(
       /Salinan dipertingkat oleh Gemini/i
     );
-    expect(screen.getByTestId('notice-map-logout').textContent).toBe('{"payday":"gemini"}');
+    expect(screen.getByTestId('notice-map-logout').textContent).toBe('{"social_proof":"gemini"}');
 
-    // Start a second mid-flight enhancement on confidence
-    fireEvent.click(screen.getByTestId('angle-confidence'));
+    // Start a second mid-flight enhancement on urgency
+    fireEvent.click(screen.getByTestId('angle-urgency'));
     const enhanceBtn = screen.getByRole('button', { name: /Gemini/i });
     fireEvent.click(enhanceBtn);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
@@ -1762,9 +1765,9 @@ describe('M3 StrategyTab component integration', () => {
                   {
                     text: JSON.stringify({
                       facebook: {
-                        primaryText: 'Salinan basi sebelum log keluar bersama doktor bertauliah.',
+                        primaryText: 'Salinan basi sebelum log keluar bersama pasukan kami.',
                         headline: 'STALE_LOGOUT_HEADLINE',
-                        description: 'Konsultasi klinikal',
+                        description: 'Pakej teratur',
                       },
                     }),
                   },
@@ -1822,20 +1825,20 @@ describe('M3 StrategyTab component integration', () => {
       .querySelector('textarea') as HTMLTextAreaElement;
     const complianceInput = screen.getByTestId('compliance-input') as HTMLTextAreaElement;
     fireEvent.change(fbTextarea, {
-      target: { value: 'Gigi anda kuning! 100% dijamin!' },
+      target: { value: 'Kulit anda kusam! 100% dijamin!' },
     });
-    expect(complianceInput.value).toBe('Gigi anda kuning! 100% dijamin!');
+    expect(complianceInput.value).toBe('Kulit anda kusam! 100% dijamin!');
     expect(screen.getByTestId('compliance-status-badge').textContent).toMatch(/Amaran Dikesan/i);
 
     // Once user edits compliance directly, FB edits no longer overwrite complianceInput
     fireEvent.change(complianceInput, {
-      target: { value: 'Teks pematuhan tersuai pengguna bersama doktor bertauliah.' },
+      target: { value: 'Teks pematuhan tersuai pengguna untuk produk berkualiti.' },
     });
     fireEvent.change(fbTextarea, {
       target: { value: 'Suntingan Facebook tidak menimpa compliance' },
     });
     expect(complianceInput.value).toBe(
-      'Teks pematuhan tersuai pengguna bersama doktor bertauliah.'
+      'Teks pematuhan tersuai pengguna untuk produk berkualiti.'
     );
 
     // 3. Edited Instagram caption & hashtags propagate to Quick-Copy
@@ -1843,13 +1846,13 @@ describe('M3 StrategyTab component integration', () => {
     const igCaption = igCard.querySelector('textarea') as HTMLTextAreaElement;
     const igHashtags = igCard.querySelector('input[type="text"]') as HTMLInputElement;
     fireEvent.change(igCaption, { target: { value: 'Kapsyen IG Suntingan Tier 5' } });
-    fireEvent.change(igHashtags, { target: { value: '#KlinikGigiTier5 #SenyumBersih' } });
+    fireEvent.change(igHashtags, { target: { value: '#BisnesTier5 #TawaranHebat' } });
     await act(async () => {
       fireEvent.click(screen.getByTestId('copy-btn-instagram'));
     });
     const igCopied = String(writeTextMock.mock.calls[0][0]);
     expect(igCopied).toContain('Kapsyen IG Suntingan Tier 5');
-    expect(igCopied).toContain('#KlinikGigiTier5 #SenyumBersih');
+    expect(igCopied).toContain('#BisnesTier5 #TawaranHebat');
     expect(igCopied).toContain('https://wa.me/');
 
     // 4. Edited TikTok hook, script, and caption propagate to Quick-Copy

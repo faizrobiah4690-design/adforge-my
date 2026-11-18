@@ -34,7 +34,7 @@ import {
   rewriteWhatsappUrlPhone,
 } from '../../utils/whatsapp';
 
-const ANGLES: AngleId[] = ['confidence', 'hygiene', 'payday'];
+const ANGLES: AngleId[] = ['urgency', 'value', 'social_proof'];
 
 const EXTRA_LABELS: Record<
   UiLanguage,
@@ -48,7 +48,7 @@ const EXTRA_LABELS: Record<
     applySafeRewriteBtn: string;
     resetComplianceBtn: string;
     metaCategory: string;
-    healthcareCategory: string;
+    policyCategory: string;
     ruleLabel: string;
     suggestionLabel: string;
     matchedLabel: string;
@@ -67,7 +67,7 @@ const EXTRA_LABELS: Record<
     applySafeRewriteBtn: 'Guna Ayat Selamat',
     resetComplianceBtn: 'Muat dari Teks Facebook',
     metaCategory: 'Meta Personal Attributes',
-    healthcareCategory: 'Norma Kesihatan MY / KKLIU',
+    policyCategory: 'Polisi Iklan Am MY',
     ruleLabel: 'Peraturan',
     suggestionLabel: 'Cadangan',
     matchedLabel: 'Frasa dikesan',
@@ -85,7 +85,7 @@ const EXTRA_LABELS: Record<
     applySafeRewriteBtn: 'Apply Safe Rewrite',
     resetComplianceBtn: 'Load from Facebook Copy',
     metaCategory: 'Meta Personal Attributes',
-    healthcareCategory: 'MY Healthcare / KKLIU Norm',
+    policyCategory: 'MY General Ad Policy',
     ruleLabel: 'Rule',
     suggestionLabel: 'Suggestion',
     matchedLabel: 'Matched',
@@ -414,17 +414,17 @@ export function StrategyTab() {
           {ANGLES.map((angle) => {
             const isSelected = angle === selectedAngle;
             const titleKey =
-              angle === 'confidence'
-                ? 'tab1.angleConfidence'
-                : angle === 'hygiene'
-                  ? 'tab1.angleHygiene'
-                  : 'tab1.anglePayday';
+              angle === 'urgency'
+                ? 'tab1.angleUrgency'
+                : angle === 'value'
+                  ? 'tab1.angleValue'
+                  : 'tab1.angleSocialProof';
             const descKey =
-              angle === 'confidence'
-                ? 'tab1.angleConfidenceDesc'
-                : angle === 'hygiene'
-                  ? 'tab1.angleHygieneDesc'
-                  : 'tab1.anglePaydayDesc';
+              angle === 'urgency'
+                ? 'tab1.angleUrgencyDesc'
+                : angle === 'value'
+                  ? 'tab1.angleValueDesc'
+                  : 'tab1.angleSocialProofDesc';
 
             return (
               <button
@@ -1126,14 +1126,10 @@ export function StrategyTab() {
                   <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[11px] font-semibold text-rose-200 break-words">
                     {finding.category === 'meta_personal_attributes'
                       ? extra.metaCategory
-                      : extra.healthcareCategory}
+                      : extra.policyCategory}
                   </span>
                   <span className="text-[11px] font-mono text-amber-200 break-words">
-                    {extra.matchedLabel}: &ldquo;
-                    {finding.id === 'my-kkliu-notice' && locale === 'en'
-                      ? 'No clinical consultation / KKLIU reference'
-                      : finding.matchedText}
-                    &rdquo;
+                    {extra.matchedLabel}: &ldquo;{finding.matchedText}&rdquo;
                   </span>
                 </div>
                 <p className="text-xs text-slate-200 break-words">

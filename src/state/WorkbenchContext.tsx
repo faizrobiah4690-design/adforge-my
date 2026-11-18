@@ -12,7 +12,7 @@ import {
   cloneBrand,
   createSeededBrands,
   SEEDED_BRAND_ID,
-  SEEDED_KLINIK_GIGI_IMPIAN,
+  SEEDED_DEMO_BRAND,
 } from '../data/seedVault';
 import type {
   BrandProfile,
@@ -31,7 +31,7 @@ import {
 
 export { normalizeWhatsappDigits };
 
-export const WORKBENCH_STORAGE_KEY = 'kks_workbench:v1';
+export const WORKBENCH_STORAGE_KEY = 'adforge_workbench:v1';
 
 interface PersistedWorkbenchState {
   version: 1;
@@ -112,20 +112,20 @@ function safeReadWorkbenchStorage(): PersistedWorkbenchState {
         ...cloned,
         logoDataUrl: isAllowedImageSrc(cloned.logoDataUrl)
           ? cloned.logoDataUrl
-          : SEEDED_KLINIK_GIGI_IMPIAN.logoDataUrl,
+          : SEEDED_DEMO_BRAND.logoDataUrl,
         themeColor: /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(cloned.themeColor.trim())
           ? cloned.themeColor.trim()
           : '#0EA5E9',
         whatsappNumber: getSafeWhatsappDigits(
           cloned.whatsappNumber,
-          SEEDED_KLINIK_GIGI_IMPIAN.whatsappNumber
+          SEEDED_DEMO_BRAND.whatsappNumber
         ),
       };
     });
     const hasSeeded = validBrands.some((b) => b.id === SEEDED_BRAND_ID);
     const brands = hasSeeded
       ? validBrands
-      : [cloneBrand(SEEDED_KLINIK_GIGI_IMPIAN), ...validBrands];
+      : [cloneBrand(SEEDED_DEMO_BRAND), ...validBrands];
 
     const rawActiveId = typeof record.activeBrandId === 'string' ? record.activeBrandId : '';
     const activeBrandId = brands.some((b) => b.id === rawActiveId)
@@ -310,7 +310,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
     const newBrand: BrandProfile = {
       id,
       name: cleanName,
-      logoDataUrl: payload.logoDataUrl || SEEDED_KLINIK_GIGI_IMPIAN.logoDataUrl,
+      logoDataUrl: payload.logoDataUrl || SEEDED_DEMO_BRAND.logoDataUrl,
       themeColor: payload.themeColor || '#0EA5E9',
       tone: payload.tone || 'casual',
       whatsappNumber: normalizedPhone || '60123456789',
@@ -365,11 +365,42 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const deleteBrand = useCallback((brandId: string): boolean => {
+    const current = brandsRef.current;
+    if (current.length <= 1) {
+      return false;
+    }
+    const target = current.find((b) => b.id === brandId);
+    if (!target || target.isSeeded) {
+      return false;
+    }
+    const remaining = current.filter((b) => b.id !== brandId).map(cloneBrand);
+    if (remaining.length === 0) {
+      return false;
+    }
+    brandsRef.current = remaining;
+    setState((prev) => {
+      const nextBrands = prev.brands.filter((b) => b.id !== brandId).map(cloneBrand);
+      if (nextBrands.length === 0 || nextBrands.length === prev.brands.length) {
+        return prev;
+      }
+      const nextActiveId = nextBrands.some((b) => b.id === prev.activeBrandId)
+        ? prev.activeBrandId
+        : nextBrands[0].id;
+      return {
+        ...prev,
+        brands: nextBrands,
+        activeBrandId: nextActiveId,
+      };
+    });
+    return true;
+  }, []);
+
   const activeBrand = useMemo(() => {
     return (
       state.brands.find((b) => b.id === state.activeBrandId) ??
       state.brands[0] ??
-      SEEDED_KLINIK_GIGI_IMPIAN
+      SEEDED_DEMO_BRAND
     );
   }, [state.brands, state.activeBrandId]);
 
@@ -391,6 +422,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       selectBrand,
       createBrand,
       updateBrand,
+      deleteBrand,
     }),
     [
       state.isLoggedIn,
@@ -408,6 +440,7 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
       selectBrand,
       createBrand,
       updateBrand,
+      deleteBrand,
     ]
   );
 

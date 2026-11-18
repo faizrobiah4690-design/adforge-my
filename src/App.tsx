@@ -25,17 +25,17 @@ function WorkspaceHeader() {
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 min-w-0">
-              <span className="text-sm sm:text-base font-bold text-slate-100 truncate">
+              <span className="text-sm sm:text-base font-bold text-slate-100 break-words">
                 {t('app.title')}
               </span>
               <span
                 data-testid="workbench-badge"
-                className="rounded-full border border-slate-700 bg-[#111827] px-2 py-0.5 text-[10px] font-medium text-slate-300 truncate"
+                className="rounded-full border border-slate-700 bg-[#111827] px-2 py-0.5 text-[10px] font-medium text-slate-300 break-words whitespace-normal leading-tight max-w-full"
               >
                 {t('app.workbenchBadge')}
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 truncate">{t('app.subtitle')}</p>
+            <p className="text-[11px] text-slate-400 break-words leading-snug">{t('app.subtitle')}</p>
           </div>
         </div>
 
@@ -48,7 +48,9 @@ function WorkspaceHeader() {
               className="h-2 w-2 rounded-full shrink-0"
               style={{ backgroundColor: activeBrand.themeColor }}
             />
-            <span className="truncate max-w-[160px]">{activeBrand.name}</span>
+            <span className="max-w-[180px] whitespace-normal break-words [overflow-wrap:anywhere] leading-tight">
+              {activeBrand.name}
+            </span>
           </span>
 
           <div className="inline-flex rounded-lg border border-slate-800 bg-[#111827] p-0.5">
@@ -128,7 +130,7 @@ function AppRouter() {
   const canEnterWorkbench = isLoggedIn && (Boolean(byokKey.trim()) || isDemoMode);
 
   return (
-    <div className="min-h-screen bg-[#0B0F19] text-slate-100 min-w-0">
+    <div className="min-h-screen bg-[#0B0F19] text-slate-100 min-w-0 max-w-full overflow-x-hidden">
       <WorkspaceHeader />
       {canEnterWorkbench ? (
         <>

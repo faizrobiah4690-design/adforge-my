@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Check, FolderPlus, Save, Shield, Sparkles, Upload } from 'lucide-react';
-import { THEME_COLOR_PRESETS } from '../data/seedVault';
+import { Check, FolderPlus, Save, Shield, Sparkles, Trash2, Upload } from 'lucide-react';
+import { SEEDED_DEMO_BRAND, THEME_COLOR_PRESETS } from '../data/seedVault';
 import { useI18n } from '../i18n/I18nContext';
 import { normalizeWhatsappDigits, useWorkbench } from '../state/WorkbenchContext';
 import type { UiLanguage } from '../types/campaign';
@@ -64,6 +64,7 @@ export function BrandVaultScreen() {
     selectBrand,
     createBrand,
     updateBrand,
+    deleteBrand,
   } = useWorkbench();
   const copy = LOCAL_COPY[locale];
 
@@ -223,7 +224,9 @@ export function BrandVaultScreen() {
           ) : null}
           <span className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-[#0B0F19] px-2.5 py-1 text-[11px] text-slate-300 max-w-full">
             <Shield className="h-3 w-3 text-sky-400 shrink-0" />
-            <span className="truncate">{t('vault.seededBadge')}: Klinik Gigi Impian</span>
+            <span className="break-words whitespace-normal leading-tight">
+              {t('vault.seededBadge')}: {brands.find((b) => b.isSeeded)?.name ?? SEEDED_DEMO_BRAND.name}
+            </span>
           </span>
         </div>
       </div>
@@ -248,7 +251,9 @@ export function BrandVaultScreen() {
                 className="h-2.5 w-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: brand.themeColor }}
               />
-              <span className="truncate max-w-[180px] sm:max-w-[220px]">{brand.name}</span>
+              <span className="break-words whitespace-normal text-left leading-tight max-w-full">
+                {brand.name}
+              </span>
             </button>
           );
         })}
@@ -279,7 +284,7 @@ export function BrandVaultScreen() {
       </form>
 
       <div className="rounded-xl border border-slate-800 bg-[#0B0F19] p-3.5 space-y-3 min-w-0">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 min-w-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 min-w-0">
           <div className="min-w-0">
             <label
               htmlFor="brand-name-input"
@@ -305,7 +310,7 @@ export function BrandVaultScreen() {
               className="h-12 w-12 rounded-lg border border-slate-700 bg-slate-900 object-contain p-1 shrink-0"
             />
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-medium text-slate-400 mb-1 truncate">
+              <div className="text-xs font-medium text-slate-400 mb-1 break-words leading-tight">
                 {t('vault.logoLabel')}
               </div>
               <input
@@ -324,7 +329,7 @@ export function BrandVaultScreen() {
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-[11px] font-medium text-slate-200 hover:bg-slate-700 peer-focus-visible:ring-2 peer-focus-visible:ring-sky-400 transition cursor-pointer max-w-full"
               >
                 <Upload className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">
+                <span className="whitespace-normal leading-tight break-words">
                   {isUploadingLogo
                     ? locale === 'ms'
                       ? 'Memproses logo...'
@@ -392,7 +397,7 @@ export function BrandVaultScreen() {
                   setSavedNotice(false);
                   updateBrand(activeBrand.id, { tone: 'casual' });
                 }}
-                className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium transition cursor-pointer truncate min-w-0 ${
+                className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium transition cursor-pointer whitespace-normal leading-tight text-center min-w-0 ${
                   activeBrand.tone === 'casual'
                     ? 'border-sky-500 bg-sky-500/20 text-sky-200'
                     : 'border-slate-700 bg-[#111827] text-slate-300 hover:border-slate-600'
@@ -409,7 +414,7 @@ export function BrandVaultScreen() {
                   setSavedNotice(false);
                   updateBrand(activeBrand.id, { tone: 'professional' });
                 }}
-                className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium transition cursor-pointer truncate min-w-0 ${
+                className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium transition cursor-pointer whitespace-normal leading-tight text-center min-w-0 ${
                   activeBrand.tone === 'professional'
                     ? 'border-sky-500 bg-sky-500/20 text-sky-200'
                     : 'border-slate-700 bg-[#111827] text-slate-300 hover:border-slate-600'
@@ -437,7 +442,7 @@ export function BrandVaultScreen() {
               placeholder={t('vault.whatsappHint')}
               className="w-full min-w-0 rounded-lg border border-slate-700 bg-[#111827] px-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none"
             />
-            <p className="mt-1 text-[10px] text-slate-500 truncate">
+            <p className="mt-1 text-[10px] text-slate-500 break-words leading-tight">
               {copy.savedFormatPrefix} {activeBrand.whatsappNumber}
             </p>
           </div>
@@ -464,6 +469,22 @@ export function BrandVaultScreen() {
                 <Check className="h-3.5 w-3.5 shrink-0" />
                 {t('vault.savedToast')}
               </span>
+            ) : null}
+            {!activeBrand.isSeeded && brands.length > 1 ? (
+              <button
+                type="button"
+                data-testid="delete-brand-btn"
+                disabled={isUploadingLogo}
+                onClick={() => {
+                  setSavedNotice(false);
+                  setBrandErrorCode(null);
+                  deleteBrand(activeBrand.id);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-200 hover:bg-rose-500/20 disabled:opacity-60 disabled:cursor-not-allowed transition cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                {t('vault.deleteFolderBtn')}
+              </button>
             ) : null}
             <button
               type="button"

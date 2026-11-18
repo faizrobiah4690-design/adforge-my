@@ -5,9 +5,9 @@ Interactive dark-mode **Freelancer Workbench** SPA for Malaysian digital marketi
 ## Features
 
 - **Onboarding & BYOK Access**: Google session simulation + Google AI Studio BYOK key setup (with local demo mode & bundled explainer video).
-- **Brand Vault (Multi-Folder Isolation)**: Pre-seeded with **Klinik Gigi Impian** plus isolated client folders storing PNG logos, theme colors, language tone (`casual` / `professional`), and Malaysian WhatsApp numbers.
+- **Brand Vault (Multi-Folder Isolation)**: Pre-seeded with **Demo Bisnes Saya** plus isolated client folders storing PNG logos, theme colors, language tone (`casual` / `professional`), and Malaysian WhatsApp numbers.
 - **Quick Campaign Form & Bilingual UI (`BM` / `EN`)**: Mobile-safe 2×2 tab workspace (`390px` & desktop) where toggling static UI language never resets active campaign edits.
-- **Tab 1 — Strategy, Copywriting, CPA & Compliance**: Customer-psychology analysis, 3 selectable ad angles (`confidence`, `hygiene`, `payday`), 4-channel copy (`Facebook Ads`, `Instagram`, `TikTok`, `Google Search RSA`), angle-tagged `wa.me` CTAs, Break-Even CPA guardrail, and Meta/KKLIU compliance linter.
+- **Tab 1 — Strategy, Copywriting, CPA & Compliance**: Customer-psychology analysis, 3 selectable ad angles (`urgency`, `value`, `social_proof`), 4-channel copy (`Facebook Ads`, `Instagram`, `TikTok`, `Google Search RSA`), angle-tagged `wa.me` CTAs, Break-Even CPA guardrail, and Meta Personal Attributes & general MY advertising compliance linter.
 - **Tab 2 — Two-Layer Carousel Studio & Safe Zones**: Text-free background photos paired with live-editable BM headlines, logo, theme accents, `9:16` vs `4:5` safe-zone toggle, and zero-CORS Canvas 2D PNG export.
 - **Tab 3 — BM Jingle Studio**: Pre-populated Bahasa Melayu chorus lyrics, multi-style `OfflineAudioContext` synthesis, audio preview, and downloadable `.wav` export.
 - **Tab 4 — Staged Video Ad Studio (`9:16`, `<= 6s`)**: Storyboard confirmation gate, automatic Tab 3 or pre-seeded fallback audio mixing, and WebCodecs/MediaRecorder vertical video export.

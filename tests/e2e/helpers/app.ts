@@ -3,7 +3,7 @@ import { appLocators, RX, type WorkspaceTabId } from './locators';
 import { createTestPngBuffer } from './media';
 
 export const DEFAULT_OFFER =
-  'Promosi Scaling & Polish sempena minggu gaji, slot terhad, WhatsApp sekarang.';
+  'Promosi Minggu Gaji: Diskaun 20% untuk pelanggan terawal, stok & slot terhad — WhatsApp sekarang.';
 
 export async function gotoFreshApp(page: Page): Promise<void> {
   await page.goto('/');
@@ -27,7 +27,7 @@ export async function completeOnboarding(
   if (options?.useDemoMode) {
     await loc.onboarding.demoBtn.click();
   } else {
-    const key = options?.apiKey ?? 'AIzaSyDemoTestKey1234567890';
+    const key = options?.apiKey ?? 'sk-live-test-key-123456';
     await loc.onboarding.byokInput.fill(key);
     await loc.onboarding.byokSaveBtn.click();
   }

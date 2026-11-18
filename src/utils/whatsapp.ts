@@ -3,9 +3,9 @@ import type { AngleId } from '../types/campaign';
 export const FALLBACK_WHATSAPP_DIGITS = '60123456789';
 
 export const ANGLE_WHATSAPP_TAGS: Record<AngleId, string> = {
-  confidence: '[Kod: SUDUT-1-KEYAKINAN]',
-  hygiene: '[Kod: SUDUT-2-PENCEGAHAN]',
-  payday: '[Kod: SUDUT-3-MINGGUGAJI]',
+  urgency: '[Kod: SUDUT-1-SEGERA]',
+  value: '[Kod: SUDUT-2-NILAI]',
+  social_proof: '[Kod: SUDUT-3-BUKTISOSIAL]',
 };
 
 /**
@@ -113,7 +113,7 @@ export function buildWhatsappCtaUrl(params: {
 }): string {
   const digits = getSafeWhatsappDigits(params.phone);
   const tag = ANGLE_WHATSAPP_TAGS[params.angle];
-  const brand = stripLoneSurrogates(params.brandName.trim()) || 'Klinik Gigi Impian';
+  const brand = stripLoneSurrogates(params.brandName.trim()) || 'Bisnes Saya';
   const cleanOffer = stripLoneSurrogates(params.offerSentence.trim().replace(/\s+/g, ' '));
   const shortOffer =
     cleanOffer.length > 120
@@ -122,7 +122,7 @@ export function buildWhatsappCtaUrl(params: {
 
   const text = shortOffer
     ? `Hai ${brand}, saya berminat dengan "${shortOffer}". ${tag}`
-    : `Hai ${brand}, boleh kongsi slot rawatan terkini? ${tag}`;
+    : `Hai ${brand}, boleh kongsi maklumat promosi terkini? ${tag}`;
 
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
 }

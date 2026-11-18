@@ -1,6 +1,10 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { ImagePlus, Images, Rocket, Trash2 } from 'lucide-react';
-import { SAMPLE_CLINIC_PHOTOS, SAMPLE_OFFER_CHIP } from '../data/seedVault';
+import {
+  SAMPLE_BUSINESS_PHOTOS,
+  SAMPLE_OFFER_CHIP,
+  SME_OFFER_PRESETS,
+} from '../data/seedVault';
 import { useI18n } from '../i18n/I18nContext';
 import { useCampaign } from '../state/CampaignContext';
 import { useWorkbench } from '../state/WorkbenchContext';
@@ -28,25 +32,25 @@ const LOCAL_COPY: Record<
   }
 > = {
   ms: {
-    pickSampleBtn: 'Pilih Foto Sampel Klinik',
+    pickSampleBtn: 'Pilih Foto Sampel Bisnes',
     clearPhotoBtn: 'Padam',
     noPhotoAttached: 'Tiada foto dipilih',
     sampleBadge: 'Sampel',
     uploadedBadge: 'Dimuat naik',
     emptyOfferError: 'Sila masukkan ayat tawaran kempen sebelum klik Bina Kempen.',
     missingPhotosError:
-      'Sila lampirkan kedua-dua Foto 1 dan Foto 2 (muat naik atau pilih foto sampel klinik).',
+      'Sila lampirkan kedua-dua Foto 1 dan Foto 2 (muat naik atau pilih foto sampel bisnes).',
     invalidPhotoError: 'Fail foto tidak sah. Sila muat naik imej PNG, JPG, atau WEBP.',
   },
   en: {
-    pickSampleBtn: 'Pick Sample Clinic Photo',
+    pickSampleBtn: 'Pick Sample Business Photo',
     clearPhotoBtn: 'Clear',
     noPhotoAttached: 'No photo attached',
     sampleBadge: 'Sample',
     uploadedBadge: 'Uploaded',
     emptyOfferError: 'Please enter a campaign offer sentence before clicking Build Campaign.',
     missingPhotosError:
-      'Please attach both Photo 1 and Photo 2 (upload or pick sample clinic photos).',
+      'Please attach both Photo 1 and Photo 2 (upload or pick sample business photos).',
     invalidPhotoError: 'Invalid photo file. Please upload a PNG, JPG, or WEBP image.',
   },
 };
@@ -128,7 +132,7 @@ export function QuickCampaignForm() {
     }
     const current = input.photos[slotIndex];
     if (!current?.src?.trim()) {
-      updateSlotPhoto(slotIndex, SAMPLE_CLINIC_PHOTOS[slotIndex === 0 ? 0 : 1]);
+      updateSlotPhoto(slotIndex, SAMPLE_BUSINESS_PHOTOS[slotIndex === 0 ? 0 : 1]);
       setFormErrorCode(null);
     }
     setOpenGallerySlot((prev) => (prev === slotIndex ? null : slotIndex));
@@ -201,8 +205,8 @@ export function QuickCampaignForm() {
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-xs font-medium text-slate-200 truncate">
+            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+              <span className="text-xs font-medium text-slate-200 break-words leading-tight">
                 {slotIndex === 0 ? t('form.photo1Label') : t('form.photo2Label')}
               </span>
               {hasPhoto ? (
@@ -211,7 +215,7 @@ export function QuickCampaignForm() {
                 </span>
               ) : null}
             </div>
-            <p className="mt-0.5 text-[11px] text-slate-400 truncate">
+            <p className="mt-0.5 text-[11px] text-slate-400 break-words [overflow-wrap:anywhere] leading-tight">
               {isSlotUploading
                 ? locale === 'ms'
                   ? 'Memproses foto...'
@@ -258,10 +262,10 @@ export function QuickCampaignForm() {
             aria-expanded={openGallerySlot === slotIndex}
             disabled={isSlotUploading}
             onClick={() => handleSamplePickerClick(slotIndex)}
-            className="inline-flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer max-w-full"
+            className="inline-flex items-center gap-1 rounded-md border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-300 hover:bg-sky-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer max-w-full text-left"
           >
             <Images className="h-3 w-3 shrink-0" />
-            <span className="truncate">{copy.pickSampleBtn}</span>
+            <span className="whitespace-normal break-words leading-tight">{copy.pickSampleBtn}</span>
           </button>
 
           <button
@@ -282,7 +286,7 @@ export function QuickCampaignForm() {
               {t('form.sampleGalleryTitle')}
             </div>
             <div className="grid grid-cols-3 gap-2 min-w-0">
-              {SAMPLE_CLINIC_PHOTOS.map((sample) => {
+              {SAMPLE_BUSINESS_PHOTOS.map((sample) => {
                 const isSelected = photo.src === sample.src;
                 return (
                   <button
@@ -300,7 +304,7 @@ export function QuickCampaignForm() {
                       alt={sample.label}
                       className="w-full aspect-[4/5] rounded object-cover"
                     />
-                    <span className="text-[10px] text-slate-300 truncate w-full">
+                    <span className="text-[10px] text-slate-300 break-words leading-tight w-full">
                       {sample.label}
                     </span>
                   </button>
@@ -333,8 +337,8 @@ export function QuickCampaignForm() {
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="space-y-4 min-w-0">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 min-w-0">
-          <div className="min-w-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 min-w-0">
+          <div className="min-w-0 md:col-span-2 lg:col-span-1">
             <label
               htmlFor="campaign-brand-select"
               className="block text-xs font-medium text-slate-400 mb-1"
@@ -397,18 +401,36 @@ export function QuickCampaignForm() {
             </p>
           ) : null}
 
-          <div className="mt-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
-            <button
-              type="button"
-              data-testid="offer-sample-chip"
-              onClick={() => {
-                setInput((prev) => ({ ...prev, offerSentence: SAMPLE_OFFER_CHIP }));
-                setFormErrorCode(null);
-              }}
-              className="text-left rounded-full border border-slate-700 bg-[#0B0F19] px-3 py-1.5 text-[11px] text-slate-300 hover:border-sky-500/60 transition cursor-pointer max-w-full truncate"
-            >
-              {t('form.offerChipPrefix')} {SAMPLE_OFFER_CHIP}
-            </button>
+          <div className="mt-2.5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 min-w-0">
+            <div className="flex flex-col gap-2 min-w-0 flex-1">
+              <button
+                type="button"
+                data-testid="offer-sample-chip"
+                onClick={() => {
+                  setInput((prev) => ({ ...prev, offerSentence: SAMPLE_OFFER_CHIP }));
+                  setFormErrorCode(null);
+                }}
+                className="text-left rounded-xl border border-slate-700 bg-[#0B0F19] px-3 py-1.5 text-[11px] text-slate-300 hover:border-sky-500/60 transition cursor-pointer max-w-full whitespace-normal break-words leading-snug"
+              >
+                {t('form.offerChipPrefix')} {SAMPLE_OFFER_CHIP}
+              </button>
+              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                {SME_OFFER_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    data-testid={`offer-preset-${preset.id}`}
+                    onClick={() => {
+                      setInput((prev) => ({ ...prev, offerSentence: preset.offer }));
+                      setFormErrorCode(null);
+                    }}
+                    className="rounded-lg border border-slate-700/80 bg-[#0B0F19] px-2.5 py-1 text-[11px] font-medium text-sky-300 hover:border-sky-500/60 hover:bg-sky-500/10 transition cursor-pointer max-w-full whitespace-normal break-words text-left leading-tight"
+                  >
+                    + {locale === 'ms' ? preset.labelMs : preset.labelEn}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <button
               type="submit"

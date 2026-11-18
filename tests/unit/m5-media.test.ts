@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { JingleTab } from '../../src/components/tabs/JingleTab';
 import { VideoTab } from '../../src/components/tabs/VideoTab';
-import { SEEDED_KLINIK_GIGI_IMPIAN } from '../../src/data/seedVault';
+import { SEEDED_DEMO_BRAND } from '../../src/data/seedVault';
 import { I18nProvider, useI18n } from '../../src/i18n/I18nContext';
 import { CampaignProvider, useCampaign } from '../../src/state/CampaignContext';
 import { WorkbenchProvider, useWorkbench } from '../../src/state/WorkbenchContext';
@@ -172,9 +172,9 @@ describe('M5 audioExport (pure PCM synthesis & RIFF WAV encoder)', () => {
   });
 
   it('builds baseline BM lyrics incorporating brand name and offer sentence', () => {
-    const lyrics = buildJingleLyrics('Klinik Senyum', 'Promosi Scaling RM99');
-    expect(lyrics).toContain('Klinik Senyum');
-    expect(lyrics).toContain('Promosi Scaling RM99');
+    const lyrics = buildJingleLyrics('Kafe Santai', 'Promosi Kopi RM9.90');
+    expect(lyrics).toContain('Kafe Santai');
+    expect(lyrics).toContain('Promosi Kopi RM9.90');
   });
 });
 
@@ -222,7 +222,7 @@ describe('M5 videoExport pure helpers', () => {
     const measure = (s: string) => Array.from(s).length * 10;
     const lines = wrapTextLines(
       measure,
-      'Promosi Scaling & Polish ✨🦷 sangat berbaloi untuk semua',
+      'Promosi Pakej Istimewa ✨🚀 sangat berbaloi untuk semua',
       150,
       3
     );
@@ -271,12 +271,12 @@ describe('Tab 3 JingleTab & Tab 4 VideoTab component behavior', () => {
     expect(container.querySelectorAll('audio').length).toBe(0);
 
     const lyricsInput = screen.getByTestId('jingle-lyrics-input') as HTMLTextAreaElement;
-    expect(lyricsInput.value).toContain('Klinik Gigi Impian');
+    expect(lyricsInput.value).toContain('Demo Bisnes Saya');
     expect(screen.getByTestId('jingle-download-btn')).toBeDisabled();
 
     // Edit lyrics -> sets lyricsEditedByUser = true
     fireEvent.change(lyricsInput, {
-      target: { value: 'Lirik Tersuai Klinik Gigi Impian ✨' },
+      target: { value: 'Lirik Tersuai Demo Bisnes Saya ✨' },
     });
     expect(screen.getByTestId('probe-lyrics-edited')).toHaveTextContent('true');
 
@@ -290,11 +290,11 @@ describe('Tab 3 JingleTab & Tab 4 VideoTab component behavior', () => {
       'data-active',
       'true'
     );
-    expect(lyricsInput.value).toBe('Lirik Tersuai Klinik Gigi Impian ✨');
+    expect(lyricsInput.value).toBe('Lirik Tersuai Demo Bisnes Saya ✨');
 
     fireEvent.click(screen.getByTestId('probe-lang-en'));
     expect(screen.getByTestId('probe-locale')).toHaveTextContent('en');
-    expect(lyricsInput.value).toBe('Lirik Tersuai Klinik Gigi Impian ✨');
+    expect(lyricsInput.value).toBe('Lirik Tersuai Demo Bisnes Saya ✨');
     expect(screen.getByTestId('jingle-style-santai-akustik')).toHaveAttribute(
       'aria-pressed',
       'true'
@@ -308,7 +308,7 @@ describe('Tab 3 JingleTab & Tab 4 VideoTab component behavior', () => {
 
     // Restore valid lyrics and generate WAV preview
     fireEvent.change(lyricsInput, {
-      target: { value: 'Senyum berseri Klinik Gigi Impian!' },
+      target: { value: 'Pilihan tepat Demo Bisnes Saya!' },
     });
     fireEvent.click(screen.getByTestId('jingle-generate-btn'));
 
@@ -393,8 +393,8 @@ describe('Tier 5 M5 Adversarial Coverage — videoExport & audioExport hardening
   ];
 
   const samplePhotos: [PhotoAsset, PhotoAsset] = [
-    { id: 'p1', label: 'P1', src: '/assets/photos/clinic-scaling-1.png', isSample: true },
-    { id: 'p2', label: 'P2', src: '/assets/photos/clinic-smile-2.png', isSample: true },
+    { id: 'p1', label: 'P1', src: '/assets/photos/business-showcase-1.png', isSample: true },
+    { id: 'p2', label: 'P2', src: '/assets/photos/business-product-2.png', isSample: true },
   ];
 
   function createFakeAudioBuffer(durationSec = 5.5, sampleRate = 48000): AudioBuffer {
@@ -551,7 +551,7 @@ describe('Tier 5 M5 Adversarial Coverage — videoExport & audioExport hardening
       exportVerticalVideo({
         frames: sampleFrames,
         photos: samplePhotos,
-        brand: SEEDED_KLINIK_GIGI_IMPIAN,
+        brand: SEEDED_DEMO_BRAND,
         audioBuffer: createFakeAudioBuffer(),
       })
     ).rejects.toThrow(/MediaRecorder is available/i);
@@ -608,7 +608,7 @@ describe('Tier 5 M5 Adversarial Coverage — videoExport & audioExport hardening
       exportVerticalVideo({
         frames: sampleFrames,
         photos: samplePhotos,
-        brand: SEEDED_KLINIK_GIGI_IMPIAN,
+        brand: SEEDED_DEMO_BRAND,
         audioBuffer: createFakeAudioBuffer(),
       })
     ).rejects.toThrow(/empty video blob/i);
@@ -756,7 +756,7 @@ describe('Tier 5 M5 Adversarial Coverage — videoExport & audioExport hardening
     const res = await exportVerticalVideo({
       frames: sampleFrames,
       photos: samplePhotos,
-      brand: SEEDED_KLINIK_GIGI_IMPIAN,
+      brand: SEEDED_DEMO_BRAND,
       audioBuffer: createFakeAudioBuffer(),
       durationSec: Number.NaN,
     });
@@ -865,7 +865,7 @@ describe('Tier 5 M5 Adversarial Coverage — videoExport & audioExport hardening
       exportVerticalVideo({
         frames: sampleFrames,
         photos: samplePhotos,
-        brand: SEEDED_KLINIK_GIGI_IMPIAN,
+        brand: SEEDED_DEMO_BRAND,
         audioBuffer: createFakeAudioBuffer(),
       })
     ).rejects.toThrow(/AudioContext blocked/i);
@@ -928,7 +928,7 @@ describe('Tier 5 M5 Adversarial Coverage — videoExport & audioExport hardening
       exportVerticalVideo({
         frames: sampleFrames,
         photos: samplePhotos,
-        brand: SEEDED_KLINIK_GIGI_IMPIAN,
+        brand: SEEDED_DEMO_BRAND,
         audioBuffer: createFakeAudioBuffer(),
       })
     ).rejects.toThrow(/recorder start failed/i);
@@ -1039,7 +1039,7 @@ describe('Tier 5 M5 Adversarial Coverage — videoExport & audioExport hardening
     const exportPromise = exportVerticalVideo({
       frames: sampleFrames,
       photos: samplePhotos,
-      brand: SEEDED_KLINIK_GIGI_IMPIAN,
+      brand: SEEDED_DEMO_BRAND,
       audioBuffer: createFakeAudioBuffer(),
     });
 
@@ -1235,7 +1235,7 @@ describe('Tier 5 M5 Adversarial Coverage — videoExport & audioExport hardening
     await exportVerticalVideo({
       frames: sampleFrames,
       photos: samplePhotos,
-      brand: { ...SEEDED_KLINIK_GIGI_IMPIAN, themeColor: '#f00' },
+      brand: { ...SEEDED_DEMO_BRAND, themeColor: '#f00' },
       audioBuffer: createFakeAudioBuffer(),
       durationSec: 1.5,
     });
@@ -1254,7 +1254,7 @@ describe('Tier 5 M5 Adversarial Coverage — videoExport & audioExport hardening
     await exportVerticalVideo({
       frames: sampleFrames,
       photos: samplePhotos,
-      brand: { ...SEEDED_KLINIK_GIGI_IMPIAN, themeColor: 'not-a-hex' },
+      brand: { ...SEEDED_DEMO_BRAND, themeColor: 'not-a-hex' },
       audioBuffer: createFakeAudioBuffer(),
       durationSec: 1.5,
     });
@@ -1310,7 +1310,7 @@ describe('Tier 5 JingleTab & VideoTab UI adversarial tests', () => {
     expect(screen.getByTestId('jingle-error')).toHaveTextContent(/Please enter jingle chorus lyrics/i);
 
     fireEvent.change(screen.getByTestId('jingle-lyrics-input'), {
-      target: { value: 'Klinik Gigi Impian senyuman menawan' },
+      target: { value: 'Demo Bisnes Saya pilihan utama anda' },
     });
     fireEvent.click(screen.getByTestId('jingle-style-pop-ceria'));
     fireEvent.click(screen.getByTestId('jingle-generate-btn'));
@@ -1325,7 +1325,7 @@ describe('Tier 5 JingleTab & VideoTab UI adversarial tests', () => {
     expect(screen.getByTestId('jingle-tab').textContent).toContain('pop-ceria • 5.5s');
 
     fireEvent.click(screen.getByTestId('jingle-download-btn'));
-    expect(lastAnchorDownload).toBe('jingle-klinik-gigi-impian-pop-ceria.wav');
+    expect(lastAnchorDownload).toBe('jingle-demo-bisnes-saya-pop-ceria.wav');
   });
 
   it('discards stale async JingleTab and VideoTab renders when launchCampaign runs mid-flight and clears/translates VideoTab errors cleanly', async () => {

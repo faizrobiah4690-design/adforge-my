@@ -14,6 +14,7 @@ import {
   toggleLanguage,
 } from './helpers/app';
 import {
+  assertNoElementClipping,
   assertNoHorizontalOverflow,
   attachNetworkOriginAuditor,
   attachRuntimeErrorCollector,
@@ -44,7 +45,7 @@ test.describe('Tier 2 — A1: Onboarding Boundaries (6 Tests)', () => {
     await expect(loc.onboarding.byokError).toBeVisible();
   });
 
-  test('T2-A1-02: Malformed BYOK key format', async ({ page }) => {
+  test('T2-A1-02: Malformed BYOK key format (<12 chars or whitespace rejected; non-AIza >=12 accepted)', async ({ page }) => {
     await gotoFreshApp(page);
     const loc = appLocators(page);
 
@@ -54,7 +55,16 @@ test.describe('Tier 2 — A1: Onboarding Boundaries (6 Tests)', () => {
 
     await expect(loc.vault.root).toHaveCount(0);
     await expect(loc.onboarding.byokError).toBeVisible();
-    await expect(loc.onboarding.byokError).toContainText(/AIza|format|tidak sah|invalid/i);
+    await expect(loc.onboarding.byokError).toContainText(/12|format|tidak sah|invalid/i);
+
+    await loc.onboarding.byokInput.fill('key with spaces 12345');
+    await loc.onboarding.byokSaveBtn.click();
+    await expect(loc.vault.root).toHaveCount(0);
+    await expect(loc.onboarding.byokError).toBeVisible();
+
+    await loc.onboarding.byokInput.fill('sk-live-test-key-123456');
+    await loc.onboarding.byokSaveBtn.click();
+    await expect(loc.vault.root).toBeVisible({ timeout: 10_000 });
   });
 
   test('T2-A1-03: Demo / Offline Mode entry without any API key', async ({ page }) => {
@@ -82,16 +92,16 @@ test.describe('Tier 2 — A1: Onboarding Boundaries (6 Tests)', () => {
     const loc = appLocators(page);
 
     await loc.onboarding.googleLoginBtn.click();
-    await loc.onboarding.byokInput.fill('AIzaSySecretKeyTest999');
+    await loc.onboarding.byokInput.fill('sk-live-secret-key-999');
     expect(await loc.onboarding.byokInput.getAttribute('type')).toBe('password');
 
     await loc.onboarding.byokVisibilityBtn.click();
     expect(await loc.onboarding.byokInput.getAttribute('type')).toBe('text');
-    await expect(loc.onboarding.byokInput).toHaveValue('AIzaSySecretKeyTest999');
+    await expect(loc.onboarding.byokInput).toHaveValue('sk-live-secret-key-999');
 
     await loc.onboarding.byokVisibilityBtn.click();
     expect(await loc.onboarding.byokInput.getAttribute('type')).toBe('password');
-    await expect(loc.onboarding.byokInput).toHaveValue('AIzaSySecretKeyTest999');
+    await expect(loc.onboarding.byokInput).toHaveValue('sk-live-secret-key-999');
   });
 
   test('T2-A1-05: Skip Google Login attempt keeps dashboard gated', async ({ page }) => {
@@ -109,7 +119,7 @@ test.describe('Tier 2 — A1: Onboarding Boundaries (6 Tests)', () => {
     if (saveVisible) {
       const enabled = await loc.onboarding.byokSaveBtn.isEnabled().catch(() => false);
       if (enabled) {
-        await loc.onboarding.byokInput.fill('AIzaSyDemoTestKey1234567890');
+        await loc.onboarding.byokInput.fill('sk-live-test-key-123456');
         await loc.onboarding.byokSaveBtn.click();
       }
     }
@@ -142,7 +152,7 @@ test.describe('Tier 2 — A2: Brand Vault Boundaries (6 Tests)', () => {
 
   test('T2-A2-01: Invalid WhatsApp formatting rejected', async ({ page }) => {
     const loc = appLocators(page);
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
 
     await loc.vault.whatsappInput.fill('abc-not-a-phone');
     await saveBrandIfButtonVisible(page);
@@ -155,7 +165,7 @@ test.describe('Tier 2 — A2: Brand Vault Boundaries (6 Tests)', () => {
 
   test('T2-A2-02: Malaysian WhatsApp normalization variations', async ({ page }) => {
     const loc = appLocators(page);
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
 
     for (const raw of ['+60 12-345 6789', '012-345 6789', '60123456789']) {
       await loc.vault.whatsappInput.fill(raw);
@@ -189,7 +199,7 @@ test.describe('Tier 2 — A2: Brand Vault Boundaries (6 Tests)', () => {
   test('T2-A2-04: Duplicate or special-character brand folder name renders safely', async ({ page }) => {
     const errors = attachRuntimeErrorCollector(page);
     const loc = appLocators(page);
-    const specialName = 'Klinik & Co <1>';
+    const specialName = 'Kedai & Co <1>';
 
     await createBrandFolder(page, {
       name: specialName,
@@ -208,7 +218,7 @@ test.describe('Tier 2 — A2: Brand Vault Boundaries (6 Tests)', () => {
 
   test('T2-A2-05: Non-PNG / invalid image upload rejection', async ({ page }) => {
     const loc = appLocators(page);
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
     const prevSrc = await loc.vault.logoPreview.evaluate((img: HTMLImageElement) => img.currentSrc || img.src);
 
     await loc.vault.logoInput.setInputFiles({
@@ -225,7 +235,7 @@ test.describe('Tier 2 — A2: Brand Vault Boundaries (6 Tests)', () => {
   test('T2-A2-06: Persistence across browser reload', async ({ page }) => {
     const loc = appLocators(page);
     await createBrandFolder(page, {
-      name: 'Klinik Senyum',
+      name: 'Kafe Murni',
       colorHex: '#EC4899',
       tone: 'professional',
       whatsapp: '016-333 9988',
@@ -233,10 +243,10 @@ test.describe('Tier 2 — A2: Brand Vault Boundaries (6 Tests)', () => {
     });
 
     await page.reload();
-    await expect(loc.vault.folderButton('Klinik Senyum')).toBeVisible({ timeout: 10_000 });
-    await expect(loc.vault.folderButton('Klinik Gigi Impian')).toBeVisible();
+    await expect(loc.vault.folderButton('Kafe Murni')).toBeVisible({ timeout: 10_000 });
+    await expect(loc.vault.folderButton('Demo Bisnes Saya')).toBeVisible();
 
-    await loc.vault.folderButton('Klinik Senyum').click();
+    await loc.vault.folderButton('Kafe Murni').click();
     expect((await loc.vault.colorInput.inputValue()).toLowerCase()).toBe('#ec4899');
     await expect(loc.vault.whatsappInput).toHaveValue(/60163339988|016[- ]?333\s?9988/);
   });
@@ -286,8 +296,8 @@ test.describe('Tier 2 — A3: Quick Launch Boundaries (6 Tests)', () => {
   test('T2-A3-04: Very long / multi-line offer sentence (>250 chars) stays clean & RSA compliant', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const longOffer =
-      'Promosi Scaling & Polish Istimewa Sempena Minggu Gaji! ' +
-      'Dapatkan pemeriksaan pergigian menyeluruh bersama doktor berpengalaman di seluruh cawangan kami dengan harga RM99 sahaja sempena hujung bulan ini. Slot sangat terhad untuk 30 pelanggan pertama yang WhatsApp klinik hari ini!';
+      'Promosi Pakej Istimewa Sempena Minggu Gaji! ' +
+      'Dapatkan konsultasi menyeluruh bersama pasukan berpengalaman di seluruh cawangan kami dengan harga RM99 sahaja sempena hujung bulan ini. Slot sangat terhad untuk 30 pelanggan pertama yang WhatsApp kedai hari ini!';
     expect(longOffer.length).toBeGreaterThan(250);
 
     await launchCampaign(page, { offerSentence: longOffer });
@@ -314,19 +324,20 @@ test.describe('Tier 2 — A3: Quick Launch Boundaries (6 Tests)', () => {
     }
 
     await assertNoHorizontalOverflow(page, '390 long offer tab1');
+    await assertNoElementClipping(page, '390 long offer tab1');
   });
 
   test('T2-A3-05: Re-launching Bina Kempen with updated offer refreshes all 4 tabs', async ({ page }) => {
     await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
     const loc = appLocators(page);
 
-    const updatedOffer = 'Promosi Braces RM999 Deposit Rendah';
+    const updatedOffer = 'Promosi Pakej Korporat RM999 Deposit Rendah';
     await loc.quickForm.offerInput.fill(updatedOffer);
     await loc.quickForm.launchBtn.click();
 
-    await expect(loc.tab1.root).toContainText(/Braces RM999/i);
+    await expect(loc.tab1.root).toContainText(/Pakej Korporat RM999/i);
     await openTab(page, 'jingle');
-    expect(await loc.tab3.lyricsInput.inputValue()).toMatch(/Braces|RM999/i);
+    expect(await loc.tab3.lyricsInput.inputValue()).toMatch(/Pakej Korporat|RM999/i);
   });
 
   test('T2-A3-06: Invalid non-image file in Quick Form Photo slot rejected', async ({ page }) => {
@@ -367,7 +378,7 @@ test.describe('Tier 2 — A4: Tab 1 Boundaries (6 Tests)', () => {
 
   test('T2-A4-01: Google RSA <=30 headline & <=90 description limits across all 3 angles', async ({ page }) => {
     const loc = appLocators(page);
-    for (const angle of ['confidence', 'hygiene', 'payday'] as const) {
+    for (const angle of ['urgency', 'value', 'social_proof'] as const) {
       await loc.tab1.angleBtn(angle).click();
       const rsaCard = loc.tab1.channelCard('google_rsa').card;
       const rsaText = await rsaCard.innerText();
@@ -448,22 +459,22 @@ test.describe('Tier 2 — A4: Tab 1 Boundaries (6 Tests)', () => {
     errors.detach();
   });
 
-  test('T2-A4-05: Meta Personal Attributes + MY Dental/KKLIU compliance triggers', async ({ page }) => {
+  test('T2-A4-05: Meta Personal Attributes + MY General Ad Policy compliance triggers', async ({ page }) => {
     const loc = appLocators(page);
     await loc.tab1.compliance.testRiskyBtn.click();
     await expect(loc.tab1.compliance.findings).toBeVisible();
 
     await loc.tab1.compliance.input.fill(
-      'Gigi anda kuning? Klinik terbaik No. 1 dijamin 100% putih sebelum dan selepas!',
+      'Bisnes anda bermasalah? Kedai terbaik No. 1 dijamin 100% berkesan sebelum dan selepas!',
     );
     const findingsBm = await loc.tab1.compliance.findings.innerText();
     expect(findingsBm).toMatch(/Meta|Atribut|Personal/i);
-    expect(findingsBm).toMatch(/KKLIU|terbaik|dijamin|No\.?\s*1|sebelum/i);
+    expect(findingsBm).toMatch(/Polisi Iklan Am|General Ad Policy|terbaik|dijamin|No\.?\s*1|sebelum/i);
 
-    await loc.tab1.compliance.input.fill('Are you suffering from bad breath? Cheapest dentist!');
+    await loc.tab1.compliance.input.fill('Are you suffering from bad credit? Cheapest service in town!');
     const findingsEn = await loc.tab1.compliance.findings.innerText();
     expect(findingsEn).toMatch(/Meta|Personal Attribute|Atribut Peribadi/i);
-    expect(findingsEn).toMatch(/KKLIU|Healthcare|Norma Kesihatan|cheapest|paling murah|superlative/i);
+    expect(findingsEn).toMatch(/Polisi Iklan Am|General Ad Policy|cheapest|paling murah|superlative/i);
   });
 
   test('T2-A4-06: Clean rewrite clears flags + per-angle edit isolation', async ({ page }) => {
@@ -473,7 +484,7 @@ test.describe('Tier 2 — A4: Tab 1 Boundaries (6 Tests)', () => {
       await loc.tab1.compliance.applyRewriteBtn.click();
     } else {
       await loc.tab1.compliance.input.fill(
-        'Penjagaan penskaleran profesional di Klinik Gigi Impian. No. Kelulusan KKLIU: 1234/2026',
+        'Penjagaan dan servis profesional untuk pelanggan di Demo Bisnes Saya.',
       );
     }
 
@@ -481,16 +492,16 @@ test.describe('Tier 2 — A4: Tab 1 Boundaries (6 Tests)', () => {
     const findingsAfter = (await loc.tab1.compliance.findings.innerText().catch(() => '')).trim();
     expect(findingsAfter).not.toMatch(/Meta Personal Attributes|Atribut Peribadi|100%|terbaik|dijamin/i);
 
-    await loc.tab1.angleBtn('confidence').click();
+    await loc.tab1.angleBtn('urgency').click();
     const fbField1 = loc.tab1.channelCard('facebook').editableField;
-    await fbField1.fill('Suntingan Sudut Keyakinan Sahaja');
+    await fbField1.fill('Suntingan Sudut Segera Sahaja');
 
-    await loc.tab1.angleBtn('payday').click();
+    await loc.tab1.angleBtn('social_proof').click();
     const fbField2 = loc.tab1.channelCard('facebook').editableField;
-    expect(await fbField2.inputValue()).not.toBe('Suntingan Sudut Keyakinan Sahaja');
+    expect(await fbField2.inputValue()).not.toBe('Suntingan Sudut Segera Sahaja');
 
-    await loc.tab1.angleBtn('confidence').click();
-    await expect(loc.tab1.channelCard('facebook').editableField).toHaveValue('Suntingan Sudut Keyakinan Sahaja');
+    await loc.tab1.angleBtn('urgency').click();
+    await expect(loc.tab1.channelCard('facebook').editableField).toHaveValue('Suntingan Sudut Segera Sahaja');
   });
 });
 
@@ -547,7 +558,7 @@ test.describe('Tier 2 — A5: Tab 2 Carousel Studio Boundaries (6 Tests)', () =>
     await loc.tab2.aspect916Btn.click();
     const before = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
 
-    await loc.tab2.headlineInput.fill('Kilauan Senyuman Baru Hari Ini');
+    await loc.tab2.headlineInput.fill('Tawaran Baru Hari Ini');
     const after = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
 
     assertValidSlidePng(after.buffer, '9:16');
@@ -564,7 +575,7 @@ test.describe('Tier 2 — A5: Tab 2 Carousel Studio Boundaries (6 Tests)', () =>
     assertValidSlidePng(dlEmpty.buffer, '9:16');
 
     await loc.tab2.headlineInput.fill(
-      'Promosi Istimewa Scaling & Polish Sempena Hari Gaji Di Seluruh Cawangan Klinik Gigi Impian',
+      'Promosi Istimewa Pakej Kombo Sempena Hari Gaji Di Seluruh Cawangan Demo Bisnes Saya',
     );
     const dlLong = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
     assertValidSlidePng(dlLong.buffer, '9:16');
@@ -591,7 +602,7 @@ test.describe('Tier 2 — A5: Tab 2 Carousel Studio Boundaries (6 Tests)', () =>
     await gotoFreshApp(page);
     await completeOnboarding(page, { useDemoMode: true });
     await createBrandFolder(page, {
-      name: 'Klinik Custom Export',
+      name: 'Kedai Custom Export',
       colorHex: '#6366F1',
       tone: 'casual',
       whatsapp: '01122334455',
@@ -605,7 +616,7 @@ test.describe('Tier 2 — A5: Tab 2 Carousel Studio Boundaries (6 Tests)', () =>
     await loc.quickForm.photo2Input.setInputFiles({ name: 'p2.png', mimeType: 'image/png', buffer: p2 });
 
     await launchCampaign(page, {
-      brandName: 'Klinik Custom Export',
+      brandName: 'Kedai Custom Export',
       offerSentence: DEFAULT_OFFER,
       attachSamplePhotos: false,
     });
@@ -666,7 +677,7 @@ test.describe('Tier 2 — A6: Tab 3 Jingle Studio Boundaries (6 Tests)', () => {
   test('T2-A6-03: Very long / special-character custom lyrics cap <= 6.0s', async ({ page }) => {
     const loc = appLocators(page);
     const longLyrics =
-      'Klinik Gigi Impian senyuman menawan! '.repeat(12) + '✨🦷 RM99 sahaja!';
+      'Demo Bisnes Saya pilihan menawan! '.repeat(12) + '✨🔥 RM99 sahaja!';
     expect(longLyrics.length).toBeGreaterThan(350);
 
     await loc.tab3.lyricsInput.fill(longLyrics);
@@ -848,7 +859,7 @@ test.describe('Tier 2 — A8: Bilingual Toggle & Responsive Layout Boundaries (6
     await loc.tab2.headlineInput.fill('Tajuk Karusel Tersuai');
 
     await openTab(page, 'jingle');
-    await loc.tab3.lyricsInput.fill('Lirik Jingle Tersuai Klinik Gigi Impian');
+    await loc.tab3.lyricsInput.fill('Lirik Jingle Tersuai Demo Bisnes Saya');
 
     await openTab(page, 'video');
     await confirmStoryboard(page);
@@ -866,7 +877,7 @@ test.describe('Tier 2 — A8: Bilingual Toggle & Responsive Layout Boundaries (6
     await expect(loc.quickForm.offerInput).toHaveValue(customOffer);
     await expect(loc.tab4.confirmCheckbox).toBeChecked();
     await openTab(page, 'jingle');
-    await expect(loc.tab3.lyricsInput).toHaveValue('Lirik Jingle Tersuai Klinik Gigi Impian');
+    await expect(loc.tab3.lyricsInput).toHaveValue('Lirik Jingle Tersuai Demo Bisnes Saya');
     await openTab(page, 'carousel');
     await expect(loc.tab2.headlineInput).toHaveValue('Tajuk Karusel Tersuai');
     await openTab(page, 'strategy');
@@ -906,7 +917,7 @@ test.describe('Tier 2 — A8: Bilingual Toggle & Responsive Layout Boundaries (6
     const loc = appLocators(page);
 
     await toggleLanguage(page); // Switch to EN before launch
-    const bmOffer = 'Promosi Scaling & Polish RM88 Sahaja';
+    const bmOffer = 'Promosi Pakej Kombo RM88 Sahaja';
     await launchCampaign(page, { offerSentence: bmOffer });
 
     await expect(loc.tabButton('strategy')).toContainText(/Strategy/i);
@@ -922,10 +933,12 @@ test.describe('Tier 2 — A8: Bilingual Toggle & Responsive Layout Boundaries (6
 
     await loc.tab1.compliance.testRiskyBtn.click();
     await assertNoHorizontalOverflow(page, '390 Tab 1 risky compliance');
+    await assertNoElementClipping(page, '390 Tab 1 risky compliance');
 
     for (const tab of ['carousel', 'jingle', 'video'] as const) {
       await openTab(page, tab);
       await assertNoHorizontalOverflow(page, `390 ${tab}`);
+      await assertNoElementClipping(page, `390 ${tab}`);
     }
   });
 

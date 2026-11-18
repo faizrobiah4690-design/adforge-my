@@ -14,6 +14,7 @@ import {
 } from './helpers/app';
 import {
   assertMobile2x2TabGrid,
+  assertNoElementClipping,
   assertNoHorizontalOverflow,
   assertTabGridLayout,
   attachNetworkOriginAuditor,
@@ -35,28 +36,28 @@ import {
 } from './helpers/media';
 
 test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
-  test('T4-01: Klinik Gigi Impian Payday Scaling Campaign Full Flow', async ({ page }) => {
+  test('T4-01: Demo Bisnes Saya Social Proof Campaign Full Flow', async ({ page }) => {
     const errors = attachRuntimeErrorCollector(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await gotoFreshApp(page);
     await completeOnboarding(page, { useDemoMode: false });
 
     const loc = appLocators(page);
-    await expect(loc.vault.folderButton('Klinik Gigi Impian')).toBeVisible();
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await expect(loc.vault.folderButton('Demo Bisnes Saya')).toBeVisible();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
     await expect(loc.vault.whatsappInput).toHaveValue(/60123456789|012[- ]?345\s?6789/);
 
     await launchCampaign(page, {
-      brandName: 'Klinik Gigi Impian',
+      brandName: 'Demo Bisnes Saya',
       offerSentence: DEFAULT_OFFER,
     });
 
-    // Tab 1: Payday angle, 4 channels, CPA Safe, Compliance risky check
-    await loc.tab1.angleBtn('payday').click();
+    // Tab 1: Social Proof angle, 4 channels, CPA Safe, Compliance risky check
+    await loc.tab1.angleBtn('social_proof').click();
     await expect(loc.tab1.psychologyPanel).toBeVisible();
     for (const ch of ['facebook', 'instagram', 'tiktok', 'google_rsa'] as const) {
       const href = await loc.tab1.channelCard(ch).whatsappLink.getAttribute('href');
-      assertWhatsAppUrl(href, '60123456789', /SUDUT-3-MINGGUGAJI|MINGGUGAJI|payday/i);
+      assertWhatsAppUrl(href, '60123456789', /SUDUT-3-BUKTISOSIAL|BUKTISOSIAL|social_proof/i);
     }
     await loc.tab1.cpa.priceInput.fill('180');
     await loc.tab1.cpa.marginInput.fill('60');
@@ -68,7 +69,7 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
 
     // Tab 2: Edit Slide 1, toggle safe zones, download PNG
     await openTab(page, 'carousel');
-    await loc.tab2.headlineInput.fill('Gaji Masuk! Scaling & Polish RM99');
+    await loc.tab2.headlineInput.fill('Gaji Masuk! Tawaran Hebat RM99');
     await loc.tab2.aspect916Btn.click();
     await loc.tab2.safeZoneToggleBtn.click();
     const dlPng = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
@@ -76,7 +77,7 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
 
     // Tab 3: Verify BM chorus mentions brand, pick pop-ceria, generate & download WAV
     await openTab(page, 'jingle');
-    expect(await loc.tab3.lyricsInput.inputValue()).toContain('Klinik Gigi Impian');
+    expect(await loc.tab3.lyricsInput.inputValue()).toContain('Demo Bisnes Saya');
     await loc.tab3.styleBtn('pop-ceria').click();
     await loc.tab3.generateBtn.click();
     await verifyAudioElement(loc.tab3.audioPlayer);
@@ -96,13 +97,13 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
     errors.detach();
   });
 
-  test('T4-02: Second Dental Brand Folder (Klinik Pergigian Harmoni) Isolation & Separate Campaign', async ({ page }) => {
+  test('T4-02: Second Brand Folder (Bengkel Auto Harmoni) Isolation & Separate Campaign', async ({ page }) => {
     await gotoFreshApp(page);
     await completeOnboarding(page, { useDemoMode: true });
     const loc = appLocators(page);
 
     await createBrandFolder(page, {
-      name: 'Klinik Pergigian Harmoni',
+      name: 'Bengkel Auto Harmoni',
       colorHex: '#10B981',
       tone: 'professional',
       whatsapp: '019-876 5432',
@@ -110,30 +111,30 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
     });
 
     await launchCampaign(page, {
-      brandName: 'Klinik Pergigian Harmoni',
-      offerSentence: 'Pemeriksaan Pergigian Korporat & Scaling Eksklusif.',
+      brandName: 'Bengkel Auto Harmoni',
+      offerSentence: 'Pakej Servis Penuh & Pemeriksaan Awal Korporat.',
     });
 
     const fbHref = await loc.tab1.channelCard('facebook').whatsappLink.getAttribute('href');
     assertWhatsAppUrl(fbHref, '60198765432');
-    expect(await loc.tab1.root.innerText()).not.toContain('Klinik Gigi Impian');
+    expect(await loc.tab1.root.innerText()).not.toContain('Demo Bisnes Saya');
 
     await openTab(page, 'carousel');
     const logoSrc = await loc.tab2.logoImg.evaluate((img: HTMLImageElement) => img.currentSrc || img.src);
     expect(logoSrc.startsWith('data:image/png')).toBe(true);
-    await expect(loc.tab2.previewStage).toContainText('Klinik Pergigian Harmoni');
+    await expect(loc.tab2.previewStage).toContainText('Bengkel Auto Harmoni');
 
     await openTab(page, 'jingle');
-    expect(await loc.tab3.lyricsInput.inputValue()).toContain('Klinik Pergigian Harmoni');
+    expect(await loc.tab3.lyricsInput.inputValue()).toContain('Bengkel Auto Harmoni');
 
-    // Switch back to Klinik Gigi Impian and confirm original state untouched
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    // Switch back to Demo Bisnes Saya and confirm original state untouched
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
     await expect(loc.vault.whatsappInput).toHaveValue(/60123456789|012[- ]?345\s?6789/);
 
     // Reload and confirm both folders persist
     await page.reload();
-    await expect(loc.vault.folderButton('Klinik Pergigian Harmoni')).toBeVisible({ timeout: 10_000 });
-    await expect(loc.vault.folderButton('Klinik Gigi Impian')).toBeVisible();
+    await expect(loc.vault.folderButton('Bengkel Auto Harmoni')).toBeVisible({ timeout: 10_000 });
+    await expect(loc.vault.folderButton('Demo Bisnes Saya')).toBeVisible();
   });
 
   test('T4-03: Mobile 390x844 Full Freelancer Flow (2x2 Tab Grid & Zero Overflow)', async ({ page }) => {
@@ -141,22 +142,27 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoFreshApp(page);
     await assertNoHorizontalOverflow(page, 'mobile onboarding');
+    await assertNoElementClipping(page, 'mobile onboarding');
 
     await completeOnboarding(page, { useDemoMode: true });
     await assertNoHorizontalOverflow(page, 'mobile vault+form');
+    await assertNoElementClipping(page, 'mobile vault+form');
 
     await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
     const loc = appLocators(page);
 
     await assertMobile2x2TabGrid(page);
     await assertNoHorizontalOverflow(page, 'mobile tab1');
+    await assertNoElementClipping(page, 'mobile tab1');
     await loc.tab1.compliance.testRiskyBtn.click();
     await assertNoHorizontalOverflow(page, 'mobile tab1 risky');
+    await assertNoElementClipping(page, 'mobile tab1 risky');
 
     await openTab(page, 'carousel');
     await assertMobile2x2TabGrid(page);
     await assertNoHorizontalOverflow(page, 'mobile tab2');
-    await loc.tab2.headlineInput.fill('Senyuman Mobile 390px');
+    await assertNoElementClipping(page, 'mobile tab2');
+    await loc.tab2.headlineInput.fill('Promosi Mobile 390px');
     await loc.tab2.safeZoneToggleBtn.click();
     const dlPng = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
     assertValidSlidePng(dlPng.buffer, '9:16');
@@ -164,6 +170,7 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
     await openTab(page, 'jingle');
     await assertMobile2x2TabGrid(page);
     await assertNoHorizontalOverflow(page, 'mobile tab3');
+    await assertNoElementClipping(page, 'mobile tab3');
     await loc.tab3.generateBtn.click();
     await verifyAudioElement(loc.tab3.audioPlayer);
     const dlWav = await captureDownload(page, () => loc.tab3.downloadBtn.click());
@@ -172,6 +179,7 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
     await openTab(page, 'video');
     await assertMobile2x2TabGrid(page);
     await assertNoHorizontalOverflow(page, 'mobile tab4');
+    await assertNoElementClipping(page, 'mobile tab4');
     await confirmStoryboard(page);
     await loc.tab4.generateBtn.click();
     await verifyVideoElement(loc.tab4.videoPlayer, { timeoutMs: 35_000 });
@@ -196,6 +204,7 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
 
     await assertTabGridLayout(page, 'desktop-1x4');
     await assertNoHorizontalOverflow(page, 'desktop 1440');
+    await assertNoElementClipping(page, 'desktop 1440');
 
     const seenClips = new Set<string>();
     for (const ch of ['facebook', 'instagram', 'tiktok', 'google_rsa'] as const) {
@@ -204,7 +213,7 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
       await expect(loc.tab1.channelCard(ch).card).toContainText(RX.copiedFeedback);
       const clip = await readClipboardWithFallback(page);
       expect(clip).toContain('https://wa.me/60123456789?text=');
-      expect(clip).toMatch(/SUDUT-|Keyakinan|confidence|Scaling/i);
+      expect(clip).toMatch(/SUDUT-|Segera|urgency|Promosi/i);
       expect(seenClips.has(clip), `Channel ${ch} copied duplicate clipboard content`).toBe(false);
       seenClips.add(clip);
     }
@@ -307,13 +316,13 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
     const errors = attachRuntimeErrorCollector(page);
     await gotoFreshApp(page);
     await completeOnboarding(page, { useDemoMode: true });
-    const pitchOffer = 'Pakej Pemutihan & Scaling Jimat 20%.';
+    const pitchOffer = 'Pakej Kombo Kopi & Kek Jimat 20%.';
     await launchCampaign(page, { offerSentence: pitchOffer });
     const loc = appLocators(page);
 
     // Tab 1 edits in BM
-    await loc.tab1.angleBtn('hygiene').click();
-    await loc.tab1.channelCard('facebook').editableField.fill('Senyum Bersih Setiap Hari');
+    await loc.tab1.angleBtn('value').click();
+    await loc.tab1.channelCard('facebook').editableField.fill('Kualiti Mantap Setiap Hari');
     await loc.tab1.cpa.priceInput.fill('250');
 
     const snapBm = await getActiveTabLanguageSnapshot(page);
@@ -321,7 +330,7 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
     const snapEn = await getActiveTabLanguageSnapshot(page);
     assertBilingualLabelSwitched(snapBm.strategyLabel, snapEn.strategyLabel);
     await expect(loc.quickForm.offerInput).toHaveValue(pitchOffer);
-    await expect(loc.tab1.channelCard('facebook').editableField).toHaveValue('Senyum Bersih Setiap Hari');
+    await expect(loc.tab1.channelCard('facebook').editableField).toHaveValue('Kualiti Mantap Setiap Hari');
     await expect(loc.tab1.cpa.priceInput).toHaveValue('250');
 
     // Tab 2 edit while in EN -> toggle back to BM
@@ -332,9 +341,9 @@ test.describe('Tier 4 — Real-World Freelancer Scenarios (6 Tests)', () => {
 
     // Tab 3 edit -> toggle to EN
     await openTab(page, 'jingle');
-    await loc.tab3.lyricsInput.fill('Jom ke Klinik Gigi Impian sekarang');
+    await loc.tab3.lyricsInput.fill('Jom ke Demo Bisnes Saya sekarang');
     await toggleLanguage(page); // -> EN
-    await expect(loc.tab3.lyricsInput).toHaveValue('Jom ke Klinik Gigi Impian sekarang');
+    await expect(loc.tab3.lyricsInput).toHaveValue('Jom ke Demo Bisnes Saya sekarang');
 
     // Tab 4 confirm -> toggle to BM -> generate video
     await openTab(page, 'video');

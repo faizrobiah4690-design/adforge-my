@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react';
 
 export type UiLanguage = 'ms' | 'en';
 export type BrandTone = 'casual' | 'professional';
-export type AngleId = 'confidence' | 'hygiene' | 'payday';
+export type AngleId = 'urgency' | 'value' | 'social_proof';
 export type ChannelId = 'facebook' | 'instagram' | 'tiktok' | 'google_rsa';
 export type WorkspaceTabId = 'strategy' | 'carousel' | 'jingle' | 'video';
 export type AspectRatioMode = '9:16' | '4:5';
@@ -50,7 +50,7 @@ export interface CpaInputs {
 
 export interface ComplianceFinding {
   id: string;
-  category: 'meta_personal_attributes' | 'my_healthcare_norm';
+  category: 'meta_personal_attributes' | 'my_advertising_norm';
   severity: 'high' | 'warning';
   matchedText: string;
   ruleKey: string;
@@ -148,6 +148,7 @@ export interface WorkbenchContextValue {
   selectBrand: (brandId: string) => void;
   createBrand: (payload: CreateBrandPayload) => BrandProfile;
   updateBrand: (brandId: string, patch: UpdateBrandPatch) => void;
+  deleteBrand: (brandId: string) => boolean;
 }
 
 export type EditedCopyByAngle = Partial<Record<AngleId, ChannelCopy>>;

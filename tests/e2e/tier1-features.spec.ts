@@ -17,6 +17,7 @@ import {
 import {
   assertDarkBackground,
   assertMobile2x2TabGrid,
+  assertNoElementClipping,
   assertNoHorizontalOverflow,
   assertTabGridLayout,
   attachNetworkOriginAuditor,
@@ -77,7 +78,7 @@ test.describe('Tier 1 — A1: Onboarding (5 Tests)', () => {
 
     await loc.onboarding.googleLoginBtn.click();
     await expect(loc.onboarding.byokInput).toBeVisible();
-    await loc.onboarding.byokInput.fill('AIzaSyDemoTestKey1234567890');
+    await loc.onboarding.byokInput.fill('sk-live-test-key-123456');
 
     const initialType = await loc.onboarding.byokInput.getAttribute('type');
     if (await loc.onboarding.byokVisibilityBtn.isVisible().catch(() => false)) {
@@ -176,7 +177,7 @@ test.describe('Tier 1 — A1: Onboarding (5 Tests)', () => {
     await expect(loc.headerApiSettings).toBeVisible();
     await loc.headerApiSettings.click();
     await expect(loc.onboarding.settingsModal).toBeVisible();
-    await expect(loc.onboarding.settingsModal).toContainText(/API|BYOK|Demo|AIza/i);
+    await expect(loc.onboarding.settingsModal).toContainText(/API|BYOK|Demo|Gemini/i);
     await loc.onboarding.settingsCloseBtn.click();
     await expect(loc.vault.root).toBeVisible();
     errors.assertClean();
@@ -190,12 +191,12 @@ test.describe('Tier 1 — A2: Brand Vault (6 Tests)', () => {
     await completeOnboarding(page, { useDemoMode: true });
   });
 
-  test('T1-A2-01: Pre-seeded Klinik Gigi Impian folder present on load', async ({ page }) => {
+  test('T1-A2-01: Pre-seeded Demo Bisnes Saya folder present on load', async ({ page }) => {
     const loc = appLocators(page);
-    await expect(loc.vault.folderButton('Klinik Gigi Impian')).toBeVisible();
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await expect(loc.vault.folderButton('Demo Bisnes Saya')).toBeVisible();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
 
-    await expect(loc.vault.root).toContainText(/Klinik Gigi Impian/i);
+    await expect(loc.vault.root).toContainText(/Demo Bisnes Saya/i);
     await expect(loc.vault.whatsappInput).toHaveValue(/60123456789|012[- ]?345\s?6789/);
 
     const logoState = await loc.vault.logoPreview.evaluate((img: HTMLImageElement) => ({
@@ -241,9 +242,9 @@ test.describe('Tier 1 — A2: Brand Vault (6 Tests)', () => {
       logoRgba: [217, 119, 6, 255],
     });
 
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
     if ((await loc.vault.activeNameInput.count()) > 0) {
-      await expect(loc.vault.activeNameInput).toHaveValue('Klinik Gigi Impian');
+      await expect(loc.vault.activeNameInput).toHaveValue('Demo Bisnes Saya');
     }
     expect((await loc.vault.colorInput.inputValue()).toLowerCase()).toBe('#0ea5e9');
     await expect(loc.vault.whatsappInput).toHaveValue(/60123456789|012[- ]?345\s?6789/);
@@ -286,7 +287,7 @@ test.describe('Tier 1 — A2: Brand Vault (6 Tests)', () => {
       )
       .toEqual({ complete: true, hasNaturalWidth: true, isDataPng: true });
 
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
     await loc.vault.folderButton('Kopi Klasik KL').click();
 
     const persistedSrc = await loc.vault.logoPreview.evaluate(
@@ -297,7 +298,7 @@ test.describe('Tier 1 — A2: Brand Vault (6 Tests)', () => {
 
   test('T1-A2-05: Update theme color & tone (casual <-> professional)', async ({ page }) => {
     const loc = appLocators(page);
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
     await loc.vault.colorInput.fill('#10B981');
     await setBrandTone(page, 'professional');
     await saveBrandIfButtonVisible(page);
@@ -344,14 +345,14 @@ test.describe('Tier 1 — A2: Brand Vault (6 Tests)', () => {
 
   test('T1-A2-06: Edit & normalize Malaysian WhatsApp number', async ({ page }) => {
     const loc = appLocators(page);
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
     await loc.vault.whatsappInput.fill('012-999 4455');
     await saveBrandIfButtonVisible(page);
 
     await expect(loc.vault.whatsappInput).toHaveValue(/60129994455|\+?60\s?12[- ]?999\s?4455/);
     await page.reload();
-    await expect(loc.vault.folderButton('Klinik Gigi Impian')).toBeVisible();
-    await loc.vault.folderButton('Klinik Gigi Impian').click();
+    await expect(loc.vault.folderButton('Demo Bisnes Saya')).toBeVisible();
+    await loc.vault.folderButton('Demo Bisnes Saya').click();
     await expect(loc.vault.whatsappInput).toHaveValue(/60129994455|\+?60\s?12[- ]?999\s?4455/);
   });
 });
@@ -365,21 +366,21 @@ test.describe('Tier 1 — A3: Quick Launch (5 Tests)', () => {
   test('T1-A3-01: Quick Form brand selector synced with Brand Vault', async ({ page }) => {
     const loc = appLocators(page);
     await createBrandFolder(page, {
-      name: 'Klinik Senyum Jaya',
+      name: 'Butik Anggun Jaya',
       colorHex: '#10B981',
       tone: 'professional',
       whatsapp: '013-222 3344',
     });
 
     await expect(loc.quickForm.brandSelect).toBeVisible();
-    await expect(loc.quickForm.brandSelect).toContainText(/Klinik Gigi Impian/i);
-    await expect(loc.quickForm.brandSelect).toContainText(/Klinik Senyum Jaya/i);
+    await expect(loc.quickForm.brandSelect).toContainText(/Demo Bisnes Saya/i);
+    await expect(loc.quickForm.brandSelect).toContainText(/Butik Anggun Jaya/i);
 
-    await launchCampaign(page, { brandName: 'Klinik Senyum Jaya' });
-    await expect(loc.tab1.root).toContainText(/Klinik Senyum Jaya/i);
+    await launchCampaign(page, { brandName: 'Butik Anggun Jaya' });
+    await expect(loc.tab1.root).toContainText(/Butik Anggun Jaya/i);
   });
 
-  test('T1-A3-02: Attach two sample clinic photos from local gallery', async ({ page }) => {
+  test('T1-A3-02: Attach two sample business photos from local gallery', async ({ page }) => {
     const loc = appLocators(page);
     if (await loc.quickForm.photo1SampleBtn.isVisible().catch(() => false)) {
       await loc.quickForm.photo1SampleBtn.click();
@@ -449,7 +450,7 @@ test.describe('Tier 1 — A3: Quick Launch (5 Tests)', () => {
     await expect(loc.tabButton('carousel')).toBeVisible();
     await expect(loc.tabButton('jingle')).toBeVisible();
     await expect(loc.tabButton('video')).toBeVisible();
-    await expect(loc.tab1.root).toContainText(/Klinik Gigi Impian/i);
+    await expect(loc.tab1.root).toContainText(/Demo Bisnes Saya/i);
   });
 });
 
@@ -466,23 +467,23 @@ test.describe('Tier 1 — A4: Tab 1 Strategy, Copywriting, CPA & Compliance (6 T
     const loc = appLocators(page);
     await expect(loc.tab1.psychologyPanel).toBeVisible();
     const text = await loc.tab1.psychologyPanel.innerText();
-    expect(text).toMatch(/Klinik Gigi Impian|Scaling/i);
+    expect(text).toMatch(/Demo Bisnes Saya|Minggu Gaji|Promosi/i);
     expect(text.length).toBeGreaterThan(80);
   });
 
   test('T1-A4-02: 3 selectable ad angles switch generated copy', async ({ page }) => {
     const loc = appLocators(page);
-    await loc.tab1.angleBtn('confidence').click();
-    const fbConf = await loc.tab1.channelCard('facebook').card.innerText();
+    await loc.tab1.angleBtn('urgency').click();
+    const fbUrg = await loc.tab1.channelCard('facebook').card.innerText();
 
-    await loc.tab1.angleBtn('hygiene').click();
-    const fbHyg = await loc.tab1.channelCard('facebook').card.innerText();
+    await loc.tab1.angleBtn('value').click();
+    const fbVal = await loc.tab1.channelCard('facebook').card.innerText();
 
-    await loc.tab1.angleBtn('payday').click();
-    const fbPay = await loc.tab1.channelCard('facebook').card.innerText();
+    await loc.tab1.angleBtn('social_proof').click();
+    const fbProof = await loc.tab1.channelCard('facebook').card.innerText();
 
-    expect(fbHyg).not.toEqual(fbConf);
-    expect(fbPay).not.toEqual(fbHyg);
+    expect(fbVal).not.toEqual(fbUrg);
+    expect(fbProof).not.toEqual(fbVal);
   });
 
   test('T1-A4-03: 4-channel copy generation (FB, IG, TikTok, Google RSA)', async ({ page }) => {
@@ -518,13 +519,13 @@ test.describe('Tier 1 — A4: Tab 1 Strategy, Copywriting, CPA & Compliance (6 T
 
   test('T1-A4-04: Angle-tagged wa.me CTA links & quick-copy buttons', async ({ page }) => {
     const loc = appLocators(page);
-    await loc.tab1.angleBtn('payday').click();
+    await loc.tab1.angleBtn('social_proof').click();
 
     for (const ch of ['facebook', 'instagram', 'tiktok', 'google_rsa'] as const) {
       const link = loc.tab1.channelCard(ch).whatsappLink;
       await expect(link).toBeVisible();
       const href = await link.getAttribute('href');
-      assertWhatsAppUrl(href, '60123456789', /SUDUT-3-MINGGUGAJI|MINGGUGAJI|payday/i);
+      assertWhatsAppUrl(href, '60123456789', /SUDUT-3-BUKTISOSIAL|BUKTISOSIAL|social_proof/i);
     }
 
     await clearClipboardSpy(page);
@@ -532,15 +533,15 @@ test.describe('Tier 1 — A4: Tab 1 Strategy, Copywriting, CPA & Compliance (6 T
     await expect(loc.tab1.channelCard('facebook').card).toContainText(RX.copiedFeedback);
     const fbClip = await readClipboardWithFallback(page);
     expect(fbClip).toContain('https://wa.me/60123456789?text=');
-    expect(fbClip).toMatch(/SUDUT-3-MINGGUGAJI|MINGGUGAJI|payday/i);
-    expect(fbClip).toMatch(/Klinik Gigi Impian|Scaling|Minggu Gaji/i);
+    expect(fbClip).toMatch(/SUDUT-3-BUKTISOSIAL|BUKTISOSIAL|social_proof/i);
+    expect(fbClip).toMatch(/Demo Bisnes Saya|Minggu Gaji|Promosi/i);
 
     await clearClipboardSpy(page);
     await loc.tab1.channelCard('google_rsa').copyBtn.click();
     await expect(loc.tab1.channelCard('google_rsa').card).toContainText(RX.copiedFeedback);
     const rsaClip = await readClipboardWithFallback(page);
     expect(rsaClip).toContain('https://wa.me/60123456789?text=');
-    expect(rsaClip).toMatch(/SUDUT-3-MINGGUGAJI|MINGGUGAJI|payday/i);
+    expect(rsaClip).toMatch(/SUDUT-3-BUKTISOSIAL|BUKTISOSIAL|social_proof/i);
     expect(rsaClip).not.toBe(fbClip);
   });
 
@@ -568,7 +569,7 @@ test.describe('Tier 1 — A4: Tab 1 Strategy, Copywriting, CPA & Compliance (6 T
     await expect(loc.tab1.compliance.findings).toBeVisible();
     const findingsText = await loc.tab1.compliance.findings.innerText();
     expect(findingsText).toMatch(/Meta|Personal Attribute|Atribut Peribadi/i);
-    expect(findingsText).toMatch(/KKLIU|100%|terbaik|dijamin|Norma Kesihatan|Healthcare/i);
+    expect(findingsText).toMatch(/100%|terbaik|dijamin|Polisi Iklan Am|General Ad Policy/i);
   });
 });
 
@@ -602,20 +603,20 @@ test.describe('Tier 1 — A5: Tab 2 Carousel Studio & Safe Zones (6 Tests)', () 
     }));
     expect(logoMeta.complete).toBe(true);
     expect(logoMeta.naturalWidth).toBeGreaterThan(0);
-    await expect(loc.tab2.previewStage).toContainText(/Klinik Gigi Impian|Scaling|WhatsApp/i);
+    await expect(loc.tab2.previewStage).toContainText(/Demo Bisnes Saya|Minggu Gaji|WhatsApp/i);
   });
 
   test('T1-A5-02: Live clickable/editable BM headline updates preview', async ({ page }) => {
     const loc = appLocators(page);
-    const newHeadline = 'Gaji Masuk! Masa Untuk Senyuman Bersih';
+    const newHeadline = 'Gaji Masuk! Tawaran Jimat Untuk Anda';
     await loc.tab2.headlineInput.fill(newHeadline);
     await expect(loc.tab2.previewStage).toContainText(newHeadline);
   });
 
   test('T1-A5-03: Switch between slides preserving per-slide edits', async ({ page }) => {
     const loc = appLocators(page);
-    const h1 = 'Gaji Masuk! Senyuman Bersih';
-    const h2 = 'Slot Scaling Terhad Minggu Ini';
+    const h1 = 'Gaji Masuk! Pakej Kombo Jimat';
+    const h2 = 'Slot Promosi Terhad Minggu Ini';
 
     await loc.tab2.slideBtn(1).click();
     await loc.tab2.headlineInput.fill(h1);
@@ -649,7 +650,7 @@ test.describe('Tier 1 — A5: Tab 2 Carousel Studio & Safe Zones (6 Tests)', () 
     const errors = attachRuntimeErrorCollector(page);
     const loc = appLocators(page);
     await loc.tab2.aspect916Btn.click();
-    await loc.tab2.headlineInput.fill('Senyuman Bersih 9:16');
+    await loc.tab2.headlineInput.fill('Promosi Hebat 9:16');
 
     const dl = await captureDownload(page, () => loc.tab2.downloadPngBtn.click());
     expect(dl.suggestedFilename.toLowerCase()).toContain('.png');
@@ -682,8 +683,8 @@ test.describe('Tier 1 — A6: Tab 3 Jingle Studio, Styles & WAV Export (5 Tests)
   test('T1-A6-01: Pre-populated BM chorus lyrics with active brand & offer', async ({ page }) => {
     const loc = appLocators(page);
     const lyrics = await loc.tab3.lyricsInput.inputValue();
-    expect(lyrics).toContain('Klinik Gigi Impian');
-    expect(lyrics).toMatch(/Scaling|Polish|minggu gaji|WhatsApp/i);
+    expect(lyrics).toContain('Demo Bisnes Saya');
+    expect(lyrics).toMatch(/Minggu Gaji|Promosi|Pakej|WhatsApp/i);
   });
 
   test('T1-A6-02: Music style switcher (>= 2 styles)', async ({ page }) => {
@@ -744,7 +745,7 @@ test.describe('Tier 1 — A6: Tab 3 Jingle Studio, Styles & WAV Export (5 Tests)
 
   test('T1-A6-05: Custom BM lyrics edit persists & allows regeneration', async ({ page }) => {
     const loc = appLocators(page);
-    const customLyrics = 'Senyum lebar di Klinik Gigi Impian, scaling bersih!';
+    const customLyrics = 'Tawaran mantap di Demo Bisnes Saya, jom tempah!';
     await loc.tab3.lyricsInput.fill(customLyrics);
     await loc.tab3.generateBtn.click();
 
@@ -870,21 +871,44 @@ test.describe('Tier 1 — A8: Bilingual BM/EN Toggle & Responsive Shell (5 Tests
     await assertTabGridLayout(page, 'desktop-1x4');
   });
 
-  test('T1-A8-04: Zero horizontal overflow at 390x844 and 1440x900', async ({ page }) => {
-    for (const vp of [
+  test('T1-A8-04: Zero horizontal overflow & zero element clipping across 320px-1440px', async ({ page }) => {
+    const viewports = [
+      { width: 320, height: 700 },
+      { width: 360, height: 800 },
       { width: 390, height: 844 },
+      { width: 640, height: 900 },
+      { width: 768, height: 1024 },
+      { width: 980, height: 900 },
       { width: 1440, height: 900 },
-    ]) {
-      await page.setViewportSize(vp);
-      await gotoFreshApp(page);
-      await assertNoHorizontalOverflow(page, `${vp.width} onboarding`);
-      await completeOnboarding(page, { useDemoMode: true });
-      await assertNoHorizontalOverflow(page, `${vp.width} vault+form`);
-      await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+    ];
 
-      for (const tab of ['strategy', 'carousel', 'jingle', 'video'] as const) {
-        await openTab(page, tab);
+    await gotoFreshApp(page);
+    for (const vp of viewports) {
+      await page.setViewportSize(vp);
+      await assertNoHorizontalOverflow(page, `${vp.width} onboarding`);
+      await assertNoElementClipping(page, `${vp.width} onboarding`);
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await completeOnboarding(page, { useDemoMode: true });
+    for (const vp of viewports) {
+      await page.setViewportSize(vp);
+      await assertNoHorizontalOverflow(page, `${vp.width} vault+form`);
+      await assertNoElementClipping(page, `${vp.width} vault+form`);
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await launchCampaign(page, { offerSentence: DEFAULT_OFFER });
+
+    for (const tab of ['strategy', 'carousel', 'jingle', 'video'] as const) {
+      await openTab(page, tab);
+      for (const vp of viewports) {
+        await page.setViewportSize(vp);
         await assertNoHorizontalOverflow(page, `${vp.width} ${tab}`);
+        await assertNoElementClipping(page, `${vp.width} ${tab}`);
+        if (tab === 'strategy') {
+          await assertTabGridLayout(page, vp.width < 640 ? 'mobile-2x2' : 'desktop-1x4');
+        }
       }
     }
   });

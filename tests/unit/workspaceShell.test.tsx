@@ -52,7 +52,7 @@ describe('App & WorkspaceShell integration', () => {
 
   it('blocks workbench recovery when logged in without BYOK key or Demo Mode', () => {
     window.localStorage.setItem(
-      'kks_workbench:v1',
+      'adforge_workbench:v1',
       JSON.stringify({
         version: 1,
         isLoggedIn: true,
@@ -61,7 +61,7 @@ describe('App & WorkspaceShell integration', () => {
         isDemoMode: false,
         activeScreen: 'workbench',
         brands: [],
-        activeBrandId: 'klinik-gigi-impian',
+        activeBrandId: 'demo-bisnes-saya',
       })
     );
 
@@ -206,7 +206,7 @@ describe('App & WorkspaceShell integration', () => {
 
     // 3. Upgrade Demo -> BYOK inside api-settings-modal -> closes modal, preserves campaign & mounts Gemini button
     fireEvent.change(screen.getByTestId('byok-input'), {
-      target: { value: 'AIzaSyUpgradeLiveModal12345' },
+      target: { value: 'sk-live-test-key-123456' },
     });
     fireEvent.click(screen.getByTestId('byok-save-btn'));
 
